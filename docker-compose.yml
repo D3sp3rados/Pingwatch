@@ -1,0 +1,14 @@
+services:
+  pingwatch:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMIN_PASSWORD=bitte-aendern
+      - TZ=Europe/Berlin
+    volumes:
+      - pingwatch-data:/data
+
+volumes:
+  pingwatch-data:

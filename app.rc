@@ -1,0 +1,22 @@
+1 ICON "app.ico"
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040704B0"
+    BEGIN
+      VALUE "CompanyName", "Raphael Wagner ICT-Dienstleistungen"
+      VALUE "FileDescription", "PingWatch-Agent"
+      VALUE "FileVersion", "1.0.0"
+      VALUE "ProductName", "PingWatch"
+      VALUE "ProductVersion", "1.0.0"
+      VALUE "OriginalFilename", "pingwatch-agent.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0407, 1200
+  END
+END

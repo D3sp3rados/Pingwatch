@@ -1,0 +1,6 @@
+/data/
+/downloads/
+*.exe
+pingwatch
+pingwatch-agent-*
+agent.json

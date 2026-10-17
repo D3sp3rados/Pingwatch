@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PingWatch</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PingWatch">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b1120">
+<style>
+:root{
+  --bg:#f3f5f9;--panel:#ffffff;--panel2:#f8fafc;--fg:#0f172a;--mut:#64748b;--line:#e2e8f0;--line2:#cbd5e1;
+  --acc:#059669;--acc-a:rgba(5,150,105,.16);--ok:#16a34a;--warn:#d97706;--loss:#ea580c;--bad:#dc2626;--off:#94a3b8;
+  --nodata:#e5e9f0;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0b1120;--panel:#111a2e;--panel2:#0e1627;--fg:#e2e8f0;--mut:#8b9ab4;--line:#1e2a44;--line2:#2a3a5c;
+  --acc:#34d399;--acc-a:rgba(52,211,153,.16);--ok:#22c55e;--warn:#f59e0b;--loss:#fb923c;--bad:#ef4444;--off:#64748b;
+  --nodata:#1a2540;--shadow:none;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+.num{font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--acc)}
+/* Kopfzeile */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:env(safe-area-inset-top) 0 0}
+.top-in{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:10px 16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px;letter-spacing:-.01em}
+.brand img{width:28px;height:28px}
+.summary{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--mut)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:12.5px;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--off)}
+.tabs{display:flex;gap:2px;margin-left:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;overflow-x:auto;max-width:100%}
+.tabs a{padding:6px 12px;border-radius:7px;color:var(--mut);text-decoration:none;font-weight:500;white-space:nowrap}
+.tabs a.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
+main{max-width:1400px;margin:0 auto;padding:16px}
+section{display:none}section.on{display:block}
+h2{font-size:15px;margin:22px 0 10px;display:flex;align-items:center;gap:10px}
+h2:first-child{margin-top:4px}
+h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
+.muted{color:var(--mut)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);cursor:pointer;font-weight:500;font-size:13px;text-decoration:none;color:var(--fg);white-space:nowrap}
+.btn:hover{border-color:var(--mut)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#04130c}
+.btn.sm{padding:4px 9px;font-size:12.5px}
+.btn.danger{color:var(--bad)}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:5px 10px;border-radius:7px;cursor:pointer;color:var(--mut);font-size:13px;font-weight:500}
+.seg button.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+/* Übersicht */
+.site-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-weight:600}
+.site-h:first-child{margin-top:2px}
+.site-h .muted{font-weight:400;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.card{padding:14px 14px 12px;cursor:pointer;position:relative;transition:border-color .15s}
+.card:hover{border-color:var(--line2)}
+.card.down{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+.card-h{display:flex;align-items:flex-start;gap:10px}
+.card-h .dot{margin-top:6px;width:10px;height:10px}
+.card-t{flex:1;min-width:0}
+.card-t b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-t span{font-size:12.5px;color:var(--mut)}
+.card-v{text-align:right}
+.card-v b{display:block;font-size:22px;font-weight:650;letter-spacing:-.02em;line-height:1.1}
+.card-v span{font-size:12px;font-weight:600}
+.spark{display:block;width:100%;height:34px;margin:10px 0 6px}
+.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:4px 0 10px}
+.kv div{font-size:11.5px;color:var(--mut)}
+.kv b{display:block;font-size:13.5px;color:var(--fg);font-weight:600}
+.bar{display:block;width:100%;height:22px;border-radius:5px;cursor:crosshair}
+.bar-ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut);margin-top:3px}
+.last{font-size:12px;color:var(--mut);margin-top:7px;min-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.last.live{color:var(--bad);font-weight:600}
+.empty{padding:40px 20px;text-align:center;color:var(--mut)}
+.empty .btn{margin-top:12px}
+/* Detail */
+.det-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.det-h h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.det-h .muted{font-size:13px}
+.det-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.det-ctl input[type=date]{padding:5px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel)}
+.chart-wrap{padding:10px 8px 6px;position:relative}
+#chart{display:block;width:100%;height:340px;touch-action:pan-y}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);padding:2px 10px 4px}
+.legend i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px}
+.stat{padding:10px 12px}
+.stat span{font-size:12px;color:var(--mut)}
+.stat b{display:block;font-size:18px;font-weight:650;margin-top:2px}
+/* Ereignisse */
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.filters select{padding:6px 9px;border-radius:9px;border:1px solid var(--line2);background:var(--panel)}
+.evlist{overflow:hidden}
+.ev{display:grid;grid-template-columns:120px 1fr auto;gap:4px 14px;padding:10px 14px;border-top:1px solid var(--line);cursor:pointer;align-items:center}
+.ev:first-child{border-top:0}
+.ev:hover{background:var(--panel2)}
+.ev .when{font-size:13px;font-weight:600}
+.ev .when small{display:block;font-weight:400;color:var(--mut);font-size:12px}
+.ev .what{min-width:0}
+.ev .what b{font-weight:600}
+.ev .what div{font-size:12.5px;color:var(--mut)}
+.ev .dur{text-align:right;font-size:13px;font-weight:600;white-space:nowrap}
+.ev .dur small{display:block;font-weight:400;color:var(--mut);font-size:11.5px}
+.badge{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11.5px;font-weight:650;margin-right:6px;vertical-align:1px}
+.b-outage{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.b-loss{background:color-mix(in srgb,var(--loss) 18%,transparent);color:var(--loss)}
+.b-spike{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.b-offline{background:color-mix(in srgb,var(--off) 22%,transparent);color:var(--mut)}
+.ev.live .dur{color:var(--bad)}
+/* Statistik */
+.hm-wrap{overflow-x:auto}
+table.hm{border-collapse:separate;border-spacing:2px;font-size:11px;min-width:100%}
+.hm th{font-weight:500;color:var(--mut);padding:2px 3px;text-align:center;white-space:nowrap}
+.hm th.d{text-align:left;padding-right:8px;font-weight:600;color:var(--fg);font-size:12px}
+.hm td.c{width:34px;min-width:30px;height:26px;border-radius:4px;text-align:center;cursor:pointer;color:rgba(0,0,0,.75);font-variant-numeric:tabular-nums}
+.hm td.s{padding:0 8px;text-align:right;white-space:nowrap;font-size:12px;font-variant-numeric:tabular-nums}
+.hm td.s.first{border-left:1px solid var(--line);padding-left:12px}
+.scale{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);margin:8px 2px}
+.scale i{width:22px;height:12px;border-radius:3px;display:inline-block}
+/* Einstellungen */
+table.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:12px;color:var(--mut);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .act{text-align:right;white-space:nowrap}
+.sites{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.site{padding:14px}
+.site-t{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px}
+.site dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px;margin:10px 0}
+.site dt{color:var(--mut)}.site dd{margin:0}
+.site .row{display:flex;gap:6px;flex-wrap:wrap}
+.help{font-size:13px;color:var(--mut);padding:12px 14px;line-height:1.55}
+.help ol{margin:6px 0 0;padding-left:20px}
+.formrow{display:flex;gap:10px;align-items:end;flex-wrap:wrap;padding:14px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--mut);flex:1;min-width:150px}
+.field input,.field select{padding:8px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--bg);color:var(--fg);font-size:14px}
+.field small{font-size:11.5px}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg)}
+dialog{max-height:calc(100dvh - 24px);overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--fg);padding:0;width:min(560px,calc(100vw - 24px));box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(2,6,23,.55)}
+.dlg-h{padding:16px 18px 4px;font-weight:650;font-size:16px}
+.dlg-b{padding:10px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dlg-b .full{grid-column:1/-1}
+.dlg-f{padding:12px 18px 16px;display:flex;justify-content:flex-end;gap:8px}
+.dlg-err{color:var(--bad);font-size:13px;padding:0 18px}
+/* Tooltip */
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.2);display:none;max-width:260px;line-height:1.5}
+#tip b{font-weight:650}
+#tip .r{display:flex;justify-content:space-between;gap:14px}
+#tip .r span:first-child{color:var(--mut)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.conn{display:none;background:var(--bad);color:#fff;text-align:center;font-size:13px;padding:5px}
+.conn.on{display:block}
+@media (max-width:700px){
+  .top-in{gap:8px;padding:8px 12px}
+  .tabs{margin-left:0;width:100%}
+  .tabs a{flex:1;text-align:center;padding:6px 6px;font-size:13px}
+  main{padding:12px}
+  .grid{grid-template-columns:1fr}
+  #chart{height:260px}
+  .ev{grid-template-columns:1fr auto;padding:10px 12px}
+  .ev .when{grid-column:1/-1;display:flex;gap:8px;align-items:baseline}
+  .ev .when small{display:inline}
+  .dlg-b{grid-template-columns:1fr}
+  .hide-m{display:none}
+}
+</style>
+</head>
+<body>
+<div class="conn" id="conn">Keine Verbindung zum Server – Anzeige ist nicht aktuell</div>
+<header class="top"><div class="top-in">
+  <div class="brand"><img src="/icon.svg" alt="">PingWatch</div>
+  <div class="summary" id="summary"></div>
+  <nav class="tabs" id="tabs">
+    <a href="#/" data-v="overview">Übersicht</a>
+    <a href="#/events" data-v="events">Ereignisse</a>
+    <a href="#/stats" data-v="stats">Statistik</a>
+    <a href="#/settings" data-v="settings">Einstellungen</a>
+  </nav>
+</div></header>
+
+<main>
+<section id="v-overview"><div id="ov"></div></section>
+
+<section id="v-host">
+  <div class="det-h">
+    <a class="btn sm" href="#/">← Übersicht</a>
+    <span class="dot" id="d-dot"></span>
+    <h1 id="d-name"></h1>
+    <span class="muted" id="d-sub"></span>
+    <span style="margin-left:auto" class="pill num" id="d-now"></span>
+  </div>
+  <div class="det-ctl">
+    <div class="seg" id="d-range">
+      <button data-r="15m">15 min</button><button data-r="1h">1 h</button><button data-r="6h">6 h</button><button data-r="24h">24 h</button><button data-r="7d">7 Tage</button><button data-r="30d">30 Tage</button>
+    </div>
+    <input type="date" id="d-date" title="Tag anzeigen">
+    <button class="btn sm" id="d-back" style="display:none">↶ Zurück</button>
+    <div class="seg" id="d-scale"><button data-s="lin" class="on">Linear</button><button data-s="log">Log</button></div>
+    <span class="muted" id="d-rangetxt" style="font-size:12.5px"></span>
+  </div>
+  <div class="panel chart-wrap">
+    <canvas id="chart"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--acc)"></i>Ø Antwortzeit</span>
+      <span><i style="background:var(--acc-a)"></i>Min–Max</span>
+      <span><i style="background:var(--bad);opacity:.7"></i>Paketverlust / Ausfall</span>
+      <span><i style="background:var(--warn)"></i>Latenzspitze</span>
+      <span><i style="background:var(--nodata)"></i>keine Daten</span>
+      <span class="hide-m">Ziehen mit der Maus = zoomen</span>
+    </div>
+  </div>
+  <div class="stats" id="d-stats"></div>
+  <h2>Ereignisse im Zeitraum <span class="sub" id="d-evcount"></span></h2>
+  <div class="panel evlist" id="d-events"></div>
+</section>
+
+<section id="v-events">
+  <div class="filters">
+    <select id="f-host"><option value="">Alle Hosts</option></select>
+    <div class="seg" id="f-types">
+      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button>
+    </div>
+    <select id="f-range">
+      <option value="1">Letzte 24 h</option><option value="7" selected>Letzte 7 Tage</option><option value="30">Letzte 30 Tage</option><option value="0">Alles</option>
+    </select>
+    <a class="btn sm" id="f-export" href="#">CSV-Export</a>
+    <span class="muted" id="f-count" style="font-size:12.5px"></span>
+  </div>
+  <div class="panel evlist" id="ev-all"></div>
+</section>
+
+<section id="v-stats">
+  <div class="filters">
+    <select id="s-host"></select>
+    <select id="s-days"><option value="7">7 Tage</option><option value="14" selected>14 Tage</option><option value="30">30 Tage</option><option value="60">60 Tage</option></select>
+    <div class="seg" id="s-metric">
+      <button data-m="loss" class="on">Paketverlust</button><button data-m="avg">Ø Antwortzeit</button><button data-m="max">Max</button><button data-m="spk">Spitzen</button>
+    </div>
+    <a class="btn sm" id="s-export" href="#">CSV-Export</a>
+  </div>
+  <div class="panel" style="padding:12px">
+    <div class="hm-wrap"><table class="hm" id="hm"></table></div>
+    <div class="scale" id="s-scale"></div>
+  </div>
+  <p class="muted" style="font-size:12.5px">Zeilen = Tage, Spalten = Uhrzeit (Stunde). Ein Klick auf ein Feld öffnet die Zeitleiste dieser Stunde.</p>
+</section>
+
+<section id="v-settings">
+  <h2>Hosts <button class="btn sm pri" id="add-host">+ Host hinzufügen</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
+
+  <h2>Standorte (Agenten) <button class="btn sm pri" id="add-site">+ Standort hinzufügen</button></h2>
+  <div class="sites" id="sites"></div>
+  <div class="panel help" style="margin-top:12px">
+    <b style="color:var(--fg)">So kommt ein Standort dazu (lokale IPs pingen)</b>
+    <ol>
+      <li>Standort anlegen, dann <b>agent.json</b> und <b>Windows-Agent</b> herunterladen.</li>
+      <li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\PingWatch</code>) und <b>pingwatch-agent.exe</b> starten.</li>
+      <li>Der Agent erscheint als Symbol im Infobereich der Taskleiste und startet ab jetzt automatisch mit Windows.</li>
+      <li>Hosts mit diesem Standort anlegen – der Agent übernimmt sie innerhalb weniger Sekunden.</li>
+    </ol>
+    Fällt das Internet am Standort aus, puffert der Agent die Messwerte und schickt sie nach. Für einen Raspberry Pi gibt es den Linux-Agent (<code>pingwatch-agent-linux-arm64 agent -config agent.json</code>).
+  </div>
+
+  <h2>Allgemein</h2>
+  <div class="panel">
+    <div class="formrow">
+      <label class="field">Messwerte aufbewahren (Tage)<input type="number" id="g-ret" min="7" max="730"></label>
+      <button class="btn" id="g-save">Speichern</button>
+    </div>
+    <div class="formrow" id="g-pw" style="border-top:1px solid var(--line)">
+      <label class="field">Altes Passwort<input type="password" id="g-old" autocomplete="current-password"></label>
+      <label class="field">Neues Passwort (min. 8 Zeichen)<input type="password" id="g-new" autocomplete="new-password"></label>
+      <button class="btn" id="g-pwsave">Passwort ändern</button>
+    </div>
+    <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
+  </div>
+  <div class="panel help" style="margin-top:12px">
+    <b style="color:var(--fg)">Auf dem iPhone als App</b><br>
+    Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. PingWatch startet dann wie eine App im Vollbild.
+  </div>
+  <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
+</section>
+</main>
+
+<dialog id="dlg-host">
+  <form method="dialog" id="host-form">
+    <div class="dlg-h" id="hf-title">Host hinzufügen</div>
+    <div class="dlg-b">
+      <label class="field">Name<input name="name" placeholder="z. B. Antenne Dogern" maxlength="60"></label>
+      <label class="field">IP-Adresse oder Hostname<input name="addr" required placeholder="192.168.1.1 oder 8.8.8.8"></label>
+      <label class="field">Pingt von<select name="site" id="hf-site"></select><small id="hf-sitehint"></small></label>
+      <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option></select></label>
+      <label class="field" id="hf-portf">TCP-Port<input name="port" type="number" min="1" max="65535" value="443"></label>
+      <label class="field">Intervall (Sekunden)<select name="interval"><option value="500">0,5</option><option value="1000" selected>1</option><option value="2000">2</option><option value="5000">5</option><option value="10000">10</option><option value="30000">30</option><option value="60000">60</option></select></label>
+      <label class="field">Timeout (ms)<input name="timeoutMs" type="number" min="100" max="10000" value="1000"></label>
+      <label class="field">Spitze ab (ms)<input name="thresholdMs" type="number" min="0" placeholder="leer = automatisch"><small>Automatisch: 3× normaler Wert, mind. +30 ms</small></label>
+      <label class="field">Ausfall ab (Pings ohne Antwort in Folge)<input name="outageCount" type="number" min="1" max="100" value="3"></label>
+      <label class="check full"><input type="checkbox" name="paused"> Pausiert</label>
+    </div>
+    <div class="dlg-err" id="hf-err"></div>
+    <div class="dlg-f">
+      <button class="btn danger" type="button" id="hf-del" style="margin-right:auto">Löschen</button>
+      <button class="btn" value="cancel" formnovalidate>Abbrechen</button>
+      <button class="btn pri" id="hf-save" value="ok">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="tip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const p2=n=>String(n).padStart(2,'0');
+function fmtMs(t10){ if(t10==null||t10<0) return '–'; const v=t10/10; if(v<1) return '<1 ms'; return (v<100? v.toLocaleString('de-DE',{maximumFractionDigits:1,minimumFractionDigits:v<10?1:0}) : Math.round(v).toLocaleString('de-DE'))+' ms'; }
+function fmtMsN(t10){ if(t10==null||t10<0) return '–'; const v=t10/10; return v<10? v.toLocaleString('de-DE',{maximumFractionDigits:1}) : Math.round(v).toLocaleString('de-DE'); }
+function fmtTime(ms,sec=true){const d=new Date(ms);return p2(d.getHours())+':'+p2(d.getMinutes())+(sec?':'+p2(d.getSeconds()):'');}
+function fmtDate(ms){const d=new Date(ms);return WD[d.getDay()]+' '+p2(d.getDate())+'.'+p2(d.getMonth()+1)+'.';}
+function isToday(ms){const d=new Date(ms),n=new Date();return d.toDateString()===n.toDateString();}
+function isYesterday(ms){const d=new Date(ms),n=new Date(Date.now()-864e5);return d.toDateString()===n.toDateString();}
+function fmtDay(ms){return isToday(ms)?'Heute':isYesterday(ms)?'Gestern':fmtDate(ms);}
+function fmtDT(ms,sec=true){return fmtDay(ms)+' '+fmtTime(ms,sec);}
+function fmtDur(ms){ if(ms<0)ms=0; const s=Math.round(ms/1000); if(s<60) return s+' s'; const m=Math.floor(s/60); if(m<60) return m+' min'+(s%60&&m<10?' '+s%60+' s':''); const h=Math.floor(m/60); if(h<24) return h+' h'+(m%60?' '+m%60+' min':''); const d=Math.floor(h/24); return d+' T'+(h%24?' '+h%24+' h':''); }
+function pct(l,n,dec){ if(!n) return '–'; const v=l*100/n; return v.toLocaleString('de-DE',{maximumFractionDigits:dec??(v<1&&v>0?2:1)})+' %'; }
+function agg(a){ return a&&a!==0? {n:a[0],lost:a[1],spk:a[2],avg:a[3],min:a[4],max:a[5]} : {n:0,lost:0,spk:0,avg:-1,min:-1,max:-1}; }
+async function api(p,opt){ const r=await fetch(p,opt); if(r.status===401){location.href='/login';throw new Error('401');} if(!r.ok){throw new Error((await r.text())||r.statusText);} const ct=r.headers.get('content-type')||''; return ct.includes('json')? r.json() : r.text(); }
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200);}
+const STATUS={ok:['OK','--ok'],spike:['Latenzspitze','--warn'],loss:['Paketverlust','--loss'],down:['Keine Antwort','--bad'],stale:['Keine Daten','--off'],siteoff:['Standort offline','--off'],paused:['Pausiert','--off'],unknown:['Warte auf Daten','--off']};
+const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline'};
+
+/* ---------- Tooltip ---------- */
+const tip=$('#tip');
+function showTip(html,x,y){ tip.innerHTML=html; tip.style.display='block'; const w=tip.offsetWidth,h=tip.offsetHeight; let L=x+14,T=y+14; if(L+w>innerWidth-8) L=x-w-14; if(L<8)L=8; if(T+h>innerHeight-8) T=y-h-14; if(T<8)T=8; tip.style.left=L+'px'; tip.style.top=T+'px'; }
+function hideTip(){tip.style.display='none';}
+function aggTip(title,a){ const r=(k,v)=>`<div class="r"><span>${k}</span><span class="num">${v}</span></div>`;
+  if(!a.n) return `<b>${title}</b><div class="muted">keine Daten</div>`;
+  return `<b>${title}</b>`+r('Pings',a.n.toLocaleString('de-DE'))+r('Verloren',a.lost?`<b style="color:var(--bad)">${a.lost} (${pct(a.lost,a.n)})</b>`:'0')+r('Ø',fmtMs(a.avg))+r('Min / Max',fmtMsN(a.min)+' / '+fmtMs(a.max))+(a.spk?r('Spitzen',`<b style="color:var(--warn)">${a.spk}</b>`):''); }
+
+/* ---------- Canvas-Helfer ---------- */
+function setupCanvas(c){ const dpr=window.devicePixelRatio||1, r=c.getBoundingClientRect(); const W=Math.max(10,Math.round(r.width)),H=Math.max(10,Math.round(r.height)); if(c.width!==W*dpr||c.height!==H*dpr){c.width=W*dpr;c.height=H*dpr;} const g=c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H); return {g,W,H}; }
+function bucketColor(a){ if(!a.n) return css('--nodata'); if(a.lost/a.n>=0.5) return css('--bad'); if(a.lost) return css('--loss'); if(a.spk) return css('--warn'); return css('--ok'); }
+
+/* ---------- Zustand ---------- */
+let S={state:null,overview:null,view:'overview',hostId:null};
+let cards={};
+
+/* ---------- Übersicht ---------- */
+function renderSummary(){
+  const st=S.state; if(!st) return;
+  const act=st.hosts.filter(h=>!h.paused);
+  const down=act.filter(h=>h.status==='down').length, warn=act.filter(h=>h.status==='loss'||h.status==='spike').length, off=act.filter(h=>['siteoff','stale'].includes(h.status)).length;
+  const ok=act.length-down-warn-off;
+  let html=`<span class="pill"><span class="dot" style="background:var(${down?'--bad':warn?'--warn':'--ok'})"></span><span class="num">${ok}/${act.length} OK</span></span>`;
+  if(down) html+=`<span class="pill" style="color:var(--bad)"><b>${down}</b>&nbsp;ohne Antwort</span>`;
+  if(off) html+=`<span class="pill hide-m">${off} ohne Daten</span>`;
+  $('#summary').innerHTML=html;
+}
+function renderOverview(){
+  const st=S.state; if(!st) return;
+  const root=$('#ov');
+  if(!st.hosts.length){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
+  // Gruppen nach Standort
+  const groups=[]; for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id); if(hs.length) groups.push([s,hs]); }
+  const sig=groups.map(([s,hs])=>s.id+':'+hs.map(h=>h.id).join(',')).join('|');
+  if(root.dataset.sig!==sig){
+    root.dataset.sig=sig; root.innerHTML=''; cards={};
+    for(const [s,hs] of groups){
+      const h=document.createElement('div'); h.className='site-h'; h.dataset.site=s.id; root.appendChild(h);
+      const g=document.createElement('div'); g.className='grid'; root.appendChild(g);
+      for(const host of hs){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div>`;
+        c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
+        const bar=c.querySelector('.bar'); bar.addEventListener('mousemove',e=>barHover(e,host.id)); bar.addEventListener('mouseleave',hideTip); bar.addEventListener('click',e=>barClick(e,host.id));
+        g.appendChild(c); cards[host.id]=c; }
+    }
+  }
+  for(const [s] of groups){ const h=root.querySelector(`.site-h[data-site="${s.id}"]`); if(!h) continue;
+    const on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
+  for(const h of st.hosts){ const c=cards[h.id]; if(!c) continue;
+    const [lbl,col]=STATUS[h.status]||STATUS.unknown;
+    c.classList.toggle('down',h.status==='down');
+    c.querySelector('.dot').style.background=`var(${col})`;
+    c.querySelector('.card-t b').textContent=h.name;
+    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'');
+    c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
+    const sv=c.querySelector('.card-v span'); sv.textContent=h.status==='down'?lbl+' ('+h.consec+'×)':lbl; sv.style.color=`var(${col})`;
+    const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
+    kv[0].textContent=fmtMs(a1.avg); kv[1].textContent=fmtMs(a1.max); kv[2].textContent=pct(a1.lost,a1.n); kv[3].textContent=pct(a24.lost,a24.n);
+    kv[2].style.color=a1.lost?'var(--bad)':''; kv[3].style.color=a24.lost?'var(--loss)':'';
+    drawSpark(c.querySelector('.spark'),h);
+    const last=c.querySelector('.last'); const live=(h.ongoing||[]).find(e=>e.type==='outage');
+    if(live){ last.className='last live'; last.textContent=`Ausfall seit ${fmtDT(live.start)} (${fmtDur(Date.now()-live.start)})`; }
+    else if(h.lastOutage){ const e=h.lastOutage; last.className='last'; last.textContent=`Letzter Ausfall: ${fmtDT(e.start,false)} · ${fmtDur((e.end||e.last)-e.start)}`; }
+    else { last.className='last'; last.textContent=h.lastErr&&h.lastR<0?h.lastErr:(a24.n?'Keine Ausfälle gespeichert':''); }
+  }
+  drawBars();
+}
+function drawSpark(c,h){
+  const {g,W,H}=setupCanvas(c); const d=h.spark||[]; if(!d.length) return;
+  const vals=d.map(v=>v<-1?-v-2:v).filter(v=>v>=0); const mx=Math.max(10,...vals)*1.15;
+  const step=W/90, x0=W-d.length*step;
+  g.fillStyle=css('--acc-a'); g.strokeStyle=css('--acc'); g.lineWidth=1.5;
+  g.beginPath(); let started=false;
+  d.forEach((v,i)=>{ const x=x0+i*step+step/2; if(v===-1){ started=false; return; } const r=v<-1?-v-2:v; const y=H-2-(r/mx)*(H-4); if(!started){g.moveTo(x,y);started=true;} else g.lineTo(x,y); });
+  g.stroke();
+  d.forEach((v,i)=>{ const x=x0+i*step; if(v===-1){ g.fillStyle=css('--bad'); g.fillRect(x,0,Math.max(2,step-0.5),H); } else if(v<-1){ const r=-v-2; g.fillStyle=css('--warn'); g.beginPath(); g.arc(x+step/2,H-2-(r/mx)*(H-4),2.4,0,7); g.fill(); } });
+}
+function drawBars(){
+  const ov=S.overview; if(!ov) return;
+  for(const id in cards){ const c=cards[id].querySelector('.bar'); const arr=ov.hosts[id]; const {g,W,H}=setupCanvas(c); if(!arr) continue;
+    const n=arr.length, w=W/n;
+    for(let i=0;i<n;i++){ const a=agg(arr[i]); g.fillStyle=bucketColor(a); const x=Math.floor(i*w), x2=Math.floor((i+1)*w); g.fillRect(x,0,Math.max(1,x2-x-(w>5?1:0)),H); }
+  }
+}
+function barIndex(e,id){ const ov=S.overview; if(!ov||!ov.hosts[id]) return -1; const r=e.target.getBoundingClientRect(); return Math.min(ov.n-1,Math.max(0,Math.floor((e.clientX-r.left)/r.width*ov.n))); }
+function barHover(e,id){ const i=barIndex(e,id); if(i<0) return; const ov=S.overview, t0=ov.from+i*ov.bucket; showTip(aggTip(fmtDay(t0)+' '+fmtTime(t0,false)+'–'+fmtTime(t0+ov.bucket,false),agg(ov.hosts[id][i])),e.clientX,e.clientY); }
+function barClick(e,id){ e.stopPropagation(); const i=barIndex(e,id); if(i<0) return; const ov=S.overview, t0=ov.from+i*ov.bucket; location.hash=`#/host/${id}?from=${t0-ov.bucket}&to=${t0+2*ov.bucket}`; }
+
+/* ---------- Ereignislisten ---------- */
+function evText(e){
+  switch(e.type){
+    case 'outage': return `${e.count.toLocaleString('de-DE')} Pings ohne Antwort`;
+    case 'loss': return `${e.count}× keine Antwort`+(e.last>e.start?` innerhalb ${fmtDur(e.last-e.start)}`:'');
+    case 'spike': return `${e.count} ${e.count===1?'Spitze':'Spitzen'} · max ${fmtMs(e.max)} · Ø ${fmtMs(Math.round(e.sum/e.count))}`;
+    case 'offline': return 'Agent hat sich nicht gemeldet';
+  } return ''; }
+function renderEvents(el,evs,showHost,limit){
+  if(!evs.length){ el.innerHTML='<div class="empty">Keine Ereignisse im gewählten Zeitraum 👍</div>'; return; }
+  const now=Date.now(); const all=evs; if(limit&&evs.length>limit&&!el._all) evs=evs.slice(0,limit);
+  el.innerHTML=evs.map(e=>{ const live=!e.end&&e.type!=='loss'&&e.type!=='spike'; const end=e.end||(live?now:e.last); const d=end-e.start;
+    return `<div class="ev ${live?'live':''}" data-h="${esc(e.host)}" data-s="${e.start}" data-e="${end}">
+      <div class="when num">${fmtTime(e.start)}<small>${fmtDay(e.start)}</small></div>
+      <div class="what"><span class="badge b-${e.type}">${TYPES[e.type]}</span>${showHost?'<b>'+esc(e.name)+'</b>':''}<div>${evText(e)}</div></div>
+      <div class="dur num">${live?'läuft':d<1000&&e.type!=='outage'?'':fmtDur(d)}<small>${live?'seit '+fmtDur(d):d<1000&&e.type!=='outage'?'':'bis '+fmtTime(end)}</small></div></div>`; }).join('')
+    + (all.length>evs.length?`<div class="ev" data-more="1" style="display:block;text-align:center;color:var(--acc);font-weight:600">Alle ${all.length} Ereignisse anzeigen</div>`:'');
+  const more=el.querySelector('[data-more]'); if(more) more.onclick=ev=>{ ev.stopPropagation(); el._all=true; renderEvents(el,all,showHost,limit); };
+  el.querySelectorAll('.ev:not([data-more])').forEach(x=>x.onclick=()=>{ if(!x.dataset.h) return; const s=+x.dataset.s,e=+x.dataset.e, pad=Math.max(5*60e3,(e-s)*0.5); location.hash=`#/host/${x.dataset.h}?from=${Math.round(s-pad)}&to=${Math.round(Math.min(Date.now(),e+pad))}`; });
+}
+
+/* ---------- Detailansicht ---------- */
+const RANGES={'15m':15*60e3,'1h':36e5,'6h':6*36e5,'24h':864e5,'7d':7*864e5,'30d':30*864e5};
+let D={preset:'1h',from:0,to:0,data:null,scale:'lin',hover:-1,drag:null,stack:[]};
+function dRange(){ if(D.preset){ const to=Date.now(); return [to-RANGES[D.preset],to]; } return [D.from,D.to]; }
+async function loadDetail(){
+  const id=S.hostId; if(!id) return;
+  const [from,to]=dRange(); const c=$('#chart'); const w=c.getBoundingClientRect().width||800;
+  const n=Math.max(60,Math.min(1200,Math.round(w/2)));
+  try{
+    const [data,evs]=await Promise.all([api(`/api/series?host=${id}&from=${Math.round(from)}&to=${Math.round(to)}&n=${n}`), api(`/api/events?host=${id}&from=${Math.round(from)}&to=${Math.round(to)}&limit=1000`)]);
+    if(S.hostId!==id) return;
+    D.data=data; D.evs=evs; drawChart(); renderDetailStats(); renderEvents($('#d-events'),evs,false,40);
+    $('#d-evcount').textContent=evs.length?evs.length+' gesamt':'';
+  }catch(e){ console.error(e); }
+}
+function renderDetailHead(){
+  const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); if(!h) return;
+  const [lbl,col]=STATUS[h.status]||STATUS.unknown;
+  $('#d-dot').style.background=`var(${col})`; $('#d-name').textContent=h.name;
+  const site=S.state.sites.find(s=>s.id===h.site);
+  $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
+  $('#d-now').innerHTML=`<span class="dot" style="background:var(${col})"></span>${h.status==='down'||h.lastR<0?lbl:fmtMs(h.lastR)} ${h.threshold?'<span class="muted">· Spitze ab '+fmtMs(h.threshold)+'</span>':''}`;
+  const [from,to]=dRange(); $('#d-rangetxt').textContent=fmtDT(from,false)+' – '+(D.preset?'jetzt':fmtDT(to,false));
+}
+function renderDetailStats(){
+  const b=D.data.b.map(agg); const t={n:0,lost:0,spk:0,sum:0,good:0,min:1e12,max:-1};
+  for(const a of b){ if(!a.n) continue; t.n+=a.n; t.lost+=a.lost; t.spk+=a.spk; const g=a.n-a.lost; if(g>0){ t.sum+=a.avg*g; t.good+=g; t.min=Math.min(t.min,a.min); t.max=Math.max(t.max,a.max);} }
+  const [from,to]=dRange(); let outs=0,down=0; for(const e of D.evs||[]){ if(e.type!=='outage') continue; outs++; const s=Math.max(from,e.start), en=Math.min(to,e.end||Date.now()); down+=Math.max(0,en-s); }
+  const st=(k,v,c)=>`<div class="panel stat"><span>${k}</span><b class="num" ${c?`style="color:var(${c})"`:''}>${v}</b></div>`;
+  $('#d-stats').innerHTML=st('Pings',t.n.toLocaleString('de-DE'))+st('Verloren',t.lost?t.lost.toLocaleString('de-DE')+' · '+pct(t.lost,t.n):'0',t.lost?'--bad':'')+st('Ø Antwortzeit',t.good?fmtMs(t.sum/t.good):'–')+st('Min',t.good?fmtMs(t.min):'–')+st('Max',t.max>=0?fmtMs(t.max):'–',t.spk?'--warn':'')+st('Spitzen',t.spk.toLocaleString('de-DE'),t.spk?'--warn':'')+st('Ausfälle',outs,outs?'--bad':'')+st('Ausfallzeit',outs?fmtDur(down):'–',outs?'--bad':'');
+}
+const CH={l:52,r:14,t:34,b:26};
+function niceMax(v){ if(v<=10) return 10; const p=Math.pow(10,Math.floor(Math.log10(v))); for(const m of [1,1.5,2,2.5,3,4,5,6,8,10]) if(m*p>=v) return m*p; return 10*p; }
+function chartGeo(){ const c=$('#chart'); const r=c.getBoundingClientRect(); return {W:r.width,H:r.height,pw:r.width-CH.l-CH.r,ph:r.height-CH.t-CH.b}; }
+function drawChart(){
+  const c=$('#chart'); const {g,W,H}=setupCanvas(c); const d=D.data; if(!d) return;
+  const b=d.b.map(agg), n=b.length, pw=W-CH.l-CH.r, ph=H-CH.t-CH.b, bw=pw/n;
+  const [from,to]=dRange();
+  // y-Skala
+  let top=10; for(const a of b) if(a.n&&a.max>top) top=a.max; top=top/10; if(d.threshold) top=Math.max(top,d.threshold/10*1.15);
+  const log=D.scale==='log'; const yMax=log?Math.pow(10,Math.ceil(Math.log10(top*1.05))):niceMax(top*1.08);
+  const Y=v=>{ v=v/10; if(log){ const lv=Math.log10(Math.max(0.1,v)+1), lm=Math.log10(yMax+1); return CH.t+ph-(lv/lm)*ph; } return CH.t+ph-Math.min(1,v/yMax)*ph; };
+  const X=i=>CH.l+i*bw;
+  const fg=css('--fg'),mut=css('--mut'),line=css('--line'),acc=css('--acc'),bad=css('--bad'),warn=css('--warn'),nod=css('--nodata');
+  g.font='11px system-ui,-apple-system,Segoe UI,sans-serif'; g.textBaseline='middle';
+  // Gitter + y-Beschriftung
+  const ticks=log? [0.1,1,10,100,1000,10000].filter(v=>v<=yMax) : [0,1,2,3,4,5].map(i=>yMax*i/5);
+  g.strokeStyle=line; g.lineWidth=1; g.fillStyle=mut; g.textAlign='right';
+  for(const v of ticks){ const y=Math.round(Y(v*10))+.5; g.beginPath(); g.moveTo(CH.l,y); g.lineTo(W-CH.r,y); g.stroke(); g.fillText((v<1&&v>0?v.toLocaleString('de-DE'):Math.round(v).toLocaleString('de-DE'))+' ms',CH.l-6,y); }
+  // keine Daten / Verlust-Spalten
+  for(let i=0;i<n;i++){ const a=b[i]; const x=X(i);
+    if(!a.n){ g.fillStyle=nod; g.globalAlpha=.55; g.fillRect(x,CH.t,Math.ceil(bw),ph); g.globalAlpha=1; continue; }
+    if(a.lost){ const r=a.lost/a.n; g.fillStyle=bad; g.globalAlpha=r>=.5?.28:.1+.15*Math.min(1,r*4); g.fillRect(x,CH.t,Math.max(1.5,Math.ceil(bw)),ph); g.globalAlpha=Math.min(1,.45+r*3); g.fillRect(x,CH.t-15,Math.max(2,Math.ceil(bw)),9); g.globalAlpha=1; }
+  }
+  // Min-Max-Band
+  g.fillStyle=css('--acc-a');
+  let seg=[]; const flushBand=()=>{ if(seg.length){ g.beginPath(); seg.forEach(([x,mn,mx],k)=>k?g.lineTo(x,Y(mx)):g.moveTo(x,Y(mx))); for(let k=seg.length-1;k>=0;k--) g.lineTo(seg[k][0],Y(seg[k][1])); g.closePath(); g.fill(); } seg=[]; };
+  for(let i=0;i<n;i++){ const a=b[i]; if(a.n&&a.max>=0){ seg.push([X(i)+bw/2,a.min,a.max]); if(bw>3){} } else flushBand(); } flushBand();
+  // Ø-Linie
+  g.strokeStyle=acc; g.lineWidth=1.6; g.lineJoin='round'; g.beginPath(); let pen=false;
+  for(let i=0;i<n;i++){ const a=b[i]; if(a.n&&a.avg>=0){ const x=X(i)+bw/2,y=Y(a.avg); if(!pen){g.moveTo(x,y);pen=true;} else g.lineTo(x,y);} else pen=false; }
+  g.stroke();
+  // Spitzen
+  g.fillStyle=warn; for(let i=0;i<n;i++){ const a=b[i]; if(a.spk&&a.max>=0){ g.beginPath(); g.arc(X(i)+bw/2,Y(a.max),bw>6?3.2:2.4,0,7); g.fill(); } }
+  // Schwelle
+  if(d.threshold){ const y=Math.round(Y(d.threshold))+.5; g.strokeStyle=warn; g.setLineDash([5,4]); g.lineWidth=1; g.beginPath(); g.moveTo(CH.l,y); g.lineTo(W-CH.r,y); g.stroke(); g.setLineDash([]); g.fillStyle=warn; g.textAlign='right'; g.fillText('Spitze ab '+fmtMs(d.threshold),W-CH.r-2,y-8); }
+  // x-Achse
+  const span=d.from+n*d.bucket-d.from; const steps=[60e3,5*60e3,10*60e3,15*60e3,30*60e3,36e5,2*36e5,3*36e5,6*36e5,12*36e5,864e5,2*864e5,7*864e5];
+  let step=steps[steps.length-1]; for(const s of steps){ if(pw/(span/s)>=78){ step=s; break; } }
+  const off=new Date().getTimezoneOffset()*60e3; let t=Math.ceil((d.from-off)/step)*step+off;
+  if(step>=864e5){ const dd=new Date(d.from); dd.setHours(24,0,0,0); t=dd.getTime(); }
+  g.textAlign='center'; g.fillStyle=mut; g.strokeStyle=line;
+  for(;t<d.from+span;t+=step){ if(step>=864e5){ const dd=new Date(t); if(dd.getHours()!==0){ dd.setHours(24,0,0,0); t=dd.getTime(); } }
+    const x=CH.l+(t-d.from)/span*pw; if(x<CH.l+10||x>W-CH.r-10) continue;
+    const dt=new Date(t), midnight=dt.getHours()===0&&dt.getMinutes()===0;
+    const lbl= step>=864e5? p2(dt.getDate())+'.'+p2(dt.getMonth()+1)+'.' : midnight? fmtDate(t) : fmtTime(t,false);
+    g.fillStyle=midnight?fg:mut; g.fillText(lbl,x,H-CH.b+14); g.beginPath(); g.moveTo(Math.round(x)+.5,CH.t+ph); g.lineTo(Math.round(x)+.5,CH.t+ph+4); g.stroke(); }
+  g.fillStyle=mut; g.textAlign='right'; g.fillText('Verlust',CH.l-6,CH.t-10);
+  // Hover
+  if(D.hover>=0&&D.hover<n){ const x=X(D.hover); g.fillStyle=fg; g.globalAlpha=.08; g.fillRect(x,CH.t,Math.max(2,bw),ph); g.globalAlpha=1; }
+  // Zoom-Auswahl
+  if(D.drag&&D.drag.x2!=null){ const a=Math.min(D.drag.x1,D.drag.x2),w=Math.abs(D.drag.x2-D.drag.x1); g.fillStyle=acc; g.globalAlpha=.15; g.fillRect(a,CH.t,w,ph); g.globalAlpha=1; }
+}
+function chartIdx(clientX){ const c=$('#chart'),r=c.getBoundingClientRect(); const d=D.data; if(!d) return -1; const x=clientX-r.left; const pw=r.width-CH.l-CH.r; if(x<CH.l||x>r.width-CH.r) return -1; return Math.floor((x-CH.l)/pw*d.b.length); }
+function chartTip(e){ const i=chartIdx(e.clientX); D.hover=i; drawChart(); if(i<0||!D.data){hideTip();return;} const d=D.data, t0=d.from+i*d.bucket;
+  const t1=t0+d.bucket; const title=fmtDay(t0)+' '+(d.bucket<60e3?fmtTime(t0)+'–'+fmtTime(t1):fmtTime(t0,false)+'–'+fmtTime(t1,false)); showTip(aggTip(title,agg(d.b[i])),e.clientX,e.clientY); }
+(function(){ const c=$('#chart');
+  c.addEventListener('mousemove',e=>{ if(D.drag){ const r=c.getBoundingClientRect(); D.drag.x2=Math.max(CH.l,Math.min(r.width-CH.r,e.clientX-r.left)); } chartTip(e); });
+  c.addEventListener('mouseleave',()=>{ D.hover=-1; hideTip(); if(!D.drag) drawChart(); });
+  c.addEventListener('mousedown',e=>{ const r=c.getBoundingClientRect(); D.drag={x1:e.clientX-r.left,x2:null}; });
+  window.addEventListener('mouseup',e=>{ if(!D.drag) return; const dr=D.drag; D.drag=null; if(dr.x2==null||Math.abs(dr.x2-dr.x1)<8){ drawChart(); return; }
+    const r=c.getBoundingClientRect(), pw=r.width-CH.l-CH.r; const d=D.data, span=d.b.length*d.bucket;
+    const a=d.from+(Math.min(dr.x1,dr.x2)-CH.l)/pw*span, b=d.from+(Math.max(dr.x1,dr.x2)-CH.l)/pw*span;
+    if(b-a<30e3) { drawChart(); return; }
+    location.hash=`#/host/${S.hostId}?from=${Math.round(a)}&to=${Math.round(b)}`; });
+  c.addEventListener('touchstart',e=>{ const t=e.touches[0]; chartTip(t); },{passive:true});
+  c.addEventListener('touchmove',e=>{ const t=e.touches[0]; chartTip(t); },{passive:true});
+})();
+$('#d-range').onclick=e=>{ const r=e.target.dataset.r; if(!r) return; location.hash=`#/host/${S.hostId}?r=${r}`; };
+$('#d-scale').onclick=e=>{ const s=e.target.dataset.s; if(!s) return; D.scale=s; $$('#d-scale button').forEach(b=>b.classList.toggle('on',b.dataset.s===s)); drawChart(); };
+$('#d-date').onchange=e=>{ if(!e.target.value) return; const d=new Date(e.target.value+'T00:00:00'); location.hash=`#/host/${S.hostId}?from=${d.getTime()}&to=${Math.min(Date.now(),d.getTime()+864e5)}`; };
+$('#d-back').onclick=()=>history.back();
+
+/* ---------- Ereignisse-Ansicht ---------- */
+function evQuery(){ const host=$('#f-host').value, types=$$('#f-types button.on').map(b=>b.dataset.t).join(','), days=+$('#f-range').value; let q=`host=${host}&types=${types}`; if(days) q+=`&from=${Date.now()-days*864e5}`; return q; }
+async function loadEvents(){ try{ const evs=await api('/api/events?limit=1000&'+evQuery()); renderEvents($('#ev-all'),evs,true,200); $('#f-count').textContent=evs.length+(evs.length>=1000?'+':'')+' Ereignisse'; $('#f-export').href='/api/export/events.csv?'+evQuery(); }catch(e){} }
+$('#f-types').onclick=e=>{ if(!e.target.dataset.t) return; e.target.classList.toggle('on'); loadEvents(); };
+$('#f-host').onchange=loadEvents; $('#f-range').onchange=loadEvents;
+
+/* ---------- Statistik ---------- */
+let SM='loss', SD=null;
+async function loadStats(){ const id=$('#s-host').value; if(!id){ $('#hm').innerHTML='<tr><td class="empty">Noch keine Hosts</td></tr>'; return; }
+  const days=$('#s-days').value; $('#s-export').href=`/api/export/stats.csv?host=${id}&days=${days}`;
+  try{ SD=await api(`/api/stats?host=${id}&days=${days}`); renderHeatmap(); }catch(e){} }
+function hmColor(a,ref){
+  if(!a.n) return [css('--nodata'),''];
+  const mix=(c,p)=>`color-mix(in srgb,${css(c)} ${Math.round(p)}%,${css('--panel')})`;
+  if(SM==='loss'){ const r=a.lost/a.n; if(!a.lost) return [mix('--ok',38),'']; const p=r*100; return [p>=5?css('--bad'):p>=1?mix('--bad',70):p>=0.2?mix('--loss',75):mix('--loss',45), p<0.1?'<0,1':p.toLocaleString('de-DE',{maximumFractionDigits:p<10?1:0})]; }
+  if(SM==='spk'){ if(!a.spk) return [mix('--ok',38),'']; return [a.spk>=20?css('--warn'):mix('--warn',35+Math.min(60,a.spk*4)),String(a.spk)]; }
+  const v=SM==='avg'?a.avg:a.max; if(v<0) return [css('--bad'),'']; const r=ref>0?v/ref:1;
+  const col= r<=1.3?mix('--ok',38): r<=2?mix('--warn',45): r<=4?mix('--warn',85): mix('--bad',75);
+  return [col,fmtMsN(v)];
+}
+function renderHeatmap(){
+  if(!SD) return; const days=SD.days;
+  const vals=[]; for(const d of days) for(const h of d.hours){ const a=agg(h); if(a.n&&a.avg>=0) vals.push(a.avg); } vals.sort((x,y)=>x-y); const med=vals.length?vals[Math.floor(vals.length/2)]:0;
+  let html='<tr><th></th>'+[...Array(24).keys()].map(h=>`<th>${p2(h)}</th>`).join('')+'<th class="s first">Verlust</th><th class="s">Ø</th><th class="s">Max</th><th class="s">Ausfälle</th><th class="s">Ausfallzeit</th></tr>';
+  for(const d of days){ const ds=new Date(d.day+'T00:00:00').getTime(); const T=agg(d.total);
+    html+=`<tr><th class="d">${fmtDay(ds)==='Heute'||fmtDay(ds)==='Gestern'?fmtDay(ds):fmtDate(ds)}</th>`;
+    d.hours.forEach((h,hr)=>{ const a=agg(h); const [bg,txt]=hmColor(a,med); html+=`<td class="c" style="background:${bg}" data-t="${ds+hr*36e5}" data-d="${d.day}" data-h="${hr}">${txt}</td>`; });
+    html+=`<td class="s first" style="${T.lost?'color:var(--bad);font-weight:600':''}">${T.n?pct(T.lost,T.n,2):'–'}</td><td class="s">${fmtMs(T.avg)}</td><td class="s">${fmtMs(T.max)}</td><td class="s" style="${d.outages?'color:var(--bad);font-weight:600':''}">${T.n?d.outages:'–'}</td><td class="s">${d.downtime?fmtDur(d.downtime):T.n?'–':''}</td></tr>`;
+  }
+  $('#hm').innerHTML=html;
+  $$('#hm td.c').forEach(td=>{ const d=days.find(x=>x.day===td.dataset.d), a=agg(d.hours[+td.dataset.h]); const t=+td.dataset.t;
+    td.onmousemove=e=>showTip(aggTip(fmtDay(t)+' '+p2(td.dataset.h)+':00–'+p2(+td.dataset.h+1)+':00',a),e.clientX,e.clientY);
+    td.onmouseleave=hideTip;
+    td.onclick=()=>{ hideTip(); location.hash=`#/host/${$('#s-host').value}?from=${t}&to=${Math.min(Date.now(),t+36e5)}`; }; });
+  const sc={loss:[['--ok',38,'0 %'],['--loss',45,'< 0,2 %'],['--loss',75,'< 1 %'],['--bad',70,'< 5 %'],['--bad',100,'≥ 5 %']],spk:[['--ok',38,'keine'],['--warn',50,'einzelne'],['--warn',100,'≥ 20']],avg:[['--ok',38,'normal'],['--warn',45,'bis 2×'],['--warn',85,'bis 4×'],['--bad',75,'> 4× normal']],max:[['--ok',38,'normal'],['--warn',45,'bis 2×'],['--warn',85,'bis 4×'],['--bad',75,'> 4× normal']]}[SM];
+  $('#s-scale').innerHTML=sc.map(([c,p,l])=>`<i style="background:color-mix(in srgb,${css(c)} ${p}%,${css('--panel')})"></i>${l}`).join('&nbsp;&nbsp;')+`&nbsp;&nbsp;<i style="background:${css('--nodata')}"></i>keine Daten`+(SM==='avg'||SM==='max'?` &nbsp;·&nbsp; normal ≈ ${fmtMs(med)}`:'');
+}
+$('#s-metric').onclick=e=>{ const m=e.target.dataset.m; if(!m) return; SM=m; $$('#s-metric button').forEach(b=>b.classList.toggle('on',b.dataset.m===m)); renderHeatmap(); };
+$('#s-host').onchange=()=>{ location.hash='#/stats/'+$('#s-host').value; };
+$('#s-days').onchange=loadStats;
+
+/* ---------- Einstellungen ---------- */
+function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
+function renderSettings(){
+  const st=S.state; if(!st) return;
+  const hs=st.hosts;
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${h.method==='tcp'?'TCP '+h.port:'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
+  $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:!h.paused})}); refreshState(); });
+  const sites=st.sites.filter(s=>s.id!=='cloud');
+  $('#sites').innerHTML=sites.length? sites.map(s=>`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
+    <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)}</dd>`:''}</dl>
+    <div class="row"><a class="btn sm pri" href="/download/agent.json?site=${s.id}">agent.json</a><a class="btn sm" href="/download/pingwatch-agent.exe">Windows-Agent</a><a class="btn sm" href="/download/pingwatch-agent-linux-arm64">Pi (ARM64)</a><a class="btn sm" href="/download/pingwatch-agent-linux-amd64">Linux x64</a></div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
+  $$('#sites [data-ren]').forEach(b=>b.onclick=async()=>{ const n=prompt('Neuer Name:',siteName(b.dataset.ren)); if(!n) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.ren,name:n})}); refreshState(); });
+  $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!confirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
+  $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
+  if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
+  $('#g-pw').style.display=st.envPassword?'none':'flex';
+  const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
+  $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
+}
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused}; }
+$('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
+$('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
+$('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+/* Host-Dialog */
+const dlg=$('#dlg-host'), hf=$('#host-form');
+function openHost(id){
+  const h=id&&S.state.hosts.find(x=>x.id===id);
+  $('#hf-title').textContent=h?'Host bearbeiten':'Host hinzufügen'; $('#hf-del').style.display=h?'':'none'; $('#hf-err').textContent='';
+  $('#hf-site').innerHTML=S.state.sites.map(s=>`<option value="${s.id}">${s.id==='cloud'?'Cloud (öffentliche IPs)':esc(s.name)+' (Agent)'}</option>`).join('');
+  hf.dataset.id=h?h.id:'';
+  hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
+  hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
+  hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
+  syncHostForm(); dlg.showModal();
+}
+function syncHostForm(){ $('#hf-portf').style.display=hf.method.value==='tcp'?'':'none'; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
+  $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)'; }
+hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm;
+hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked};
+  try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
+$('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
+$('#add-host').onclick=()=>openHost();
+
+/* ---------- Routing & Polling ---------- */
+function fillHostSelects(){ const st=S.state; if(!st) return;
+  const opts=st.hosts.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
+  const fh=$('#f-host'); const v=fh.value; const sig1=st.hosts.map(h=>h.id+h.name).join(); if(fh.dataset.sig!==sig1){ fh.innerHTML='<option value="">Alle Hosts</option>'+opts; fh.value=v; fh.dataset.sig=sig1; }
+  const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=opts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
+function route(){
+  const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
+  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings'].includes(v)) v='overview';
+  S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||(v==='host'&&a.dataset.v==='overview')));
+  hideTip();
+  if(v==='host'){ S.hostId=parts[1]; const r=q.get('r'); if(q.get('from')){ D.preset=null; D.from=+q.get('from'); D.to=+q.get('to')||Date.now(); } else { D.preset=r&&RANGES[r]?r:(D.preset||'1h'); }
+    $$('#d-range button').forEach(b=>b.classList.toggle('on',b.dataset.r===D.preset)); $('#d-back').style.display=D.preset?'none':''; $('#d-date').value='';
+    D.data=null; $('#d-events')._all=false; drawChart(); renderDetailHead(); loadDetail(); }
+  else S.hostId=null;
+  if(v==='events') loadEvents();
+  if(v==='stats'){ fillHostSelects(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
+  if(v==='settings') renderSettings();
+  if(v==='overview') { renderOverview(); }
+  window.scrollTo(0,0);
+}
+async function refreshState(){
+  try{ S.state=await api('/api/state'); $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
+  renderSummary(); fillHostSelects();
+  if(S.view==='overview') renderOverview();
+  if(S.view==='host') renderDetailHead();
+  if(S.view==='settings') renderSettings();
+}
+async function refreshOverview(){ try{ S.overview=await api('/api/overview?hours=24&n=96'); if(S.view==='overview') drawBars(); }catch(e){} }
+let tick=0;
+setInterval(()=>{ if(document.hidden) return; tick++;
+  refreshState();
+  if(tick%10===0) refreshOverview();
+  if(S.view==='host'&&D.preset){ const span=RANGES[D.preset]; if(span<=6*36e5||tick%10===0) loadDetail(); }
+  if(S.view==='events'&&tick%5===0) loadEvents();
+},3000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ refreshState(); refreshOverview(); if(S.view==='host') loadDetail(); } });
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); },150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); });
+window.addEventListener('hashchange',route);
+(async()=>{ await refreshState(); await refreshOverview(); route(); })();
+</script>
+</body>
+</html>

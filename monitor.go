@@ -1,0 +1,664 @@
+package main
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"sort"
+	"sync"
+	"time"
+)
+
+const (
+	memWindow = 48 * time.Hour
+	mergeGap  = int64(60_000) // ms: Verluste/Spitzen innerhalb 60 s = ein Ereignis
+	baseSize  = 300
+)
+
+type HostCfg struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Addr        string `json:"addr"`
+	Site        string `json:"site"` // "cloud" oder Standort-ID
+	Method      string `json:"method"`
+	Port        int    `json:"port"`
+	IntervalMs  int    `json:"intervalMs"`
+	TimeoutMs   int    `json:"timeoutMs"`
+	ThresholdMs int    `json:"thresholdMs"` // 0 = automatisch
+	OutageCount int    `json:"outageCount"`
+	Paused      bool   `json:"paused"`
+}
+
+type SiteCfg struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Token string `json:"token"`
+}
+
+type Config struct {
+	Hosts         []HostCfg `json:"hosts"`
+	Sites         []SiteCfg `json:"sites"`
+	RetentionDays int       `json:"retentionDays"`
+	PassHash      string    `json:"passHash"`
+	Secret        string    `json:"secret"`
+	Version       int64     `json:"version"`
+}
+
+func randHex(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func (h *HostCfg) normalize() {
+	if h.IntervalMs < 500 {
+		h.IntervalMs = 1000
+	}
+	if h.IntervalMs > 300000 {
+		h.IntervalMs = 300000
+	}
+	if h.TimeoutMs <= 0 {
+		h.TimeoutMs = 1000
+	}
+	if h.TimeoutMs > 10000 {
+		h.TimeoutMs = 10000
+	}
+	if h.OutageCount < 1 {
+		h.OutageCount = 3
+	}
+	if h.Method != "tcp" {
+		h.Method = "icmp"
+		h.Port = 0
+	} else if h.Port <= 0 || h.Port > 65535 {
+		h.Port = 443
+	}
+	if h.Site == "" {
+		h.Site = "cloud"
+	}
+	if h.ThresholdMs < 0 {
+		h.ThresholdMs = 0
+	}
+}
+
+type Host struct {
+	mu      sync.Mutex
+	cfg     HostCfg
+	samples []Sample
+	lastR   int32
+	lastT   int64
+	lastF   uint8
+	lastErr string
+	ip      string
+	consec  int
+	stStart int64
+	stLast  int64
+	base    [baseSize]int32
+	baseN   int
+	basePos int
+	baseMed int32
+	baseCnt int
+	oOut    *Event
+	oLoss   *Event
+	oSpk    *Event
+	stop    chan struct{}
+}
+
+func (h *Host) addBase(r int32) {
+	h.base[h.basePos] = r
+	h.basePos = (h.basePos + 1) % baseSize
+	if h.baseN < baseSize {
+		h.baseN++
+	}
+	h.baseCnt++
+	if h.baseCnt%10 == 1 || h.baseN < 30 {
+		tmp := make([]int32, h.baseN)
+		copy(tmp, h.base[:h.baseN])
+		sort.Slice(tmp, func(i, j int) bool { return tmp[i] < tmp[j] })
+		h.baseMed = tmp[len(tmp)/2]
+	}
+}
+
+// effThreshold in Zehntel-ms, 0 = noch keine Grundlage
+func (h *Host) effThreshold() int32 {
+	if h.cfg.ThresholdMs > 0 {
+		return int32(h.cfg.ThresholdMs) * 10
+	}
+	if h.baseN < 30 {
+		return 0
+	}
+	t := h.baseMed * 3
+	if alt := h.baseMed + 300; alt > t {
+		t = alt
+	}
+	return t
+}
+
+type siteState struct {
+	mu       sync.Mutex
+	lastSeen int64
+	ip       string
+	version  string
+	offEv    *Event
+	pushMu   sync.Mutex
+}
+
+type Monitor struct {
+	mu      sync.RWMutex
+	cfg     Config
+	cfgPath string
+	hosts   map[string]*Host
+	sites   map[string]*siteState
+	store   *Store
+	evMu    sync.Mutex
+	events  []*Event
+	nextEv  int64
+	started int64
+	icmpOK  string
+}
+
+func NewMonitor(dataDir string) *Monitor {
+	m := &Monitor{
+		cfgPath: filepath.Join(dataDir, "config.json"),
+		hosts:   map[string]*Host{},
+		sites:   map[string]*siteState{},
+		store:   NewStore(dataDir),
+		started: time.Now().UnixMilli(),
+	}
+	if b, err := os.ReadFile(m.cfgPath); err == nil {
+		if err := json.Unmarshal(b, &m.cfg); err != nil {
+			log.Fatalf("config.json fehlerhaft: %v", err)
+		}
+	}
+	if m.cfg.RetentionDays <= 0 {
+		m.cfg.RetentionDays = 60
+	}
+	if m.cfg.Secret == "" {
+		m.cfg.Secret = randHex(32)
+	}
+	m.events = m.store.LoadEvents(m.cfg.RetentionDays)
+	for _, e := range m.events {
+		if e.ID >= m.nextEv {
+			m.nextEv = e.ID
+		}
+	}
+	for _, s := range m.cfg.Sites {
+		m.sites[s.ID] = &siteState{}
+	}
+	m.saveConfigLocked()
+	return m
+}
+
+func (m *Monitor) saveConfigLocked() {
+	m.cfg.Version = time.Now().UnixNano()
+	b, _ := json.MarshalIndent(m.cfg, "", "  ")
+	tmp := m.cfgPath + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err == nil {
+		os.Rename(tmp, m.cfgPath)
+	}
+}
+
+// Start lädt die letzten 48 h aus den Dateien und startet die Cloud-Pinger.
+func (m *Monitor) Start() {
+	m.mu.Lock()
+	for _, hc := range m.cfg.Hosts {
+		h := &Host{cfg: hc, lastR: -1}
+		m.loadMemory(h)
+		m.hosts[hc.ID] = h
+		if hc.Site == "cloud" && !hc.Paused {
+			m.startWorker(h)
+		}
+	}
+	m.mu.Unlock()
+	go m.housekeeping()
+}
+
+func (m *Monitor) loadMemory(h *Host) {
+	now := time.Now()
+	from := now.Add(-memWindow).UnixMilli()
+	for d := now.Add(-memWindow); !d.After(now.Add(24 * time.Hour)); d = d.AddDate(0, 0, 1) {
+		for _, sm := range m.store.ReadDay(h.cfg.ID, d.Format("2006-01-02")) {
+			if sm.T >= from {
+				h.samples = append(h.samples, sm)
+			}
+		}
+	}
+	sort.Slice(h.samples, func(i, j int) bool { return h.samples[i].T < h.samples[j].T })
+	for _, sm := range h.samples {
+		if sm.R >= 0 {
+			h.addBase(sm.R)
+		}
+	}
+	if n := len(h.samples); n > 0 {
+		l := h.samples[n-1]
+		h.lastR, h.lastT, h.lastF = l.R, l.T, l.F
+	}
+}
+
+func (m *Monitor) startWorker(h *Host) {
+	stop := make(chan struct{})
+	h.stop = stop
+	cfg := h.cfg
+	go func() {
+		res := &resolver{addr: cfg.Addr}
+		tk := time.NewTicker(time.Duration(cfg.IntervalMs) * time.Millisecond)
+		defer tk.Stop()
+		for {
+			t := time.Now().UnixMilli()
+			r, ip, e := probe(cfg, res)
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			m.Ingest(h, t, r, ip, e)
+			select {
+			case <-stop:
+				return
+			case <-tk.C:
+			}
+		}
+	}()
+}
+
+func (m *Monitor) newEvent(h *Host, typ string, start int64) *Event {
+	m.evMu.Lock()
+	m.nextEv++
+	e := &Event{ID: m.nextEv, HostID: h.cfg.ID, HostName: h.cfg.Name, Site: h.cfg.Site, Type: typ, Start: start, Last: start}
+	m.events = append(m.events, e)
+	m.evMu.Unlock()
+	return e
+}
+
+func (m *Monitor) finishEvent(e *Event, end int64) {
+	m.evMu.Lock()
+	e.End = end
+	cp := *e
+	m.evMu.Unlock()
+	m.store.AppendEvent(cp)
+}
+
+// Ingest verarbeitet einen Messwert (lokal oder vom Agenten).
+func (m *Monitor) Ingest(h *Host, t int64, r int32, ip, errStr string) {
+	h.mu.Lock()
+	thr := h.effThreshold()
+	var f uint8
+	if r < 0 {
+		f = 2
+	} else if thr > 0 && r > thr {
+		f = 1
+	}
+	sm := Sample{T: t, R: r, F: f}
+	n := len(h.samples)
+	if n == 0 || h.samples[n-1].T <= t {
+		h.samples = append(h.samples, sm)
+	} else {
+		i := sort.Search(n, func(i int) bool { return h.samples[i].T > t })
+		h.samples = append(h.samples, Sample{})
+		copy(h.samples[i+1:], h.samples[i:])
+		h.samples[i] = sm
+	}
+	if t >= h.lastT {
+		h.lastR, h.lastT, h.lastF, h.lastErr = r, t, f, errStr
+		if ip != "" {
+			h.ip = ip
+		}
+	}
+	if r >= 0 {
+		h.addBase(r)
+	}
+
+	var done []*Event
+	m.evMu.Lock()
+	if h.oLoss != nil && t-h.oLoss.Last > mergeGap {
+		done = append(done, h.oLoss)
+		h.oLoss = nil
+	}
+	if h.oSpk != nil && t-h.oSpk.Last > mergeGap {
+		done = append(done, h.oSpk)
+		h.oSpk = nil
+	}
+	m.evMu.Unlock()
+
+	if r < 0 {
+		h.consec++
+		if h.consec == 1 {
+			h.stStart = t
+		}
+		h.stLast = t
+		if h.consec >= h.cfg.OutageCount {
+			if h.oOut == nil {
+				e := m.newEvent(h, "outage", h.stStart)
+				m.evMu.Lock()
+				e.Count, e.Last = h.consec, t
+				m.evMu.Unlock()
+				h.oOut = e
+			} else {
+				m.evMu.Lock()
+				h.oOut.Count++
+				h.oOut.Last = t
+				m.evMu.Unlock()
+			}
+		}
+	} else {
+		if h.consec > 0 {
+			if h.oOut != nil {
+				m.finishEvent(h.oOut, t)
+				h.oOut = nil
+			} else {
+				if h.oLoss == nil {
+					h.oLoss = m.newEvent(h, "loss", h.stStart)
+				}
+				m.evMu.Lock()
+				h.oLoss.Count += h.consec
+				h.oLoss.Last = h.stLast
+				m.evMu.Unlock()
+			}
+			h.consec = 0
+		}
+		if f == 1 {
+			if h.oSpk == nil {
+				h.oSpk = m.newEvent(h, "spike", t)
+			}
+			m.evMu.Lock()
+			h.oSpk.Count++
+			h.oSpk.Last = t
+			h.oSpk.Sum += int64(r)
+			if r > h.oSpk.Max {
+				h.oSpk.Max = r
+			}
+			m.evMu.Unlock()
+		}
+	}
+	id := h.cfg.ID
+	h.mu.Unlock()
+
+	for _, e := range done {
+		m.finishEvent(e, e.Last)
+	}
+	m.store.Append(id, sm)
+}
+
+// closeIdle schließt Verlust-/Spitzen-Ereignisse ohne neue Messwerte.
+func (m *Monitor) closeIdle(h *Host, now int64) {
+	h.mu.Lock()
+	var done []*Event
+	m.evMu.Lock()
+	if h.oLoss != nil && now-h.oLoss.Last > mergeGap+5000 {
+		done = append(done, h.oLoss)
+		h.oLoss = nil
+	}
+	if h.oSpk != nil && now-h.oSpk.Last > mergeGap+5000 {
+		done = append(done, h.oSpk)
+		h.oSpk = nil
+	}
+	m.evMu.Unlock()
+	h.mu.Unlock()
+	for _, e := range done {
+		m.finishEvent(e, e.Last)
+	}
+}
+
+func (m *Monitor) closeAll(h *Host) {
+	h.mu.Lock()
+	evs := []*Event{h.oOut, h.oLoss, h.oSpk}
+	h.oOut, h.oLoss, h.oSpk = nil, nil, nil
+	h.consec = 0
+	h.mu.Unlock()
+	for _, e := range evs {
+		if e != nil {
+			m.finishEvent(e, e.Last)
+		}
+	}
+}
+
+func (m *Monitor) housekeeping() {
+	tick := time.NewTicker(5 * time.Second)
+	lastMaint := time.Time{}
+	for range tick.C {
+		now := time.Now()
+		nowMs := now.UnixMilli()
+		m.store.Flush()
+		m.mu.RLock()
+		hosts := make([]*Host, 0, len(m.hosts))
+		for _, h := range m.hosts {
+			hosts = append(hosts, h)
+		}
+		sites := m.cfg.Sites
+		m.mu.RUnlock()
+		cut := now.Add(-memWindow).UnixMilli()
+		for _, h := range hosts {
+			m.closeIdle(h, nowMs)
+			h.mu.Lock()
+			if len(h.samples) > 0 && h.samples[0].T < cut {
+				i := sort.Search(len(h.samples), func(i int) bool { return h.samples[i].T >= cut })
+				h.samples = append([]Sample(nil), h.samples[i:]...)
+			}
+			h.mu.Unlock()
+		}
+		// Standorte ohne Meldung → offline
+		for _, s := range sites {
+			m.mu.RLock()
+			st := m.sites[s.ID]
+			hasHosts := false
+			for _, hc := range m.cfg.Hosts {
+				if hc.Site == s.ID && !hc.Paused {
+					hasHosts = true
+				}
+			}
+			m.mu.RUnlock()
+			if st == nil || !hasHosts {
+				continue
+			}
+			st.mu.Lock()
+			if st.lastSeen > 0 && nowMs-st.lastSeen > 45_000 && st.offEv == nil {
+				m.evMu.Lock()
+				m.nextEv++
+				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Type: "offline", Start: st.lastSeen, Last: st.lastSeen}
+				m.events = append(m.events, e)
+				m.evMu.Unlock()
+				st.offEv = e
+			}
+			st.mu.Unlock()
+		}
+		if now.Sub(lastMaint) > time.Hour {
+			lastMaint = now
+			m.mu.RLock()
+			ret := m.cfg.RetentionDays
+			m.mu.RUnlock()
+			go m.store.Maintenance(ret)
+			m.evMu.Lock()
+			c := now.AddDate(0, 0, -ret).UnixMilli()
+			keep := m.events[:0]
+			for _, e := range m.events {
+				if e.End == 0 || e.Start >= c {
+					keep = append(keep, e)
+				}
+			}
+			m.events = keep
+			if len(keep) > 0 {
+				m.store.RewriteEvents(keep)
+			}
+			m.evMu.Unlock()
+		}
+	}
+}
+
+func (m *Monitor) siteSeen(id, ip, ver string) {
+	m.mu.Lock()
+	st := m.sites[id]
+	if st == nil {
+		st = &siteState{}
+		m.sites[id] = st
+	}
+	m.mu.Unlock()
+	now := time.Now().UnixMilli()
+	st.mu.Lock()
+	st.lastSeen, st.ip = now, ip
+	if ver != "" {
+		st.version = ver
+	}
+	ev := st.offEv
+	st.offEv = nil
+	st.mu.Unlock()
+	if ev != nil {
+		m.finishEvent(ev, now)
+	}
+}
+
+func (m *Monitor) Shutdown() {
+	m.mu.Lock()
+	for _, h := range m.hosts {
+		if h.stop != nil {
+			close(h.stop)
+			h.stop = nil
+		}
+	}
+	hosts := m.hosts
+	m.mu.Unlock()
+	for _, h := range hosts {
+		m.closeAll(h)
+	}
+	m.store.Close()
+}
+
+// ---- Konfigurationsänderungen ----
+
+func (m *Monitor) UpsertHost(hc HostCfg) HostCfg {
+	hc.normalize()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if hc.ID == "" {
+		hc.ID = randHex(4)
+	}
+	found := false
+	for i := range m.cfg.Hosts {
+		if m.cfg.Hosts[i].ID == hc.ID {
+			m.cfg.Hosts[i] = hc
+			found = true
+		}
+	}
+	if !found {
+		m.cfg.Hosts = append(m.cfg.Hosts, hc)
+	}
+	h := m.hosts[hc.ID]
+	if h == nil {
+		h = &Host{cfg: hc, lastR: -1}
+		m.loadMemory(h)
+		m.hosts[hc.ID] = h
+	} else {
+		if h.stop != nil {
+			close(h.stop)
+			h.stop = nil
+		}
+		h.mu.Lock()
+		addrChanged := h.cfg.Addr != hc.Addr || h.cfg.Site != hc.Site
+		h.cfg = hc
+		if addrChanged {
+			h.baseN, h.basePos, h.baseMed, h.ip = 0, 0, 0, ""
+		}
+		h.mu.Unlock()
+		if hc.Paused || addrChanged {
+			go m.closeAll(h)
+		}
+	}
+	if hc.Site == "cloud" && !hc.Paused {
+		m.startWorker(h)
+	}
+	m.saveConfigLocked()
+	return hc
+}
+
+func (m *Monitor) DeleteHost(id string) {
+	m.mu.Lock()
+	h := m.hosts[id]
+	delete(m.hosts, id)
+	out := m.cfg.Hosts[:0]
+	for _, hc := range m.cfg.Hosts {
+		if hc.ID != id {
+			out = append(out, hc)
+		}
+	}
+	m.cfg.Hosts = out
+	m.saveConfigLocked()
+	m.mu.Unlock()
+	if h != nil {
+		if h.stop != nil {
+			close(h.stop)
+		}
+		m.closeAll(h)
+	}
+}
+
+func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if s.ID == "" {
+		s.ID = randHex(4)
+		s.Token = randHex(24)
+		m.cfg.Sites = append(m.cfg.Sites, s)
+		m.sites[s.ID] = &siteState{}
+	} else {
+		for i := range m.cfg.Sites {
+			if m.cfg.Sites[i].ID == s.ID {
+				if s.Name != "" {
+					m.cfg.Sites[i].Name = s.Name
+				}
+				if s.Token == "new" {
+					m.cfg.Sites[i].Token = randHex(24)
+				}
+				s = m.cfg.Sites[i]
+			}
+		}
+	}
+	m.saveConfigLocked()
+	return s
+}
+
+func (m *Monitor) DeleteSite(id string) {
+	m.mu.Lock()
+	out := m.cfg.Sites[:0]
+	for _, s := range m.cfg.Sites {
+		if s.ID != id {
+			out = append(out, s)
+		}
+	}
+	m.cfg.Sites = out
+	delete(m.sites, id)
+	var paused []string
+	for i := range m.cfg.Hosts {
+		if m.cfg.Hosts[i].Site == id {
+			m.cfg.Hosts[i].Paused = true
+			paused = append(paused, m.cfg.Hosts[i].ID)
+		}
+	}
+	m.saveConfigLocked()
+	m.mu.Unlock()
+	for _, hid := range paused {
+		m.mu.RLock()
+		h := m.hosts[hid]
+		m.mu.RUnlock()
+		if h != nil {
+			h.mu.Lock()
+			h.cfg.Paused = true
+			h.mu.Unlock()
+			m.closeAll(h)
+		}
+	}
+}
+
+func (m *Monitor) siteByToken(tok string) (SiteCfg, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if tok == "" {
+		return SiteCfg{}, false
+	}
+	for _, s := range m.cfg.Sites {
+		if s.Token == tok {
+			return s, true
+		}
+	}
+	return SiteCfg{}, false
+}
