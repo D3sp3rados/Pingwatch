@@ -18,6 +18,8 @@ ENV TZ=Europe/Berlin \
     AGENT_DIR=/app/downloads
 COPY --from=build /out/pingwatch /app/pingwatch
 COPY --from=build /out/downloads /app/downloads
+RUN adduser -D -u 1000 pingwatch && mkdir -p /data && chown -R pingwatch:pingwatch /data
+USER pingwatch
 VOLUME ["/data"]
 EXPOSE 8080
 ENTRYPOINT ["/app/pingwatch", "server"]
