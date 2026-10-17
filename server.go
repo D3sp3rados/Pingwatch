@@ -82,7 +82,17 @@ func runServer(args []string) {
 	}
 	m.Start()
 
-	srv := &http.Server{Addr: ":" + *port, Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
+	handler := s.routes()
+	if os.Getenv("ACCESS_LOG") != "0" {
+		inner := handler
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/agent/config" {
+				log.Printf("HTTP %s %s (Host %s, von %s)", r.Method, r.URL.Path, r.Host, clientIP(r))
+			}
+			inner.ServeHTTP(w, r)
+		})
+	}
+	srv := &http.Server{Addr: "0.0.0.0:" + *port, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
