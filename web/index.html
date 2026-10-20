@@ -262,6 +262,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
 <section id="v-events">
   <div class="filters">
+    <select id="f-group" style="display:none"><option value="">Alle Gruppen</option></select>
     <select id="f-host"><option value="">Alle Hosts</option></select>
     <div class="seg" id="f-types">
       <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button><button data-t="reboot" class="on">Neustarts</button><button data-t="wan" class="on">WAN</button>
@@ -291,6 +292,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <h2>Monatsbericht (PDF)</h2>
   <div class="panel" id="rp-box"><div class="formrow" style="align-items:flex-end">
     <label class="field" style="max-width:220px">Monat<select id="rp-month"></select></label>
+    <label class="field" style="max-width:240px;display:none">Für<select id="rp-group"></select></label>
     <a class="btn pri" id="rp-open" target="_blank" rel="noopener">Bericht öffnen</a>
     <button class="btn ed" id="rp-send">Per E-Mail senden</button>
     <span class="muted" style="font-size:12.5px" id="rp-info"></span></div></div>
@@ -816,10 +818,11 @@ $('#d-date').onchange=e=>{ if(!e.target.value) return; const d=new Date(e.target
 $('#d-back').onclick=()=>history.back();
 
 /* ---------- Ereignisse-Ansicht ---------- */
-function evQuery(){ const host=$('#f-host').value, types=$$('#f-types button.on').map(b=>b.dataset.t).join(','), days=+$('#f-range').value; let q=`host=${host}&types=${types}`; if(days) q+=`&from=${Date.now()-days*864e5}`; return q; }
+function evQuery(){ const grp=$('#f-group').value; return evQuery0()+(grp?'&group='+encodeURIComponent(grp):''); }
+function evQuery0(){ const host=$('#f-host').value, types=$$('#f-types button.on').map(b=>b.dataset.t).join(','), days=+$('#f-range').value; let q=`host=${host}&types=${types}`; if(days) q+=`&from=${Date.now()-days*864e5}`; return q; }
 async function loadEvents(){ try{ const evs=await api('/api/events?limit=1000&'+evQuery()); renderEvents($('#ev-all'),evs,true,200); $('#f-count').textContent=evs.length+(evs.length>=1000?'+':'')+' Ereignisse'; $('#f-export').href='/api/export/events.csv?'+evQuery(); }catch(e){} }
 $('#f-types').onclick=e=>{ if(!e.target.dataset.t) return; e.target.classList.toggle('on'); loadEvents(); };
-$('#f-host').onchange=loadEvents; $('#f-range').onchange=loadEvents;
+$('#f-host').onchange=loadEvents; $('#f-range').onchange=loadEvents; $('#f-group').onchange=()=>{ fillHostSelects(true); loadEvents(); };
 
 /* ---------- Statistik ---------- */
 let SM='loss', SD=null;
@@ -1118,10 +1121,11 @@ $('#af-del').onclick=async()=>{ if(!confirm('Alarmweg löschen?')) return; await
 function renderReportBox(){ const o=S.state&&S.state.org; if(!o) return; const ok=(o.features||[]).includes('report');
   const sel=$('#rp-month'); if(!sel.options.length){ const n=new Date(); for(let i=0;i<13;i++){ const d=new Date(n.getFullYear(),n.getMonth()-i,1); const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     sel.add(new Option(d.toLocaleDateString('de-DE',{month:'long',year:'numeric'})+(i===0?' (bisher)':''),v)); } sel.value=sel.options[1].value; }
-  $('#rp-open').href='/api/report.pdf?month='+sel.value; $('#rp-open').style.display=$('#rp-send').style.display=ok?'':'none'; sel.parentElement.style.display=ok?'':'none';
+  const grp=$('#rp-group').value; $('#rp-open').href='/api/report.pdf?month='+sel.value+(grp?'&group='+grp:'');
+  const g=(S.state.groups||[]).find(x=>x.id===grp); $('#rp-send').textContent=g?(g.reportTo?'An '+g.reportTo.split(',')[0]+(g.reportTo.includes(',')?' …':'')+' senden':'Per E-Mail senden'):'Per E-Mail senden'; $('#rp-open').style.display=$('#rp-send').style.display=ok?'':'none'; sel.parentElement.style.display=ok?'':'none';
   $('#rp-info').innerHTML=ok?'':'Der Monatsbericht ist in den Paketen <b>Pro</b> und <b>Partner</b> enthalten. <a href="#/billing">Paket ansehen →</a>'; }
-$('#rp-month').onchange=renderReportBox;
-$('#rp-send').onclick=async()=>{ try{ const r=await api('/api/report/send',{method:'POST',body:JSON.stringify({month:$('#rp-month').value})}); toast(`Bericht an ${r.sent} Empfänger gesendet`); }catch(e){ alert(e.message); } };
+$('#rp-month').onchange=renderReportBox; $('#rp-group').onchange=renderReportBox;
+$('#rp-send').onclick=async()=>{ try{ const r=await api('/api/report/send',{method:'POST',body:JSON.stringify({month:$('#rp-month').value,group:$('#rp-group').value})}); toast(`Bericht an ${r.sent} Empfänger gesendet`); }catch(e){ alert(e.message); } };
 
 /* Team */
 const ROLES={owner:'Inhaber',admin:'Admin',viewer:'Nur lesen'};
@@ -1270,10 +1274,11 @@ async function newGroup(){ const n=prompt('Name der Gruppe (z. B. Kundenname):')
 $('#hf-group').onchange=async()=>{ if($('#hf-group').value!=='__new') return; const g=await newGroup(); fillGroupSelect(g?g.id:''); };
 function renderGroups(){ const gs=S.state.groups||[]; const cnt=id=>S.state.hosts.filter(h=>h.group===id).length;
   const sig=JSON.stringify(gs)+S.state.hosts.map(h=>h.group).join(); if($('#grp-tbl').dataset.sig===sig) return; $('#grp-tbl').dataset.sig=sig;
-  $('#grp-tbl').innerHTML=gs.length?'<tr><th>Gruppe</th><th>Hosts</th><th class="hide-m">Notiz</th><th></th></tr>'+gs.map(g=>`<tr><td><b>📁 ${esc(g.name)}</b></td><td class="num">${cnt(g.id)}</td><td class="hide-m muted">${esc(g.note||'')}</td><td class="act"><button class="btn sm ed" data-gren="${g.id}">Umbenennen</button> <button class="btn sm ed" data-gnote="${g.id}">Notiz</button> <button class="btn sm danger ed" data-gdel="${g.id}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Gruppen. Fasse z. B. alle Hosts eines Kunden in einer Gruppe zusammen.</td></tr>';
+  $('#grp-tbl').innerHTML=gs.length?'<tr><th>Gruppe</th><th>Hosts</th><th class="hide-m">Notiz</th><th></th></tr>'+gs.map(g=>`<tr><td><b>📁 ${esc(g.name)}</b></td><td class="num">${cnt(g.id)}</td><td class="hide-m muted">${esc(g.note||'')}${g.reportTo?`<br><span class="tag">Bericht an ${esc(g.reportTo)}</span>`:''}</td><td class="act"><button class="btn sm ed" data-grep="${g.id}">Monatsbericht</button> <button class="btn sm ed" data-gren="${g.id}">Umbenennen</button> <button class="btn sm ed" data-gnote="${g.id}">Notiz</button> <button class="btn sm danger ed" data-gdel="${g.id}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Gruppen. Fasse z. B. alle Hosts eines Kunden in einer Gruppe zusammen.</td></tr>';
   const G=id=>gs.find(g=>g.id===id);
   $$('#grp-tbl [data-gren]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gren); const n=prompt('Neuer Name:',g.name); if(!n) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,name:n})}); refreshState(); }catch(e){ alert(e.message); } });
   $$('#grp-tbl [data-gnote]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gnote); const n=prompt('Notiz (z. B. Ansprechpartner, Telefon):',g.note||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,note:n})}); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#grp-tbl [data-grep]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.grep); const n=prompt(`Monatsbericht nur für „${g.name}“ am 1. jedes Monats per E-Mail an (mehrere mit Komma, leer = aus):`,g.reportTo||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,reportTo:n})}); toast(n.trim()?'Gruppen-Bericht eingerichtet':'Gruppen-Bericht aus'); refreshState(); }catch(e){ alert(e.message); } });
   $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); if(!confirm(`Gruppe „${g.name}“ löschen? Die Hosts bleiben erhalten (ohne Gruppe).`)) return; await api('/api/groups?id='+g.id,{method:'DELETE'}); refreshState(); });
 }
 $('#add-group').onclick=async()=>{ if(await newGroup()) toast('Gruppe angelegt – jetzt Hosts zuordnen (Bearbeiten → Gruppe)'); };
@@ -1308,11 +1313,18 @@ $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host w
 $('#add-host').onclick=()=>openHost();
 
 /* ---------- Routing & Polling ---------- */
-function fillHostSelects(){ const st=S.state; if(!st) return;
+function fillHostSelects(force){ const st=S.state; if(!st) return; const gs=st.groups||[];
+  const gsig=JSON.stringify(gs.map(g=>g.id+g.name)); const fg=$('#f-group');
+  if(fg.dataset.sig!==gsig){ const v=fg.value; fg.innerHTML='<option value="">Alle Gruppen</option>'+gs.map(g=>`<option value="${g.id}">📁 ${esc(g.name)}</option>`).join('')+'<option value="-">Ohne Gruppe</option>'; fg.value=v; fg.dataset.sig=gsig; fg.style.display=gs.length?'':'none'; }
+  const rg=$('#rp-group'); if(rg.dataset.sig!==gsig){ const v=rg.value; rg.innerHTML='<option value="">Alle Hosts</option>'+gs.map(g=>`<option value="${g.id}">📁 ${esc(g.name)}</option>`).join(''); rg.value=v; rg.dataset.sig=gsig; rg.parentElement.style.display=gs.length?'':'none'; }
+  if(force){ $('#f-host').dataset.sig=''; }
+  const fgv=fg.value; const inG=h=>!fgv||(fgv==='-'?!gs.some(g=>g.id===h.group):h.group===fgv);
   const opts=st.hosts.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
-  const fh=$('#f-host'); const v=fh.value; const sig1=st.hosts.map(h=>h.id+h.name).join(); if(fh.dataset.sig!==sig1){ fh.innerHTML='<option value="">Alle Hosts</option>'+opts; fh.value=v; fh.dataset.sig=sig1; }
+  const gopts=gs.length?gs.map(g=>{ const hs=st.hosts.filter(h=>h.group===g.id); return hs.length?`<optgroup label="📁 ${esc(g.name)}">`+hs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')+'</optgroup>':''; }).join('')+(()=>{ const r=st.hosts.filter(h=>!gs.some(g=>g.id===h.group)); return r.length?'<optgroup label="Ohne Gruppe">'+r.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')+'</optgroup>':''; })():opts;
+  const sig1=st.hosts.map(h=>h.id+h.name+(h.group||'')).join()+gsig;
+  const fh=$('#f-host'); const v=fh.value; if(fh.dataset.sig!==sig1+fgv){ fh.innerHTML='<option value="">Alle Hosts</option>'+st.hosts.filter(inG).map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join(''); fh.value=v; if(fh.value!==v) fh.value=''; fh.dataset.sig=sig1+fgv; }
   const rh=$('#r-host'); if(rh.dataset.sig!==sig1){ const v3=rh.value; rh.innerHTML='<option value="">Alle Hosts</option>'+opts; rh.value=v3; rh.dataset.sig=sig1; }
-  const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=opts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
+  const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=gopts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
   let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','billing','admin'].includes(v)) v='overview';
@@ -1325,7 +1337,7 @@ function route(){
     D.data=null; $('#d-events')._all=false; drawChart(); renderDetailHead(); loadDetail(); }
   else S.hostId=null;
   if(v==='events') loadEvents();
-  if(v==='stats'){ renderReportBox(); fillHostSelects(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
+  if(v==='stats'){ fillHostSelects(); renderReportBox(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
   if(v==='settings') renderSettings();
   if(v==='billing') renderBilling();
   if(v==='admin') loadAdmin();

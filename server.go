@@ -726,6 +726,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 || limit > 5000 {
 		limit = 300
 	}
+	if g := q.Get("group"); g != "" {
+		evs := s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
+		writeJSON(w, filterEventsByHosts(evs, s.m.groupHostSet(principal(r).Org, g), limit))
+		return
+	}
 	writeJSON(w, s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), limit))
 }
 
@@ -1105,6 +1110,9 @@ func csvHeader(w http.ResponseWriter, name string) {
 func (s *Server) exportEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	evs := s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
+	if g := q.Get("group"); g != "" {
+		evs = filterEventsByHosts(evs, s.m.groupHostSet(principal(r).Org, g), 100000)
+	}
 	csvHeader(w, "pingwatch-ereignisse.csv")
 	fmt.Fprintln(w, "Beginn;Ende;Dauer (s);Host;Typ;Anzahl;Max (ms);Ø (ms)")
 	for _, e := range evs {

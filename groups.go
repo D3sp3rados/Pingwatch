@@ -15,6 +15,53 @@ type Group struct {
 	Name    string `json:"name"`
 	Note    string `json:"note,omitempty"`
 	Created int64  `json:"created"`
+	// Monatsbericht nur für diese Gruppe an eigene Empfänger (z. B. den Endkunden)
+	ReportTo   string `json:"reportTo,omitempty"`
+	ReportSent string `json:"reportSent,omitempty"`
+}
+
+func (m *Monitor) groupByID(org, id string) *Group {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, g := range m.cfg.Groups {
+		if g.ID == id && g.Org == org {
+			gg := g
+			return &gg
+		}
+	}
+	return nil
+}
+
+// groupHostSet: IDs der Hosts einer Gruppe ("-" = Hosts ohne Gruppe).
+func (m *Monitor) groupHostSet(org, gid string) map[string]bool {
+	set := map[string]bool{}
+	valid := map[string]bool{}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, g := range m.cfg.Groups {
+		if g.Org == org {
+			valid[g.ID] = true
+		}
+	}
+	for _, h := range m.cfg.Hosts {
+		if h.Org != org {
+			continue
+		}
+		if h.Group == gid || (gid == "-" && !valid[h.Group]) {
+			set[h.ID] = true
+		}
+	}
+	return set
+}
+
+func filterEventsByHosts(evs []Event, set map[string]bool, limit int) []Event {
+	out := evs[:0]
+	for _, e := range evs {
+		if set[e.HostID] && len(out) < limit {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func (m *Monitor) groupsOf(org string) []Group {
@@ -58,6 +105,17 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 		}
 		g.Name = strings.TrimSpace(g.Name)
 		g.Note = strings.TrimSpace(g.Note)
+		if as := splitAddrs(g.ReportTo); len(as) > 0 {
+			for _, a := range as {
+				if !validEmail(strings.ToLower(a)) {
+					http.Error(w, "Ungültige E-Mail-Adresse: "+a, 400)
+					return
+				}
+			}
+			g.ReportTo = strings.ToLower(strings.Join(as, ", "))
+		} else {
+			g.ReportTo = ""
+		}
 		if g.Name == "" || len(g.Name) > 80 {
 			http.Error(w, "Name fehlt (höchstens 80 Zeichen)", 400)
 			return
@@ -77,7 +135,7 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 			found := false
 			for i := range m.cfg.Groups {
 				if m.cfg.Groups[i].ID == g.ID && m.cfg.Groups[i].Org == p.Org {
-					m.cfg.Groups[i].Name, m.cfg.Groups[i].Note = g.Name, g.Note
+					m.cfg.Groups[i].Name, m.cfg.Groups[i].Note, m.cfg.Groups[i].ReportTo = g.Name, g.Note, g.ReportTo
 					g = m.cfg.Groups[i]
 					found = true
 				}

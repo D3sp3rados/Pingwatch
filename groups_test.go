@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGroups(t *testing.T) {
@@ -35,5 +37,47 @@ func TestGroups(t *testing.T) {
 	c.do("DELETE", "/api/groups?id="+g.ID, nil)
 	if s.m.host(hc.ID).cfg.Group != "" {
 		t.Fatal("Host noch in gelöschter Gruppe")
+	}
+}
+
+func TestGroupReportAndEvents(t *testing.T) {
+	s, ts := newTestServer(t)
+	c := newClient(t, ts)
+	c.login("admin", "admin-pass-123")
+	_, body := c.do("POST", "/api/groups", map[string]string{"name": "Oli Pfeiffer", "reportTo": "Oli@Pfeiffer.de"})
+	var g Group
+	mustJSON(t, body, &g)
+	if g.ReportTo != "oli@pfeiffer.de" {
+		t.Fatal("reportTo:", body)
+	}
+	if code, _ := c.do("POST", "/api/groups", map[string]any{"id": g.ID, "name": "Oli Pfeiffer", "reportTo": "kaputt"}); code != 400 {
+		t.Fatal("ungültige Adresse angenommen")
+	}
+	a := s.m.UpsertHost(HostCfg{Name: "Antenne Pfeiffer", Addr: "10.0.0.1", Site: "cloud", Org: "default", Group: g.ID})
+	b := s.m.UpsertHost(HostCfg{Name: "Fremder Router", Addr: "10.0.0.2", Site: "cloud", Org: "default"})
+	now := time.Now().UnixMilli()
+	s.m.evMu.Lock()
+	s.m.events = append(s.m.events, &Event{ID: 901, HostID: a.ID, HostName: a.Name, Org: "default", Type: "outage", Start: now - 600000, End: now - 300000},
+		&Event{ID: 902, HostID: b.ID, HostName: b.Name, Org: "default", Type: "outage", Start: now - 600000, End: now - 300000})
+	s.m.evMu.Unlock()
+	_, body = c.do("GET", "/api/events?group="+g.ID, nil)
+	if !strings.Contains(body, "Antenne Pfeiffer") || strings.Contains(body, "Fremder") {
+		t.Fatal("Gruppenfilter:", body)
+	}
+	_, body = c.do("GET", "/api/events?group=-", nil)
+	if strings.Contains(body, "Antenne Pfeiffer") || !strings.Contains(body, "Fremder") {
+		t.Fatal("ohne Gruppe:", body)
+	}
+	pdf, err := s.m.buildReport("default", time.Now(), g.ID)
+	if err != nil || !bytes.Contains(pdf, []byte("Oli Pfeiffer")) {
+		t.Fatal("PDF:", err)
+	}
+	var to []string
+	old := sendMailFn
+	sendMailFn = func(rcpt []string, msg []byte) error { to = rcpt; return nil }
+	defer func() { sendMailFn = old }()
+	code, body := c.do("POST", "/api/report/send", map[string]string{"month": time.Now().Format("2006-01"), "group": g.ID})
+	if code != 200 || len(to) != 1 || to[0] != "oli@pfeiffer.de" {
+		t.Fatal("Versand:", code, body, to)
 	}
 }

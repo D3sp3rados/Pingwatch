@@ -64,10 +64,20 @@ func parseMonth(s string) (time.Time, error) {
 }
 
 // buildReport erzeugt den Monatsbericht einer Organisation als PDF.
-func (m *Monitor) buildReport(org string, month time.Time) ([]byte, error) {
+func (m *Monitor) buildReport(org string, month time.Time, group string) ([]byte, error) {
 	o := m.orgByID(org)
 	if o == nil {
 		return nil, fmt.Errorf("Kunde unbekannt")
+	}
+	var only map[string]bool
+	subject := o.Name
+	if group != "" {
+		g := m.groupByID(org, group)
+		if g == nil {
+			return nil, fmt.Errorf("Gruppe unbekannt")
+		}
+		only = m.groupHostSet(org, group)
+		subject = g.Name
 	}
 	first := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.Local)
 	last := first.AddDate(0, 1, -1)
@@ -85,6 +95,9 @@ func (m *Monitor) buildReport(org string, month time.Time) ([]byte, error) {
 		h.mu.Lock()
 		cfg := h.cfg
 		h.mu.Unlock()
+		if only != nil && !only[cfg.ID] {
+			continue
+		}
 		ds := m.dayStatsAt(h, last, days)
 		hr := hostReport{Name: cfg.Name, Addr: cfg.Addr, Site: m.siteNameOf(cfg.Site)}
 		for i := len(ds) - 1; i >= 0; i-- {
@@ -108,6 +121,9 @@ func (m *Monitor) buildReport(org string, month time.Time) ([]byte, error) {
 	evs := m.queryEvents(org, "", "", map[string]bool{"outage": true, "offline": true}, first.UnixMilli(), last.AddDate(0, 0, 1).UnixMilli(), 5000)
 	kept := evs[:0]
 	for _, e := range evs {
+		if only != nil && !only[e.HostID] {
+			continue
+		}
 		if !e.Maint {
 			kept = append(kept, e)
 		}
@@ -131,12 +147,12 @@ func (m *Monitor) buildReport(org string, month time.Time) ([]byte, error) {
 	header := func(sub bool) {
 		p.Rect(0, 0, p.W, 6, acc)
 		if sub {
-			p.Text(L, 34, 9, true, mut, 'l', o.Name+" · "+title)
+			p.Text(L, 34, 9, true, mut, 'l', subject+" · "+title)
 			y = 56
 			return
 		}
 		p.Text(L, 52, 22, true, ink, 'l', title)
-		p.Text(L, 72, 12, false, mut, 'l', o.Name)
+		p.Text(L, 72, 12, false, mut, 'l', subject)
 		p.Text(R, 52, 10, true, acc, 'r', "PingWatch")
 		p.Text(R, 66, 8, false, mut, 'r', fmt.Sprintf("%s – %s", first.Format("02.01.2006"), last.Format("02.01.2006")))
 		y = 100
@@ -318,7 +334,7 @@ func (m *Monitor) buildReport(org string, month time.Time) ([]byte, error) {
 	need(40)
 	p.Text(L, y, 7.5, false, mut, 'l', "Verfügbarkeit = Anteil der Zeit ohne Ausfall an den Tagen mit Messwerten. Ausfall = mehrere Pings in Folge ohne Antwort (je Host einstellbar).")
 	footer()
-	return p.Bytes(o.Name + " – " + title), nil
+	return p.Bytes(subject + " – " + title), nil
 }
 
 func evDur(e Event) int64 {
@@ -365,7 +381,8 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Monat ungültig", 400)
 		return
 	}
-	pdf, err := s.m.buildReport(o.ID, month)
+	group := r.URL.Query().Get("group")
+	pdf, err := s.m.buildReport(o.ID, month, group)
 	if err != nil {
 		http.Error(w, err.Error(), 400)
 		return
@@ -383,6 +400,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReportSend(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Month string `json:"month"`
+		Group string `json:"group"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -398,7 +416,7 @@ func (s *Server) handleReportSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Monat ungültig", 400)
 		return
 	}
-	n, err := s.m.sendReport(o.ID, month)
+	n, err := s.m.sendReport(o.ID, month, req.Group)
 	if err != nil {
 		http.Error(w, err.Error(), 502)
 		return
@@ -424,21 +442,35 @@ func (m *Monitor) reportRecipients(org string) []string {
 	return to
 }
 
-func (m *Monitor) sendReport(org string, month time.Time) (int, error) {
+func (m *Monitor) sendReport(org string, month time.Time, group string) (int, error) {
+	o := m.orgByID(org)
+	if o == nil {
+		return 0, fmt.Errorf("Kunde unbekannt")
+	}
 	to := m.reportRecipients(org)
+	subject := o.Name
+	if group != "" {
+		g := m.groupByID(org, group)
+		if g == nil {
+			return 0, fmt.Errorf("Gruppe unbekannt")
+		}
+		to, subject = splitAddrs(g.ReportTo), g.Name
+		if len(to) == 0 {
+			return 0, fmt.Errorf("Für die Gruppe „%s“ ist kein Berichts-Empfänger eingetragen", g.Name)
+		}
+	}
 	if len(to) == 0 {
 		return 0, fmt.Errorf("Kein E-Mail-Alarmweg mit „Monatsbericht“ eingerichtet")
 	}
-	o := m.orgByID(org)
-	pdf, err := m.buildReport(org, month)
+	pdf, err := m.buildReport(org, month, group)
 	if err != nil {
 		return 0, err
 	}
 	mn := fmt.Sprintf("%s %d", monthNames[month.Month()-1], month.Year())
-	txt := fmt.Sprintf("Guten Tag,\n\nim Anhang finden Sie den PingWatch-Monatsbericht %s für %s.\n\n%s\n", mn, o.Name, dashboardURL())
+	txt := fmt.Sprintf("Guten Tag,\n\nim Anhang finden Sie den PingWatch-Monatsbericht %s für %s.\n\n%s\n", mn, subject, dashboardURL())
 	htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif">Guten Tag,<br><br>im Anhang finden Sie den PingWatch-Monatsbericht <b>%s</b> für %s.%s</div>`,
-		mn, o.Name, strings.Replace(linkHTML(dashboardURL()), " · ", "<br><br>", 1))
-	err = sendMail(to, "PingWatch-Monatsbericht "+mn+" – "+o.Name, txt, htm,
+		mn, subject, strings.Replace(linkHTML(dashboardURL()), " · ", "<br><br>", 1))
+	err = sendMail(to, "PingWatch-Monatsbericht "+mn+" – "+subject, txt, htm,
 		&attachment{Name: "PingWatch-Bericht-" + month.Format("2006-01") + ".pdf", Type: "application/pdf", Data: pdf})
 	return len(to), err
 }
@@ -465,7 +497,7 @@ func (m *Monitor) reportLoop() {
 			if len(m.reportRecipients(id)) == 0 {
 				continue
 			}
-			n, err := m.sendReport(id, prev)
+			n, err := m.sendReport(id, prev, "")
 			if err != nil {
 				log.Printf("Monatsbericht %s: %v", id, err)
 				continue // nächster Versuch in 10 Minuten
@@ -475,6 +507,33 @@ func (m *Monitor) reportLoop() {
 			for i := range m.cfg.Orgs {
 				if m.cfg.Orgs[i].ID == id {
 					m.cfg.Orgs[i].ReportSent = key
+				}
+			}
+			m.saveConfigLocked()
+			m.mu.Unlock()
+		}
+		// Gruppen mit eigenen Empfängern
+		m.mu.RLock()
+		var gtodo []Group
+		for _, g := range m.cfg.Groups {
+			if g.ReportTo != "" && g.ReportSent != key {
+				gtodo = append(gtodo, g)
+			}
+		}
+		m.mu.RUnlock()
+		for _, g := range gtodo {
+			o := m.orgByID(g.Org)
+			if o == nil || o.Disabled || !planHas(o.Plan, "report") {
+				continue
+			}
+			if _, err := m.sendReport(g.Org, prev, g.ID); err != nil {
+				log.Printf("Monatsbericht Gruppe %s: %v", g.Name, err)
+				continue
+			}
+			m.mu.Lock()
+			for i := range m.cfg.Groups {
+				if m.cfg.Groups[i].ID == g.ID {
+					m.cfg.Groups[i].ReportSent = key
 				}
 			}
 			m.saveConfigLocked()
