@@ -106,6 +106,13 @@ func (m *Monitor) buildReport(org string, month time.Time) ([]byte, error) {
 	}
 	sort.Slice(hrs, func(i, j int) bool { return strings.ToLower(hrs[i].Name) < strings.ToLower(hrs[j].Name) })
 	evs := m.queryEvents(org, "", "", map[string]bool{"outage": true, "offline": true}, first.UnixMilli(), last.AddDate(0, 0, 1).UnixMilli(), 5000)
+	kept := evs[:0]
+	for _, e := range evs {
+		if !e.Maint {
+			kept = append(kept, e)
+		}
+	}
+	evs = kept
 	sort.Slice(evs, func(i, j int) bool { return evDur(evs[i]) > evDur(evs[j]) })
 
 	title := fmt.Sprintf("Monatsbericht %s %d", monthNames[first.Month()-1], first.Year())

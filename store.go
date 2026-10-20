@@ -346,6 +346,11 @@ type Event struct {
 	Count    int    `json:"count"`
 	Max      int32  `json:"max"`
 	Sum      int64  `json:"sum"`
+	Cause    string `json:"cause,omitempty"` // Ausfall wegen übergeordnetem Host
+	Maint    bool   `json:"maint,omitempty"` // während Wartung
+	Trace    string `json:"trace,omitempty"` // Routenverfolgung beim Ausfall
+	Notified bool   `json:"-"`               // Beginn wurde gemeldet
+	Decided  bool   `json:"-"`               // Wartung/Ursache geprüft
 }
 
 func (s *FileStore) AppendEvent(e Event) {
@@ -366,10 +371,17 @@ func (s *FileStore) LoadEvents(retentionDays int) []*Event {
 	defer f.Close()
 	cut := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 	var out []*Event
+	idx := map[int64]int{}
 	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
 		var e Event
 		if json.Unmarshal(sc.Bytes(), &e) == nil && (retentionDays <= 0 || e.Start >= cut) {
+			if i, ok := idx[e.ID]; ok {
+				out[i] = &e // spätere Zeile (z. B. mit Traceroute) gewinnt
+				continue
+			}
+			idx[e.ID] = len(out)
 			out = append(out, &e)
 		}
 	}

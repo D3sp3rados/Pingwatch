@@ -11,7 +11,7 @@ RUN go build -trimpath -ldflags "-s -w" -o /out/pingwatch . \
 
 # ---- Laufzeit ----
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata && (apk add --no-cache iputils-tracepath || apk add --no-cache iputils || true)
 ENV TZ=Europe/Berlin \
     DATA_DIR=/data \
     PORT=8080 \

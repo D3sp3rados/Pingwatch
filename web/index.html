@@ -51,8 +51,8 @@ body.viewer .ed{display:none!important}
 .meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}.meter i{display:block;height:100%;background:var(--acc)}
 .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:14px}
 .kv b{display:block;font-size:18px}.kv span{font-size:12.5px;color:var(--mut)}
-.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;border:1px solid var(--line);color:var(--mut)}
-.badge.warn{color:var(--warn);border-color:var(--warn)}.badge.bad{color:var(--bad);border-color:var(--bad)}.badge.ok{color:var(--ok);border-color:var(--ok)}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;border:1px solid var(--line);color:var(--mut)}
+.tag.warn{color:var(--warn);border-color:var(--warn)}.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}
 section{display:none}section.on{display:block}
 h2{font-size:15px;margin:22px 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 h2:first-child{margin-top:4px}
@@ -212,7 +212,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="dot" id="d-dot"></span>
     <h1 id="d-name"></h1>
     <span class="muted" id="d-sub"></span>
-    <span style="margin-left:auto" class="pill num" id="d-now"></span>
+    <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
+    <span class="pill num" id="d-now"></span>
   </div>
   <div class="det-ctl">
     <div class="seg" id="d-range">
@@ -311,6 +312,10 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
   </div>
 
+  <h2>Wartungsfenster <button class="btn sm pri ed" id="add-maint">+ Wartung planen</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="mt-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px">Während einer Wartung gibt es keine Alarme, und Ausfälle zählen nicht in die Verfügbarkeit (Monatsbericht).</p>
+
   <h2>Alarme <button class="btn sm pri ed" id="add-alert">+ Alarmweg</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="al-tbl"></table></div>
   <p class="muted" style="font-size:12.5px" id="al-info">Zusätzlich zu den Push-Meldungen aufs iPhone: E-Mail, Microsoft Teams, Telegram oder eigener Webhook.</p>
@@ -381,6 +386,37 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-maint">
+  <form method="dialog" id="mt-form">
+    <div class="dlg-h" id="mf-title">Wartung planen</div>
+    <div class="dlg-b">
+      <label class="field full">Bezeichnung<input name="name" maxlength="60" placeholder="z. B. Firmware-Update Router"></label>
+      <label class="field full">Art<select name="kind"><option value="once">Einmalig</option><option value="weekly">Jede Woche</option></select></label>
+      <label class="field mf-once">Beginn<input type="datetime-local" name="start"></label>
+      <label class="field mf-once">Ende<input type="datetime-local" name="end"></label>
+      <div class="full mf-weekly" id="mf-days" style="display:flex;flex-wrap:wrap;gap:4px 14px"></div>
+      <label class="field mf-weekly">Von<input type="time" name="from" value="22:00"></label>
+      <label class="field mf-weekly">Bis<input type="time" name="to" value="02:00"><small>Bis vor Von = über Mitternacht</small></label>
+      <div class="full"><b style="font-size:13px">Hosts</b> <span class="muted" style="font-size:12px">(keiner ausgewählt = alle inkl. Standorte)</span>
+        <div id="mf-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:140px;overflow:auto"></div></div>
+    </div>
+    <div class="dlg-err" id="mf-err"></div>
+    <div class="dlg-f">
+      <button class="btn danger" type="button" id="mf-del" style="margin-right:auto">Löschen</button>
+      <button class="btn" value="cancel" formnovalidate>Abbrechen</button>
+      <button class="btn pri" value="ok">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-trace">
+  <form method="dialog">
+    <div class="dlg-h" id="tr-title">Traceroute</div>
+    <div class="dlg-b" style="display:block"><pre id="tr-text" style="font-size:12px;white-space:pre-wrap;margin:0;max-height:60vh;overflow:auto"></pre></div>
+    <div class="dlg-f"><button class="btn" id="tr-copy" type="button">Kopieren</button><button class="btn pri" value="ok">Schließen</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-alert">
   <form method="dialog" id="al-form">
     <div class="dlg-h" id="af-title">Alarmweg hinzufügen</div>
@@ -419,6 +455,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Name<input name="name" placeholder="z. B. Antenne Dogern" maxlength="60"></label>
       <label class="field">IP-Adresse oder Hostname<input name="addr" required placeholder="192.168.1.1 oder 8.8.8.8"></label>
       <label class="field">Pingt von<select name="site" id="hf-site"></select><small id="hf-sitehint"></small></label>
+      <label class="field">Hängt ab von<select name="parent" id="hf-parent"></select><small>Fällt dieser Host aus, gibt es für diesen keinen Alarm.</small></label>
       <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option></select></label>
       <label class="field" id="hf-portf">TCP-Port<input name="port" type="number" min="1" max="65535" value="443"></label>
       <label class="field">Intervall (Sekunden)<select name="interval"><option value="500">0,5</option><option value="1000" selected>1</option><option value="2000">2</option><option value="5000">5</option><option value="10000">10</option><option value="30000">30</option><option value="60000">60</option></select></label>
@@ -516,7 +553,7 @@ function renderOverview(){
     c.querySelector('.card-t b').textContent=h.name;
     c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
-    const sv=c.querySelector('.card-v span'); sv.textContent=h.status==='down'?lbl+' ('+h.consec+'×)':lbl; sv.style.color=`var(${col})`;
+    const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
     const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
     kv[0].textContent=fmtMs(a1.avg); kv[1].textContent=fmtMs(a1.max); kv[2].textContent=pct(a1.lost,a1.n); kv[3].textContent=pct(a24.lost,a24.n);
     kv[2].style.color=a1.lost?'var(--bad)':''; kv[3].style.color=a24.lost?'var(--loss)':'';
@@ -563,9 +600,10 @@ function renderEvents(el,evs,showHost,limit){
   el.innerHTML=evs.map(e=>{ const live=!e.end&&e.type!=='loss'&&e.type!=='spike'; const end=e.end||(live?now:e.last); const d=end-e.start;
     return `<div class="ev ${live?'live':''}" data-h="${esc(e.host)}" data-s="${e.start}" data-e="${end}">
       <div class="when num">${fmtTime(e.start)}<small>${fmtDay(e.start)}</small></div>
-      <div class="what"><span class="badge b-${e.type}">${TYPES[e.type]}</span>${showHost?'<b>'+esc(e.name)+'</b>':''}<div>${evText(e)}</div></div>
+      <div class="what"><span class="badge b-${e.type}">${TYPES[e.type]}</span>${showHost?'<b>'+esc(e.name)+'</b>':''}<div>${evText(e)}${e.maint?' <span class="tag">Wartung</span>':''}${e.cause?` <span class="tag warn">wegen ${esc(e.cause)}</span>`:''}${e.trace?` <a href="#" class="trlink" data-tr="${e.id}">Traceroute</a>`:''}</div></div>
       <div class="dur num">${live?'läuft':d<1000&&e.type!=='outage'?'':fmtDur(d)}<small>${live?'seit '+fmtDur(d):d<1000&&e.type!=='outage'?'':'bis '+fmtTime(end)}</small></div></div>`; }).join('')
     + (all.length>evs.length?`<div class="ev" data-more="1" style="display:block;text-align:center;color:var(--acc);font-weight:600">Alle ${all.length} Ereignisse anzeigen</div>`:'');
+  el.querySelectorAll('[data-tr]').forEach(a=>a.onclick=ev=>{ ev.preventDefault(); ev.stopPropagation(); const e=all.find(x=>String(x.id)===a.dataset.tr); showTrace('Traceroute zu '+(e.name||''),e.trace); });
   const more=el.querySelector('[data-more]'); if(more) more.onclick=ev=>{ ev.stopPropagation(); el._all=true; renderEvents(el,all,showHost,limit); };
   el.querySelectorAll('.ev:not([data-more])').forEach(x=>x.onclick=()=>{ if(!x.dataset.h) return; const s=+x.dataset.s,e=+x.dataset.e, pad=Math.max(5*60e3,(e-s)*0.5); location.hash=`#/host/${x.dataset.h}?from=${Math.round(s-pad)}&to=${Math.round(Math.min(Date.now(),e+pad))}`; });
 }
@@ -588,7 +626,8 @@ async function loadDetail(){
 function renderDetailHead(){
   const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); if(!h) return;
   const [lbl,col]=STATUS[h.status]||STATUS.unknown;
-  $('#d-dot').style.background=`var(${col})`; $('#d-name').textContent=h.name;
+  $('#d-dot').style.background=`var(${col})`; $('#d-name').textContent=h.name+(h.maint?' · Wartung':'');
+  $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
   const site=S.state.sites.find(s=>s.id===h.site);
   $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
   $('#d-now').innerHTML=`<span class="dot" style="background:var(${col})"></span>${h.status==='down'||h.lastR<0?lbl:fmtMs(h.lastR)} ${h.threshold?'<span class="muted">· Spitze ab '+fmtMs(h.threshold)+'</span>':''}`;
@@ -740,24 +779,56 @@ function renderSettings(){
   $('#g-retrow').style.display=sup?'flex':'none';
   $('#g-pw').style.display=sup&&st.envPassword?'none':'flex';
   if(st.org) $('#team-sub').textContent=st.org.name;
-  loadUsers(); loadAlerts();
+  loadUsers(); loadAlerts(); loadMaint();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
   if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||''}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+/* Traceroute */
+function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#dlg-trace').showModal(); }
+$('#tr-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText($('#tr-text').textContent); toast('Kopiert'); };
+$('#d-trace').onclick=async()=>{ const h=S.state.hosts.find(x=>x.id===S.hostId); if(!h) return; showTrace('Traceroute zu '+h.name,'läuft … (bis zu einer Minute'+(h.site!=='cloud'?', wird vom Agenten ausgeführt':'')+')');
+  try{ const r=await api('/api/trace',{method:'POST',body:JSON.stringify({host:h.id})}); $('#tr-text').textContent=r.text; }catch(e){ $('#tr-text').textContent='Fehler: '+e.message; } };
+
+/* Wartungsfenster */
+let MT=[], mtAt=0;
+async function loadMaint(force){ if(!force&&Date.now()-mtAt<15000) return; mtAt=Date.now(); try{ MT=await api('/api/maint'); }catch(e){ return; } renderMaint(); }
+function renderMaint(){ const hn=id=>(S.state.hosts.find(h=>h.id===id)||{}).name||'?';
+  const when=w=>w.weekdays&&w.weekdays.length?`${[1,2,3,4,5,6,0].filter(d=>w.weekdays.includes(d)).map(d=>WD[d]).join(', ')} · ${w.from}–${w.to} Uhr`:`${fmtDT(w.start,false)} – ${fmtDT(w.end,false)}`;
+  $('#mt-tbl').innerHTML=MT.length?'<tr><th>Bezeichnung</th><th>Wann</th><th class="hide-m">Hosts</th><th>Status</th><th></th></tr>'+MT.map(w=>`<tr><td><b>${esc(w.name)}</b></td><td>${when(w)}</td><td class="hide-m">${w.hosts&&w.hosts.length?w.hosts.map(hn).map(esc).join(', '):'alle'}</td>
+    <td>${w.active?'<span class="tag warn">läuft</span>':w.past?'<span class="tag">vorbei</span>':'<span class="tag ok">geplant</span>'}</td><td class="act"><button class="btn sm ed" data-med="${w.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="empty">Keine Wartung geplant.</td></tr>';
+  $$('#mt-tbl [data-med]').forEach(b=>b.onclick=()=>openMaint(b.dataset.med)); }
+const mdlg=$('#dlg-maint'), mf=$('#mt-form');
+const dtl=ms=>{ const d=new Date(ms-new Date(ms).getTimezoneOffset()*6e4); return d.toISOString().slice(0,16); };
+function syncMaint(){ const wk=mf.kind.value==='weekly'; $$('.mf-once').forEach(e=>e.style.display=wk?'none':''); $$('.mf-weekly').forEach(e=>e.style.display=wk?'':'none'); }
+function openMaint(id){ const w=id&&MT.find(x=>x.id===id); $('#mf-title').textContent=w?'Wartung bearbeiten':'Wartung planen'; $('#mf-err').textContent='';
+  mf.dataset.id=w?w.id:''; mf.name.value=w?w.name:''; const wk=!!(w&&w.weekdays&&w.weekdays.length); mf.kind.value=wk?'weekly':'once';
+  const n=Date.now(); mf.start.value=dtl(w&&!wk?w.start:Math.ceil(n/36e5)*36e5); mf.end.value=dtl(w&&!wk?w.end:Math.ceil(n/36e5)*36e5+36e5);
+  mf.from.value=wk?w.from:'22:00'; mf.to.value=wk?w.to:'02:00';
+  $('#mf-days').innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="check"><input type="checkbox" value="${d}"${wk&&w.weekdays.includes(d)?' checked':''}> ${WD[d]}</label>`).join('');
+  const sel=new Set(w&&w.hosts||[]); $('#mf-hosts').innerHTML=S.state.hosts.map(h=>`<label class="check"><input type="checkbox" value="${h.id}"${sel.has(h.id)?' checked':''}> ${esc(h.name)}</label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
+  $('#mf-del').style.display=w?'':'none'; syncMaint(); mdlg.showModal(); }
+mf.kind.onchange=syncMaint; $('#add-maint').onclick=()=>openMaint();
+mf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const wk=mf.kind.value==='weekly'; const body={id:mf.dataset.id,name:mf.name.value.trim(),hosts:$$('#mf-hosts input:checked').map(i=>i.value)};
+  if(wk){ body.weekdays=$$('#mf-days input:checked').map(i=>+i.value); body.from=mf.from.value; body.to=mf.to.value; if(!body.weekdays.length){ $('#mf-err').textContent='Bitte mindestens einen Wochentag wählen.'; return; } }
+  else { body.start=new Date(mf.start.value).getTime(); body.end=new Date(mf.end.value).getTime(); }
+  try{ await api('/api/maint',{method:'POST',body:JSON.stringify(body)}); mdlg.close(); toast('Gespeichert'); loadMaint(true); refreshState(); }catch(err){ $('#mf-err').textContent=err.message; } });
+$('#mf-del').onclick=async()=>{ if(!confirm('Wartungsfenster löschen?')) return; await api('/api/maint?id='+mf.dataset.id,{method:'DELETE'}); mdlg.close(); loadMaint(true); };
 
 /* Alarme */
 const ATYPE={email:'E-Mail',teams:'Teams',telegram:'Telegram',webhook:'Webhook'};
 let AL=null, alAt=0;
 async function loadAlerts(force){ if(!force&&AL&&Date.now()-alAt<15000) return renderAlerts(); alAt=Date.now(); try{ AL=await api('/api/alerts'); }catch(e){ return; } renderAlerts(); }
 function renderAlerts(){ if(!AL) return; const cs=AL.channels||[];
-  const ev=c=>[c.outage&&'Ausfall',c.offline&&'Standort',c.loss&&'Verlust',c.spike&&'Spitzen',c.report&&'Bericht'].filter(Boolean).map(t=>`<span class="badge">${t}</span>`).join(' ');
-  const stat=c=>c.disabled?'<span class="badge">pausiert</span>':c.lastErr&&c.errAt>(c.lastOK||0)?`<span class="badge bad" title="${esc(c.lastErr)}">Fehler</span> <span class="muted" style="font-size:12px">${esc(c.lastErr.slice(0,60))}</span>`:c.lastOK?`<span class="badge ok">zuletzt ${fmtDT(c.lastOK,false)}</span>`:'<span class="muted">–</span>';
+  const ev=c=>[c.outage&&'Ausfall',c.offline&&'Standort',c.loss&&'Verlust',c.spike&&'Spitzen',c.report&&'Bericht'].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join(' ');
+  const stat=c=>c.disabled?'<span class="tag">pausiert</span>':c.lastErr&&c.errAt>(c.lastOK||0)?`<span class="tag bad" title="${esc(c.lastErr)}">Fehler</span> <span class="muted" style="font-size:12px">${esc(c.lastErr.slice(0,60))}</span>`:c.lastOK?`<span class="tag ok">zuletzt ${fmtDT(c.lastOK,false)}</span>`:'<span class="muted">–</span>';
   const tgt=c=>c.type==='email'?esc(c.target):c.type==='telegram'?'Chat '+esc(c.target):esc(c.target.replace(/^https:\/\/([^/]+).*/,'$1'));
   const sig=JSON.stringify(AL); if($('#al-tbl').dataset.sig===sig) return; $('#al-tbl').dataset.sig=sig;
   $('#al-tbl').innerHTML=!AL.allowed&&!cs.length?`<tr><td class="empty">Alarme per E-Mail, Teams, Telegram und Webhook gibt es ab dem Paket <b>Basis</b>. <a href="#/billing">Paket ansehen →</a></td></tr>`:
@@ -823,7 +894,7 @@ let usersAt=0;
 async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-tbl').dataset.sig) return; usersAt=Date.now(); let us; try{ us=await api('/api/users'); }catch(e){ return; }
   const st=S.state, me=st.me||{}, canEd=me.role!=='viewer', own=me.role==='owner'||me.super;
   const sig=JSON.stringify(us)+me.role; if($('#users-tbl').dataset.sig===sig) return; $('#users-tbl').dataset.sig=sig;
-  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="badge">Sie</span>':''}</td><td>${esc(u.email)}</td>
+  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="tag">Sie</span>':''}</td><td>${esc(u.email)}</td>
     <td>${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<select data-role="${u.id}">${Object.entries(ROLES).filter(([k])=>k!=='owner'||own).map(([k,v])=>`<option value="${k}"${k===u.role?' selected':''}>${v}</option>`).join('')}</select>`:ROLES[u.role]||u.role}</td>
     <td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td>
     <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
@@ -845,7 +916,7 @@ function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.
   const q=new URLSearchParams((location.hash.split('?')[1])||'');
   const lim=v=>v>0?v:'∞', bar=(u,l)=>l>0?`<div class="meter"><i style="width:${Math.min(100,u*100/l)}%"></i></div>`:'';
   const [stx,scl]=STAT[o.status||'active']||[o.status,''];
-  $('#b-cur').innerHTML=`<div><span>Paket</span><b>${esc(o.planName)}</b> <span class="badge ${scl}">${stx}</span></div>
+  $('#b-cur').innerHTML=`<div><span>Paket</span><b>${esc(o.planName)}</b> <span class="tag ${scl}">${stx}</span></div>
     <div><span>Standorte</span><b>${o.usedSites} / ${lim(o.siteLimit)}</b>${bar(o.usedSites,o.siteLimit)}</div>
     <div><span>Hosts</span><b>${o.usedHosts} / ${lim(o.hostLimit)}</b>${bar(o.usedHosts,o.hostLimit)}</div>
     <div><span>Verlauf</span><b>${o.retention} Tage</b></div>
@@ -892,8 +963,8 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
   const cur=S.state&&S.state.org&&S.state.org.id;
   const list=ORGS.filter(o=>!q||(o.name+' '+(o.owner||'')+' '+(o.email||'')).toLowerCase().includes(q));
   $('#a-tbl').innerHTML=list.length?'<tr><th>Kunde</th><th>Paket</th><th>Status</th><th>Standorte</th><th class="hide-m">Hosts</th><th class="hide-m">Benutzer</th><th class="hide-m">€/Monat</th><th class="hide-m">Seit</th><th></th></tr>'+list.map(o=>{ const [t,c]=o.disabled?['gesperrt','bad']:(STAT[o.status||'active']||[o.status,'']);
-    return `<tr><td><b>${esc(o.name)}</b>${o.id===cur?' <span class="badge ok">geöffnet</span>':''}<br><span class="muted" style="font-size:12px">${esc(o.owner||o.email||'')}</span></td>
-    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="badge">Stripe</span>':o.billing==='invoice'?' <span class="badge">Rechnung</span>':''}</td><td><span class="badge ${c}">${t}</span></td>
+    return `<tr><td><b>${esc(o.name)}</b>${o.id===cur?' <span class="tag ok">geöffnet</span>':''}<br><span class="muted" style="font-size:12px">${esc(o.owner||o.email||'')}</span></td>
+    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="tag">Stripe</span>':o.billing==='invoice'?' <span class="tag">Rechnung</span>':''}</td><td><span class="tag ${c}">${t}</span></td>
     <td class="num">${o.usedSites} / ${o.sites||(o.plan==='free'?1:'∞')}</td><td class="hide-m num">${o.usedHosts}</td><td class="hide-m num">${o.users}</td><td class="hide-m num">${o.mrr?eur(o.mrr):'–'}</td><td class="hide-m">${fmtDay(o.created)}</td>
     <td class="act"><button class="btn sm pri" data-open="${o.id}">Öffnen</button> <button class="btn sm" data-oed="${o.id}">Bearbeiten</button></td></tr>`; }).join(''):'<tr><td class="empty">Keine Kunden gefunden.</td></tr>';
   $$('#a-tbl [data-open]').forEach(b=>b.onclick=()=>switchOrg(b.dataset.open,'#/'));
@@ -955,17 +1026,18 @@ function openHost(id){
   const h=id&&S.state.hosts.find(x=>x.id===id);
   $('#hf-title').textContent=h?'Host bearbeiten':'Host hinzufügen'; $('#hf-del').style.display=h?'':'none'; $('#hf-err').textContent='';
   $('#hf-site').innerHTML=S.state.sites.map(s=>`<option value="${s.id}">${s.id==='cloud'?'Cloud (öffentliche IPs)':esc(s.name)+' (Agent)'}</option>`).join('');
+  $('#hf-parent').innerHTML='<option value="">– nichts –</option>'+S.state.hosts.filter(x=>!h||x.id!==h.id).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
   hf.dataset.id=h?h.id:'';
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
-  hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
+  hf.parent.value=h&&h.parent||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
   syncHostForm(); dlg.showModal();
 }
 function syncHostForm(){ $('#hf-portf').style.display=hf.method.value==='tcp'?'':'none'; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
   $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)'; }
 hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
-  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked};
+  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value};
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
 $('#add-host').onclick=()=>openHost();

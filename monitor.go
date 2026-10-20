@@ -29,6 +29,7 @@ type HostCfg struct {
 	OutageCount int    `json:"outageCount"`
 	Paused      bool   `json:"paused"`
 	Org         string `json:"org,omitempty"`
+	Parent      string `json:"parent,omitempty"` // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
 }
 
 type SiteCfg struct {
@@ -47,6 +48,7 @@ type Config struct {
 	Orgs          []Org     `json:"orgs"`
 	Users         []User    `json:"users"`
 	Channels      []Channel `json:"channels"`
+	Maints        []Maint   `json:"maints"`
 	Secret        string    `json:"secret"`
 	Version       int64     `json:"version"`
 }
@@ -273,11 +275,9 @@ func (m *Monitor) newEvent(h *Host, typ string, start int64) *Event {
 	m.nextEv++
 	e := &Event{ID: m.nextEv, HostID: h.cfg.ID, HostName: h.cfg.Name, Site: h.cfg.Site, Org: h.cfg.Org, Type: typ, Start: start, Last: start}
 	m.events = append(m.events, e)
-	cp := *e
 	m.evMu.Unlock()
-	if typ == "outage" {
-		m.notifyEventStart(cp)
-	}
+	// Achtung: Aufrufer hält h.mu – darum Wartung/Abhängigkeit/Meldung asynchron prüfen.
+	go m.eventStarted(e, h)
 	return e
 }
 
@@ -287,7 +287,24 @@ func (m *Monitor) finishEvent(e *Event, end int64) {
 	cp := *e
 	m.evMu.Unlock()
 	m.store.AppendEvent(cp)
-	m.notifyEventEnd(cp)
+	if cp.Decided || cp.Type == "offline" {
+		m.notifyEventEnd(cp)
+		return
+	}
+	// Beginn wird noch geprüft (Wartung/Abhängigkeit) – Ende erst danach melden.
+	go func() {
+		for i := 0; i < 400; i++ {
+			time.Sleep(100 * time.Millisecond)
+			m.evMu.Lock()
+			d := e.Decided
+			cp = *e
+			m.evMu.Unlock()
+			if d {
+				break
+			}
+		}
+		m.notifyEventEnd(cp)
+	}()
 }
 
 // finishEventQuiet schließt ein Ereignis ohne Benachrichtigung (Pause, Löschen, Neustart).
@@ -473,9 +490,11 @@ func (m *Monitor) housekeeping() {
 			}
 			st.mu.Lock()
 			if st.lastSeen > 0 && nowMs-st.lastSeen > 45_000 && st.offEv == nil {
+				inM := m.inMaint(s.Org, "", now)
 				m.evMu.Lock()
 				m.nextEv++
-				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Org: s.Org, Type: "offline", Start: st.lastSeen, Last: st.lastSeen}
+				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Org: s.Org, Type: "offline", Start: st.lastSeen, Last: st.lastSeen,
+					Maint: inM}
 				m.events = append(m.events, e)
 				cp := *e
 				m.evMu.Unlock()
@@ -492,6 +511,7 @@ func (m *Monitor) housekeeping() {
 			go func() {
 				m.store.Maintenance(ret)
 				m.applyOrgRetention()
+				m.cleanupMaints()
 			}()
 			m.evMu.Lock()
 			c := now.AddDate(0, 0, -ret).UnixMilli()

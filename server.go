@@ -180,6 +180,7 @@ func (s *Server) routes() http.Handler {
 	})
 	mux.HandleFunc("/api/agent/config", s.handleAgentConfig)
 	mux.HandleFunc("/api/agent/push", s.handleAgentPush)
+	mux.HandleFunc("/api/agent/trace", s.handleAgentTrace)
 
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
@@ -227,6 +228,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/stats", protect(s.handleStats))
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
+	mux.HandleFunc("/api/maint", protect(s.handleMaint))
+	mux.HandleFunc("/api/trace", protect(s.handleTraceNow))
 	mux.HandleFunc("/api/sites", protect(s.handleSites))
 	mux.HandleFunc("/api/settings", protect(s.handleSettings))
 	mux.HandleFunc("/api/reset", protect(s.handleReset))
@@ -275,6 +278,7 @@ type HostView struct {
 	Spark     []int32 `json:"spark"`
 	Ongoing   []Event `json:"ongoing"`
 	LastOut   *Event  `json:"lastOutage"`
+	Maint     bool    `json:"maint,omitempty"`
 }
 
 type SiteView struct {
@@ -322,11 +326,13 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	h1, h24 := now-3600_000, now-24*3600_000
 	p := principal(r)
 	hv := []HostView{}
+	tnow := time.Now()
 	for _, h := range m.hostsOf(p.Org) {
 		siteOn, _ := m.siteOnline(h.cfg.Site)
+		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
 		v := HostView{HostCfg: h.cfg, IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
-			Threshold: h.effThreshold()}
+			Threshold: h.effThreshold(), Maint: inM}
 		if h.baseN >= 30 {
 			v.Baseline = h.baseMed
 		}
@@ -607,6 +613,9 @@ func (m *Monitor) dayStatsAt(h *Host, last time.Time, days int) []DayStat {
 			}
 			switch e.Type {
 			case "outage":
+				if e.Maint {
+					continue // Wartung zählt nicht als Ausfall
+				}
 				if e.Start >= d0 {
 					ds.Outages++
 				}
@@ -729,6 +738,10 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		hc.Org = p.Org
+		if err := s.m.validParent(p.Org, hc.ID, hc.Parent); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
 		writeJSON(w, s.m.UpsertHost(hc))
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
@@ -993,7 +1006,11 @@ func (s *Server) handleAgentPush(w http.ResponseWriter, r *http.Request) {
 	s.m.mu.RLock()
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
-	writeJSON(w, map[string]any{"accepted": acc, "version": ver})
+	out := map[string]any{"accepted": acc, "version": ver}
+	if tr := takeTraces(site.ID); len(tr) > 0 {
+		out["traces"] = tr
+	}
+	writeJSON(w, out)
 }
 
 // ---------- Exporte ----------

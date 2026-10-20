@@ -325,6 +325,9 @@ func (m *Monitor) siteNameOf(id string) string {
 }
 
 func (m *Monitor) notifyEventStart(e Event) {
+	if e.quiet() {
+		return
+	}
 	at := time.UnixMilli(e.Start).Format("15:04:05")
 	switch e.Type {
 	case "outage":
@@ -337,9 +340,15 @@ func (m *Monitor) notifyEventStart(e Event) {
 }
 
 func (m *Monitor) notifyEventEnd(e Event) {
+	if e.quiet() {
+		return
+	}
 	dur := fmtDurShort(e.End - e.Start)
 	switch e.Type {
 	case "outage":
+		if !e.Notified {
+			return
+		}
 		m.notify(notice{"recovered", e.HostID, "🟢 " + e.HostName + " wieder erreichbar",
 			fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur), e.Org})
 	case "loss":

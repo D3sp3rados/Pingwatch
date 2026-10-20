@@ -363,9 +363,13 @@ func (a *Agent) push(batch []pushSample) error {
 		return errors.New(resp.Status)
 	}
 	var r struct {
-		Version int64 `json:"version"`
+		Version int64      `json:"version"`
+		Traces  []traceReq `json:"traces"`
 	}
 	json.NewDecoder(resp.Body).Decode(&r)
+	for _, t := range r.Traces {
+		go a.trace(t)
+	}
 	a.mu.Lock()
 	changed := r.Version != 0 && r.Version != a.cfgVer
 	a.mu.Unlock()
@@ -466,4 +470,20 @@ func (a *Agent) status() agentStatus {
 	}
 	sort.Strings(st.Down)
 	return st
+}
+
+// trace führt eine vom Server angeforderte Routenverfolgung aus und schickt das Ergebnis zurück.
+func (a *Agent) trace(t traceReq) {
+	text := runTrace(t.Addr)
+	b, _ := json.Marshal(map[string]any{"id": t.ID, "text": text})
+	for try := 0; try < 3; try++ {
+		resp, err := a.req("POST", "/api/agent/trace", bytes.NewReader(b), false)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode < 500 {
+				return
+			}
+		}
+		time.Sleep(10 * time.Second)
+	}
 }
