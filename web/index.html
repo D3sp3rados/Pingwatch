@@ -272,6 +272,24 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     Fällt das Internet am Standort aus, puffert der Agent die Messwerte und schickt sie nach. Für einen Raspberry Pi gibt es den Linux-Agent (<code>pingwatch-agent-linux-arm64 agent -config agent.json</code>).
   </div>
 
+  <h2>Daten zurücksetzen</h2>
+  <div class="panel">
+    <div class="formrow">
+      <label class="field">Host<select id="r-host"><option value="">Alle Hosts</option></select></label>
+      <label class="field">Zeitraum<select id="r-range">
+        <option value="24">Letzte 24 Stunden</option><option value="48">Letzte 48 Stunden</option><option value="72">Letzte 72 Stunden</option>
+        <option value="168">Letzte Woche</option><option value="336">Letzte 2 Wochen</option><option value="day">Bestimmter Tag / Zeitraum …</option>
+      </select></label>
+      <label class="field" id="r-fromf" style="display:none">Von<input type="date" id="r-from"></label>
+      <label class="field" id="r-tof" style="display:none">Bis (leer = nur ein Tag)<input type="date" id="r-to"></label>
+    </div>
+    <div class="formrow" style="padding-top:0;align-items:center">
+      <label class="check"><input type="checkbox" id="r-events" checked> Ereignisse (Ausfälle, Paketverlust, Spitzen)</label>
+      <label class="check"><input type="checkbox" id="r-samples"> Messwerte (Zeitleiste und Statistik)</label>
+      <button class="btn danger" id="r-go" style="margin-left:auto">Löschen</button>
+    </div>
+  </div>
+
   <h2>Allgemein</h2>
   <div class="panel">
     <div class="formrow">
@@ -622,6 +640,21 @@ $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „B
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
 
+/* Zurücksetzen */
+$('#r-range').onchange=()=>{ const d=$('#r-range').value==='day'; $('#r-fromf').style.display=$('#r-tof').style.display=d?'':'none'; };
+$('#r-go').onclick=async()=>{
+  const host=$('#r-host').value, range=$('#r-range').value, ev=$('#r-events').checked, sm=$('#r-samples').checked;
+  if(!ev&&!sm){ alert('Bitte Ereignisse und/oder Messwerte auswählen.'); return; }
+  const body={host,events:ev,samples:sm}; let zr;
+  const fd=d=>d.split('-').reverse().join('.');
+  if(range==='day'){ const a=$('#r-from').value, b=$('#r-to').value; if(!a){ alert('Bitte ein Datum wählen.'); return; } body.dayFrom=a; if(b) body.dayTo=b; zr=b&&b!==a?`vom ${fd(a)} bis ${fd(b)}`:`vom ${fd(a)}`; }
+  else { body.hours=+range; zr=$('#r-range').selectedOptions[0].textContent.replace('Letzte','der letzten').replace('Letzten','der letzten'); }
+  const was=[ev?'Ereignisse':'',sm?'Messwerte':''].filter(Boolean).join(' und ');
+  const wer=host?('von „'+(S.state.hosts.find(h=>h.id===host)||{}).name+'“'):'aller Hosts';
+  if(!confirm(`${was} ${wer} ${zr} endgültig löschen?`)) return;
+  try{ const r=await api('/api/reset',{method:'POST',body:JSON.stringify(body)}); toast(ev?`Gelöscht – ${r.events} Ereignisse entfernt`:'Messwerte gelöscht'); refreshOverview(); refreshState(); }catch(e){ alert(e.message); }
+};
+
 /* Host-Dialog */
 const dlg=$('#dlg-host'), hf=$('#host-form');
 function openHost(id){
@@ -647,6 +680,7 @@ $('#add-host').onclick=()=>openHost();
 function fillHostSelects(){ const st=S.state; if(!st) return;
   const opts=st.hosts.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const fh=$('#f-host'); const v=fh.value; const sig1=st.hosts.map(h=>h.id+h.name).join(); if(fh.dataset.sig!==sig1){ fh.innerHTML='<option value="">Alle Hosts</option>'+opts; fh.value=v; fh.dataset.sig=sig1; }
+  const rh=$('#r-host'); if(rh.dataset.sig!==sig1){ const v3=rh.value; rh.innerHTML='<option value="">Alle Hosts</option>'+opts; rh.value=v3; rh.dataset.sig=sig1; }
   const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=opts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');

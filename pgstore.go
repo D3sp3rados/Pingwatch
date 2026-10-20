@@ -425,3 +425,29 @@ func (s *PgStore) SaveConfig(b []byte) error {
 	_, err := s.db.Exec(`INSERT INTO pw_config (id, data) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`, string(b))
 	return err
 }
+
+func (s *PgStore) DeleteSamples(hosts []string, from, to int64) {
+	s.Flush()
+	if len(hosts) == 0 {
+		return
+	}
+	minFrom := from - from%60_000
+	if _, err := s.db.Exec(`DELETE FROM pw_samples WHERE host = ANY($1) AND t >= $2 AND t < $3`, pq.Array(hosts), from, to); err != nil {
+		s.logErr("Zurücksetzen", err)
+	}
+	if _, err := s.db.Exec(`DELETE FROM pw_minutes WHERE host = ANY($1) AND t >= $2 AND t < $3`, pq.Array(hosts), minFrom, to); err != nil {
+		s.logErr("Zurücksetzen", err)
+	}
+	s.cacheMu.Lock()
+	s.aggCache = map[string][]Agg{}
+	s.cacheMu.Unlock()
+}
+
+func (s *PgStore) DeleteEvents(ids []int64) {
+	if len(ids) == 0 {
+		return
+	}
+	if _, err := s.db.Exec(`DELETE FROM pw_events WHERE id = ANY($1)`, pq.Array(ids)); err != nil {
+		s.logErr("Ereignisse löschen", err)
+	}
+}

@@ -224,6 +224,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
 	mux.HandleFunc("/api/sites", protect(s.handleSites))
 	mux.HandleFunc("/api/settings", protect(s.handleSettings))
+	mux.HandleFunc("/api/reset", protect(s.handleReset))
 	mux.HandleFunc("/api/export/events.csv", protect(s.exportEvents))
 	mux.HandleFunc("/api/export/samples.csv", protect(s.exportSamples))
 	mux.HandleFunc("/api/export/stats.csv", protect(s.exportStats))
@@ -986,4 +987,62 @@ func (s *Server) exportStats(w http.ResponseWriter, r *http.Request) {
 				deNum(a.Avg()), deNum(mn), deNum(mx), a.Spk)
 		}
 	}
+}
+
+func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	var req struct {
+		Host    string `json:"host"`
+		Hours   int    `json:"hours"`
+		DayFrom string `json:"dayFrom"`
+		DayTo   string `json:"dayTo"`
+		Samples bool   `json:"samples"`
+		Events  bool   `json:"events"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "ungültig", 400)
+		return
+	}
+	if req.Host != "" && s.m.host(req.Host) == nil {
+		http.Error(w, "unbekannter Host", 404)
+		return
+	}
+	if !req.Samples && !req.Events {
+		http.Error(w, "Messwerte und/oder Ereignisse auswählen", 400)
+		return
+	}
+	now := time.Now()
+	var from, to int64
+	if req.DayFrom != "" {
+		d1, err := time.ParseInLocation("2006-01-02", req.DayFrom, time.Local)
+		if err != nil {
+			http.Error(w, "Datum ungültig", 400)
+			return
+		}
+		d2 := d1
+		if req.DayTo != "" {
+			if d2, err = time.ParseInLocation("2006-01-02", req.DayTo, time.Local); err != nil {
+				http.Error(w, "Datum ungültig", 400)
+				return
+			}
+		}
+		if d2.Before(d1) {
+			d1, d2 = d2, d1
+		}
+		from, to = d1.UnixMilli(), d2.AddDate(0, 0, 1).UnixMilli()
+	} else {
+		switch req.Hours {
+		case 24, 48, 72, 168, 336:
+		default:
+			http.Error(w, "Zeitraum ungültig", 400)
+			return
+		}
+		from = now.Add(-time.Duration(req.Hours) * time.Hour).UnixMilli()
+		to = now.Add(time.Minute).UnixMilli()
+	}
+	n := s.m.Reset(req.Host, from, to, req.Samples, req.Events)
+	writeJSON(w, map[string]any{"ok": true, "events": n})
 }

@@ -657,3 +657,93 @@ func (m *Monitor) siteByToken(tok string) (SiteCfg, bool) {
 	}
 	return SiteCfg{}, false
 }
+
+// Reset löscht Ereignisse (und optional Messwerte) im Zeitraum [from, to) für einen Host oder alle ("").
+// Liefert die Anzahl gelöschter Ereignisse.
+func (m *Monitor) Reset(hostID string, from, to int64, samples, events bool) int {
+	in := func(t int64) bool { return t >= from && t < to }
+	var hosts []*Host
+	m.mu.RLock()
+	if hostID == "" {
+		for _, h := range m.hosts {
+			hosts = append(hosts, h)
+		}
+	} else if h := m.hosts[hostID]; h != nil {
+		hosts = append(hosts, h)
+	}
+	m.mu.RUnlock()
+	ids := map[string]bool{}
+	var idList []string
+	for _, h := range hosts {
+		ids[h.cfg.ID] = true
+		idList = append(idList, h.cfg.ID)
+	}
+
+	// laufende Ereignisse im Zeitraum verwerfen, Messwerte im Speicher entfernen
+	for _, h := range hosts {
+		h.mu.Lock()
+		if events {
+			m.evMu.Lock()
+			if h.oOut != nil && in(h.oOut.Start) {
+				h.oOut = nil
+				h.consec = 0
+			}
+			if h.oLoss != nil && in(h.oLoss.Start) {
+				h.oLoss = nil
+			}
+			if h.oSpk != nil && in(h.oSpk.Start) {
+				h.oSpk = nil
+			}
+			m.evMu.Unlock()
+		}
+		if samples {
+			kept := make([]Sample, 0, len(h.samples))
+			for _, sm := range h.samples {
+				if !in(sm.T) {
+					kept = append(kept, sm)
+				}
+			}
+			h.samples = kept
+			h.baseN, h.basePos, h.baseMed = 0, 0, 0
+			for _, sm := range h.samples {
+				if sm.R >= 0 {
+					h.addBase(sm.R)
+				}
+			}
+		}
+		h.mu.Unlock()
+	}
+
+	// Ereignisliste bereinigen
+	var removed []int64
+	if !events {
+		if samples {
+			m.store.DeleteSamples(idList, from, to)
+		}
+		log.Printf("Zurückgesetzt: %d Host(s) %s – %s, nur Messwerte", len(hosts),
+			time.UnixMilli(from).Format("02.01.2006 15:04"), time.UnixMilli(to).Format("02.01.2006 15:04"))
+		return 0
+	}
+	m.evMu.Lock()
+	keep := m.events[:0]
+	for _, e := range m.events {
+		match := in(e.Start) && (ids[e.HostID] || (hostID == "" && e.Type == "offline"))
+		if match {
+			removed = append(removed, e.ID)
+			continue
+		}
+		keep = append(keep, e)
+	}
+	m.events = keep
+	cp := append([]*Event(nil), keep...)
+	m.evMu.Unlock()
+
+	m.store.DeleteEvents(removed)
+	m.store.RewriteEvents(cp)
+	if samples {
+		m.store.DeleteSamples(idList, from, to)
+	}
+	log.Printf("Zurückgesetzt: %d Host(s) %s – %s, Messwerte=%v, %d Ereignisse entfernt",
+		len(hosts), time.UnixMilli(from).Format("02.01.2006 15:04"), time.UnixMilli(to).Format("02.01.2006 15:04"), samples, len(removed))
+	return len(removed)
+}

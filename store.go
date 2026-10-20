@@ -406,6 +406,8 @@ type Storage interface {
 	AppendEvent(e Event)
 	LoadEvents(retentionDays int) []*Event
 	RewriteEvents(evs []*Event)
+	DeleteSamples(hosts []string, from, to int64)
+	DeleteEvents(ids []int64)
 	LoadConfig() ([]byte, error)
 	SaveConfig(b []byte) error
 	Kind() string
@@ -424,3 +426,48 @@ func (s *FileStore) SaveConfig(b []byte) error {
 }
 
 func (s *FileStore) Kind() string { return "files" }
+
+// DeleteSamples entfernt Messwerte im Zeitraum [from, to) (ms) für die angegebenen Hosts.
+func (s *FileStore) DeleteSamples(hosts []string, from, to int64) {
+	s.Close() // offene Tagesdateien schließen, werden beim nächsten Append neu geöffnet
+	now := time.Now()
+	for _, host := range hosts {
+		end := time.UnixMilli(to)
+		if end.After(now) {
+			end = now
+		}
+		for d := time.UnixMilli(from); !dayStart(d.Format("2006-01-02")).After(end); d = d.AddDate(0, 0, 1) {
+			day := d.Format("2006-01-02")
+			base := filepath.Join(s.hostDir(host), day)
+			_, e1 := os.Stat(base + ".csv")
+			_, e2 := os.Stat(base + ".csv.gz")
+			if e1 != nil && e2 != nil {
+				continue
+			}
+			var keep []Sample
+			for _, sm := range s.ReadDay(host, day) {
+				if sm.T < from || sm.T >= to {
+					keep = append(keep, sm)
+				}
+			}
+			os.Remove(base + ".csv.gz")
+			f, err := os.Create(base + ".csv.tmp")
+			if err != nil {
+				continue
+			}
+			w := bufio.NewWriter(f)
+			for _, sm := range keep {
+				fmt.Fprintf(w, "%d;%s;%c\n", sm.T, fmtR(sm.R), flagChars[sm.F])
+			}
+			w.Flush()
+			f.Close()
+			os.Rename(base+".csv.tmp", base+".csv")
+			s.mu.Lock()
+			delete(s.aggCache, host+"|"+day)
+			s.mu.Unlock()
+		}
+	}
+}
+
+// DeleteEvents: bei Dateien schreibt RewriteEvents die bereinigte Liste.
+func (s *FileStore) DeleteEvents(ids []int64) {}
