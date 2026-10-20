@@ -70,6 +70,7 @@ func runServer(args []string) {
 		log.Printf("Push-Benachrichtigungen aktiv (Topic %s)", p.topic)
 	}
 	go m.pushLoop()
+	go m.reportLoop()
 	s := &Server{m: m, envPass: os.Getenv("ADMIN_PASSWORD"), agentDir: envOr("AGENT_DIR", "./downloads")}
 	if s.envPass == "" && m.cfg.PassHash == "" {
 		pw := randHex(5)
@@ -313,6 +314,9 @@ func (m *Monitor) siteOnline(id string) (bool, *siteState) {
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.Host, "localhost") && !strings.HasPrefix(r.Host, "127.") {
+		lastBase.Store("u", baseURL(r))
+	}
 	m := s.m
 	now := time.Now().UnixMilli()
 	h1, h24 := now-3600_000, now-24*3600_000
@@ -569,7 +573,10 @@ type DayStat struct {
 	Spikes   int    `json:"spikeEvents"`
 }
 
-func (m *Monitor) dayStats(h *Host, days int) []DayStat {
+func (m *Monitor) dayStats(h *Host, days int) []DayStat { return m.dayStatsAt(h, time.Now(), days) }
+
+// dayStatsAt liefert Tagesstatistiken für die days Tage bis einschließlich last (neuester zuerst).
+func (m *Monitor) dayStatsAt(h *Host, last time.Time, days int) []DayStat {
 	var out []DayStat
 	now := time.Now()
 	m.evMu.Lock()
@@ -581,7 +588,7 @@ func (m *Monitor) dayStats(h *Host, days int) []DayStat {
 	}
 	m.evMu.Unlock()
 	for i := 0; i < days; i++ {
-		day := now.AddDate(0, 0, -i).Format("2006-01-02")
+		day := last.AddDate(0, 0, -i).Format("2006-01-02")
 		aggs := m.dayAggs(h, day)
 		ds := DayStat{Day: day, Hours: make([]Agg, 24)}
 		for idx, a := range aggs {

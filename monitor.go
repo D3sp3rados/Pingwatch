@@ -46,6 +46,7 @@ type Config struct {
 	Devices       []Device  `json:"devices"`
 	Orgs          []Org     `json:"orgs"`
 	Users         []User    `json:"users"`
+	Channels      []Channel `json:"channels"`
 	Secret        string    `json:"secret"`
 	Version       int64     `json:"version"`
 }

@@ -31,6 +31,11 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/billing/change", protect(s.handleBillingChange))
 	mux.HandleFunc("/api/billing/portal", protect(s.handleBillingPortal))
 	mux.HandleFunc("/api/stripe/webhook", s.handleStripeWebhook)
+	mux.HandleFunc("/api/alerts", protect(s.handleAlerts))
+	mux.HandleFunc("/api/alerts/test", protect(s.handleAlertTest))
+	mux.HandleFunc("/api/alerts/telegram", protect(s.handleTelegramChats))
+	mux.HandleFunc("/api/report.pdf", protect(s.handleReport))
+	mux.HandleFunc("/api/report/send", protect(s.handleReportSend))
 }
 
 func publicPlans() []Plan {
@@ -458,6 +463,13 @@ func (s *Server) deleteOrg(id string) {
 		}
 	}
 	m.cfg.Devices = keepD
+	keepC := m.cfg.Channels[:0]
+	for _, c := range m.cfg.Channels {
+		if c.Org != id {
+			keepC = append(keepC, c)
+		}
+	}
+	m.cfg.Channels = keepC
 	keepO := m.cfg.Orgs[:0]
 	for _, o := range m.cfg.Orgs {
 		if o.ID != id {

@@ -78,6 +78,22 @@ Umgebungsvariablen (alle optional):
 
 Stripe-Webhook-Ereignisse: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. Für Rechnungen und Zahlungsmethode leitet PingWatch Kunden ins Stripe-Kundenportal (im Stripe-Dashboard aktivieren).
 
+## Alarme & Monatsbericht
+
+Unter **Einstellungen → Alarme** legt jeder Kunde eigene Alarmwege an (ab Paket Basis): E-Mail, Microsoft Teams (Workflow-Webhook), Telegram, eigener Webhook (JSON, optional HMAC-signiert). Der PDF-Monatsbericht (Pro/Partner) liegt unter **Statistik** und geht am 1. jedes Monats ab 7 Uhr an alle E-Mail-Alarmwege mit Haken „Monatsbericht“.
+
+| Variable | Zweck |
+|---|---|
+| `SMTP_HOST`, `SMTP_PORT` (587) | eigener Mailserver |
+| `SMTP_TLS` | `starttls` (Standard), `tls` (Port 465) oder `none` |
+| `SMTP_USER`, `SMTP_PASSWORD` | Anmeldung am Mailserver (optional) |
+| `SMTP_FROM` | Absender, z. B. `PingWatch <pingwatch@rst.de>` |
+| `SMTP_INSECURE=1` | Zertifikat nicht prüfen (interner Server mit eigenem Zertifikat) |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_NAME` | gemeinsamer Bot des Anbieters (sonst trägt jeder Kunde seinen eigenen Bot ein) |
+| `PUBLIC_URL` | Link in Alarmen, z. B. `https://pingwatch-a4029c.apps.rstcloud.de` |
+
+Hinweis rstcloud: ausgehende Verbindungen auf 25/465/587 sind dort gesperrt – den Mailserver über einen freigegebenen Port oder das interne Netz ansprechen.
+
 ## Daten
 
 **Mit Datenbank (PostgreSQL):** PingWatch legt die Tabellen beim Start selbst an (`pw_config`, `pw_samples`, `pw_minutes`, `pw_events`).

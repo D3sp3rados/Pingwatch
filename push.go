@@ -242,6 +242,7 @@ func (m *Monitor) notify(n notice) {
 
 func (m *Monitor) pushLoop() {
 	for n := range m.notices {
+		m.dispatchAlerts(n)
 		if m.pusher == nil {
 			continue
 		}

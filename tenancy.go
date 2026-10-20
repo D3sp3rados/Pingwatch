@@ -23,16 +23,17 @@ import (
 
 // Org ist ein Kunde (Mandant). Hosts, Standorte, Geräte und Benutzer gehören zu genau einer Org.
 type Org struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Plan      string `json:"plan"`              // free, basis, pro, partner, internal
-	Sites     int    `json:"sites"`             // gebuchte Standorte (Abo-Menge)
-	Billing   string `json:"billing,omitempty"` // stripe, invoice, ""
-	Created   int64  `json:"created"`
-	Email     string `json:"email,omitempty"`  // Rechnungs-/Kontakt-E-Mail
-	Status    string `json:"status,omitempty"` // active, past_due, canceled
-	PaidUntil int64  `json:"paidUntil,omitempty"`
-	Disabled  bool   `json:"disabled,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Plan       string `json:"plan"`              // free, basis, pro, partner, internal
+	Sites      int    `json:"sites"`             // gebuchte Standorte (Abo-Menge)
+	Billing    string `json:"billing,omitempty"` // stripe, invoice, ""
+	Created    int64  `json:"created"`
+	Email      string `json:"email,omitempty"`  // Rechnungs-/Kontakt-E-Mail
+	Status     string `json:"status,omitempty"` // active, past_due, canceled
+	PaidUntil  int64  `json:"paidUntil,omitempty"`
+	Disabled   bool   `json:"disabled,omitempty"`
+	ReportSent string `json:"reportSent,omitempty"` // Monat (YYYY-MM) des zuletzt versandten Monatsberichts
 
 	StripeCustomer string `json:"stripeCustomer,omitempty"`
 	StripeSub      string `json:"stripeSub,omitempty"`
