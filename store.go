@@ -346,6 +346,7 @@ type Event struct {
 	Count    int    `json:"count"`
 	Max      int32  `json:"max"`
 	Sum      int64  `json:"sum"`
+	Dev      string `json:"dev,omitempty"`     // UniFi-Gerät (MAC) bei device/reboot/wan
 	Cause    string `json:"cause,omitempty"`   // Ausfall wegen übergeordnetem Host
 	Maint    bool   `json:"maint,omitempty"`   // während Wartung
 	Trace    string `json:"trace,omitempty"`   // Routenverfolgung beim Ausfall

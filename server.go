@@ -437,9 +437,8 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
 		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name}, Online: on, Hosts: cnt[sc.ID]}
-		if sc.UniFi != nil {
-			u := unifiView(&sc)
-			u.Devices = nil
+		if sc.UniFi != nil && sc.UniFi.On {
+			u := m.unifiSiteView(&sc)
 			v.UniFi = &u
 		}
 		if st != nil {

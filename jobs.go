@@ -3,12 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -93,7 +91,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.Kind != "scan" && req.Kind != "unifi" {
+	if req.Kind != "scan" && req.Kind != "unifi" && req.Kind != "unifiprobe" {
 		http.Error(w, "Auftrag unbekannt", 400)
 		return
 	}
@@ -119,6 +117,13 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	} else if req.Kind == "unifiprobe" {
+		// Diagnose: nutzt die gespeicherte Konfiguration des Standorts
+		if site.UniFi == nil || site.UniFi.Key == "" || !principal(r).Super {
+			http.Error(w, "UniFi-Livestatus ist für diesen Standort nicht eingerichtet", 400)
+			return
+		}
+		req.Params["url"], req.Params["key"] = site.UniFi.URL, site.UniFi.Key
 	} else {
 		if !strings.HasPrefix(req.Params["url"], "https://") || req.Params["key"] == "" {
 			http.Error(w, "Adresse der UniFi-Konsole (https://…) und API-Schlüssel angeben", 400)
@@ -180,6 +185,8 @@ func (a *Agent) runJob(j agentJob) {
 		res, err = scanNetwork(j.Params["cidr"])
 	case "unifi":
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
+	case "unifiprobe":
+		res, err = unifiProbe(j.Params["url"], j.Params["key"], strings.Split(j.Params["paths"], ","))
 	default:
 		err = errors.New("unbekannter Auftrag – Agent aktualisieren")
 	}
@@ -383,86 +390,9 @@ func arpTable() map[string]string {
 
 // ---------- UniFi (Network-Anwendung, Integration-API ab Network 9) ----------
 
-type unifiDevice struct {
-	Name  string `json:"name"`
-	IP    string `json:"ip"`
-	MAC   string `json:"mac"`
-	Model string `json:"model"`
-	State string `json:"state"`
-	Site  string `json:"site"`
-}
 
 // unifiBase kann in Tests überschrieben werden.
 func unifiDevices(base, key, siteFilter string) ([]unifiDevice, error) {
 	return unifiFetch(base, key, siteFilter, false)
 }
 
-// unifiFetch holt die Geräte; all = auch Geräte ohne IP (für den Livestatus).
-func unifiFetch(base, key, siteFilter string, all bool) ([]unifiDevice, error) {
-	base = strings.TrimRight(strings.TrimSpace(base), "/")
-	cl := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{
-		Proxy:           nil,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // UniFi-Konsolen haben ein selbst signiertes Zertifikat
-	}}
-	get := func(path string, v any) error {
-		req, _ := http.NewRequest("GET", base+path, nil)
-		req.Header.Set("X-API-KEY", key)
-		req.Header.Set("Accept", "application/json")
-		resp, err := cl.Do(req)
-		if err != nil {
-			return fmt.Errorf("UniFi-Konsole nicht erreichbar: %v", shortErr(err))
-		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-		switch {
-		case resp.StatusCode == 401 || resp.StatusCode == 403:
-			return errors.New("API-Schlüssel abgelehnt")
-		case resp.StatusCode == 404:
-			return errors.New("Integration-API nicht gefunden – bitte UniFi Network auf die aktuelle Version bringen")
-		case resp.StatusCode >= 300:
-			return fmt.Errorf("UniFi: HTTP %d", resp.StatusCode)
-		}
-		return json.Unmarshal(b, v)
-	}
-	const api = "/proxy/network/integration/v1"
-	var sites struct {
-		Data []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"data"`
-	}
-	if err := get(api+"/sites?limit=200", &sites); err != nil {
-		return nil, err
-	}
-	out := []unifiDevice{}
-	for _, st := range sites.Data {
-		if siteFilter != "" && !strings.EqualFold(siteFilter, st.Name) && siteFilter != st.ID {
-			continue
-		}
-		for offset := 0; offset < 5000; offset += 200 {
-			var devs struct {
-				Data []struct {
-					Name       string `json:"name"`
-					Model      string `json:"model"`
-					MacAddress string `json:"macAddress"`
-					IPAddress  string `json:"ipAddress"`
-					State      string `json:"state"`
-				} `json:"data"`
-				TotalCount int `json:"totalCount"`
-			}
-			if err := get(fmt.Sprintf("%s/sites/%s/devices?offset=%d&limit=200", api, st.ID, offset), &devs); err != nil {
-				return nil, err
-			}
-			for _, d := range devs.Data {
-				if d.IPAddress == "" && !all {
-					continue
-				}
-				out = append(out, unifiDevice{Name: d.Name, IP: d.IPAddress, MAC: strings.ToLower(d.MacAddress), Model: d.Model, State: d.State, Site: st.Name})
-			}
-			if len(devs.Data) < 200 || offset+200 >= devs.TotalCount {
-				break
-			}
-		}
-	}
-	return out, nil
-}

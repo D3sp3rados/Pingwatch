@@ -69,6 +69,16 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 /* Übersicht */
 .site-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-weight:600}
+.uf{margin-top:12px}.uf-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;cursor:pointer;font-size:13.5px}
+.uf-h b{font-size:14px}.uf-h .chev{margin-left:auto;color:var(--mut);transition:transform .15s}.uf.open .uf-h .chev{transform:rotate(90deg)}
+.uf-b{display:none;padding:0 14px 12px}.uf.open .uf-b{display:block}
+.uf-cat{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
+.uf-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.ud{border:1px solid var(--line);border-radius:10px;padding:9px 11px;cursor:pointer;background:var(--bg)}.ud:hover{border-color:var(--line2)}
+.ud.off{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+.ud-t{display:flex;align-items:center;gap:7px}.ud-t b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ud-m{font-size:12px;color:var(--mut);margin:2px 0 6px;display:flex;gap:8px;flex-wrap:wrap}
+.ubar{display:flex;gap:1px;height:8px}.ubar i{flex:1;border-radius:1px;background:var(--nodata)}.ubar i.l1{background:var(--ok)}.ubar i.l2{background:var(--warn)}.ubar i.l3{background:var(--bad)}
+.wanp{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}
 .site-h:first-child{margin-top:2px}
 .site-h .muted{font-weight:400;font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
@@ -124,8 +134,8 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .badge{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11.5px;font-weight:650;margin-right:6px;vertical-align:1px}
 .b-outage{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
 .b-loss{background:color-mix(in srgb,var(--loss) 18%,transparent);color:var(--loss)}
-.b-spike{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
-.b-port,.b-device{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.b-spike,.b-reboot{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.b-port,.b-device,.b-wan{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
 .b-offline{background:color-mix(in srgb,var(--off) 22%,transparent);color:var(--mut)}
 .ev.live .dur{color:var(--bad)}
 /* Statistik */
@@ -254,7 +264,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="filters">
     <select id="f-host"><option value="">Alle Hosts</option></select>
     <div class="seg" id="f-types">
-      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button>
+      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button><button data-t="reboot" class="on">Neustarts</button><button data-t="wan" class="on">WAN</button>
     </div>
     <select id="f-range">
       <option value="1">Letzte 24 h</option><option value="7" selected>Letzte 7 Tage</option><option value="30">Letzte 30 Tage</option><option value="0">Alles</option>
@@ -558,7 +568,7 @@ function agg(a){ return a&&a!==0? {n:a[0],lost:a[1],spk:a[2],avg:a[3],min:a[4],m
 async function api(p,opt){ const r=await fetch(p,opt); if(r.status===401){location.href='/login';throw new Error('401');} if(!r.ok){throw new Error((await r.text())||r.statusText);} const ct=r.headers.get('content-type')||''; return ct.includes('json')? r.json() : r.text(); }
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200);}
 const STATUS={ok:['OK','--ok'],spike:['Latenzspitze','--warn'],loss:['Paketverlust','--loss'],down:['Keine Antwort','--bad'],stale:['Keine Daten','--off'],siteoff:['Standort offline','--off'],paused:['Pausiert','--off'],unknown:['Warte auf Daten','--off']};
-const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down'};
+const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down',reboot:'Neustart',wan:'WAN getrennt'};
 
 /* ---------- Tooltip ---------- */
 const tip=$('#tip');
@@ -585,20 +595,24 @@ function renderSummary(){
   let html=`<span class="pill"><span class="dot" style="background:var(${down?'--bad':warn?'--warn':'--ok'})"></span><span class="num">${ok}/${act.length} OK</span></span>`;
   if(down) html+=`<span class="pill" style="color:var(--bad)"><b>${down}</b>&nbsp;ohne Antwort</span>`;
   if(off) html+=`<span class="pill hide-m">${off} ohne Daten</span>`;
+  let uoff=0,wdown=0; for(const s of st.sites){ if(s.unifi&&s.unifi.on){ uoff+=s.unifi.offline||0; wdown+=s.unifi.wanDown||0; } }
+  if(uoff) html+=`<span class="pill" style="color:var(--bad)"><b>${uoff}</b>&nbsp;UniFi offline</span>`;
+  if(wdown) html+=`<span class="pill" style="color:var(--bad)"><b>${wdown}</b>&nbsp;WAN getrennt</span>`;
   $('#summary').innerHTML=html;
 }
 function renderOverview(){
   const st=S.state; if(!st) return;
   const root=$('#ov');
-  if(!st.hosts.length){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
+  if(!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
   // Gruppen nach Standort
-  const groups=[]; for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id); if(hs.length) groups.push([s,hs]); }
-  const sig=groups.map(([s,hs])=>s.id+':'+hs.map(h=>h.id).join(',')).join('|');
+  const groups=[]; for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id); if(hs.length||(s.unifi&&s.unifi.on)) groups.push([s,hs]); }
+  const sig=groups.map(([s,hs])=>s.id+':'+hs.map(h=>h.id).join(',')+(s.unifi&&s.unifi.on?':u':'')).join('|');
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const [s,hs] of groups){
       const h=document.createElement('div'); h.className='site-h'; h.dataset.site=s.id; root.appendChild(h);
       const g=document.createElement('div'); g.className='grid'; root.appendChild(g);
+      if(s.unifi&&s.unifi.on){ const u=document.createElement('div'); u.className='panel uf'; u.dataset.site=s.id; root.appendChild(u); }
       for(const host of hs){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div>`;
         c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
         const bar=c.querySelector('.bar'); bar.addEventListener('mousemove',e=>barHover(e,host.id)); bar.addEventListener('mouseleave',hideTip); bar.addEventListener('click',e=>barClick(e,host.id));
@@ -607,6 +621,7 @@ function renderOverview(){
   }
   for(const [s] of groups){ const h=root.querySelector(`.site-h[data-site="${s.id}"]`); if(!h) continue;
     const on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
+  for(const [s] of groups){ const u=root.querySelector(`.uf[data-site="${s.id}"]`); if(u) renderUniFi(u,s); }
   for(const h of st.hosts){ const c=cards[h.id]; if(!c) continue;
     const [lbl,col]=STATUS[h.status]||STATUS.unknown;
     c.classList.toggle('down',h.status==='down');
@@ -656,6 +671,8 @@ function evText(e){
     case 'spike': return `${e.count} ${e.count===1?'Spitze':'Spitzen'} · max ${fmtMs(e.max)} · Ø ${fmtMs(Math.round(e.sum/e.count))}`;
     case 'offline': return 'Agent hat sich nicht gemeldet';
     case 'port': return 'Schnittstelle war down';
+    case 'reboot': return 'UniFi-Gerät neu gestartet';
+    case 'wan': return 'Internetleitung getrennt';
     case 'device': return e.name==='UniFi-Konsole'?'Konsole nicht erreichbar':'offline in der UniFi-Konsole';
   } return ''; }
 function ackHTML(e){ if(e.type!=='outage'&&e.type!=='offline') return '';
@@ -865,6 +882,35 @@ $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „B
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
 
+/* UniFi in der Übersicht */
+const UF={open:{}}; try{ UF.open=JSON.parse(localStorage.getItem('pw_ufopen')||'{}'); }catch(e){}
+const UCAT={gateway:'Gateway',switch:'Switches',ap:'Access Points',other:'Sonstige'};
+const fmtUp=s=>{ if(!s) return '–'; const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60); return d?`${d} T ${h} h`:h?`${h} h ${m} min`:`${m} min`; };
+function renderUniFi(el,s){ const u=s.unifi||{}; const devs=u.devices||[];
+  const bad=(u.offline||0)+(u.wanDown||0); const forced=bad>0; const open=UF.open[s.id]??forced;
+  el.classList.toggle('open',!!open);
+  const gw=devs.find(d=>d.cat==='gateway'&&d.wan&&d.wan.length);
+  const wans=gw?gw.wan.map(w=>`<span class="wanp" title="${esc(w.ip||'')}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}"><span class="dot" style="background:var(${w.up?'--ok':'--bad'})"></span>${esc(w.name)}${w.up?(w.latency?' '+Math.round(w.latency)+' ms':''):' getrennt'}${w.active?' ★':''}</span>`).join(' '):'';
+  const head=`<b>UniFi</b><span class="muted">${u.err?'<span style="color:var(--bad)">Konsole nicht erreichbar</span>':u.at?`${u.total} Geräte · ${u.offline?`<b style="color:var(--bad)">${u.offline} offline</b>`:'alle online'}${u.boots?` · <span style="color:var(--warn)">${u.boots} Neustart${u.boots>1?'s':''} (24 h)</span>`:''}`:'warte auf erste Abfrage …'}</span>${wans}<span class="chev">›</span>`;
+  const sig=JSON.stringify([u.at,u.err,open,devs.map(d=>[d.state,d.pingAvg,d.loss,d.boots.length,d.bar.join('')])]);
+  if(el.dataset.sig===sig) return; el.dataset.sig=sig;
+  let body='';
+  for(const cat of ['gateway','switch','ap','other']){ const ds=devs.filter(d=>d.cat===cat); if(!ds.length) continue;
+    body+=`<div class="uf-cat">${UCAT[cat]} (${ds.length})</div><div class="uf-g">`+ds.map(d=>{ const off=['OFFLINE','CONNECTION_INTERRUPTED','ISOLATED','DISCONNECTED'].includes(d.state);
+      const m=[esc(d.model),d.pingAvg>=0?`Ping ${d.pingAvg.toLocaleString('de-DE',{maximumFractionDigits:1})} ms`:'',d.loss>0?`<span style="color:var(--loss)">${d.loss.toLocaleString('de-DE',{maximumFractionDigits:0})} % Verlust</span>`:'',d.boots.length?`<span style="color:var(--warn)">${d.boots.length}× Neustart</span>`:'',off?`<span style="color:var(--bad)">offline seit ${fmtTime(d.since,false)}</span>`:''].filter(Boolean).join(' · ');
+      return `<div class="ud${off?' off':''}" data-ud="${esc(d.mac||d.name)}"><div class="ud-t"><span class="dot" style="background:var(${off?'--bad':d.state==='ONLINE'?'--ok':'--warn'})"></span><b title="${esc(d.name)}">${esc(d.name)}</b><span class="muted num" style="font-size:12px">${d.avail>=0?d.avail.toLocaleString('de-DE',{maximumFractionDigits:1})+' %':''}</span></div><div class="ud-m">${m}</div><div class="ubar">${d.bar.map(l=>`<i class="l${l}"></i>`).join('')}</div></div>`; }).join('')+'</div>';
+  }
+  el.innerHTML=`<div class="uf-h">${head}</div><div class="uf-b">${body||'<div class="muted" style="padding:6px 0">Noch keine Geräte.</div>'}<div class="bar-ax" style="margin-top:6px"><span>Balken: letzte 24 h</span><span>grün ok · gelb Verlust/Neustart · rot offline</span></div></div>`;
+  el.querySelector('.uf-h').onclick=()=>{ UF.open[s.id]=!el.classList.contains('open'); try{ localStorage.setItem('pw_ufopen',JSON.stringify(UF.open)); }catch(e){} el.dataset.sig=''; renderUniFi(el,s); };
+  el.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud)));
+}
+function showUDev(s,d){ if(!d) return; const rows=[['Status',d.state==='ONLINE'?'online':d.state.toLowerCase()],['seit',fmtDT(d.since,false)],['Modell',d.model],['IP',d.ip||'–'],['MAC',d.mac||'–'],['Firmware',d.fw||'–'],
+  ['Laufzeit',fmtUp(d.uptime)],['CPU / RAM',d.cpu||d.mem?`${Math.round(d.cpu)} % / ${Math.round(d.mem)} %`:'–'],['Uplink',d.tx||d.rx?`↑ ${fmtBit(d.tx)} · ↓ ${fmtBit(d.rx)}`:'–'],
+  ['Ping (1 h)',d.pingAvg>=0?`Ø ${d.pingAvg.toFixed(1)} ms · max ${d.pingMax.toFixed(1)} ms · ${d.loss.toFixed(0)} % Verlust`:'–'],['Verfügbar (24 h)',d.avail>=0?d.avail.toFixed(2)+' %':'–'],
+  ['Neustarts (24 h)',d.boots.length?d.boots.map(b=>fmtTime(b,false)).join(', '):'keine']];
+  for(const w of d.wan||[]) rows.push([w.name+(w.active?' (aktiv)':''),`${w.up?'verbunden':'<b style="color:var(--bad)">getrennt</b>'}${w.ip?' · '+esc(w.ip):''}${w.latency?' · '+w.latency.toFixed(1)+' ms':''}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}${w.avail?' · '+w.avail.toFixed(2)+' % verfügbar':''}`]);
+  showTrace(d.name+' · '+s.name,''); $('#tr-text').innerHTML='<table class="tbl" style="font-size:13px;font-family:-apple-system,system-ui,Segoe UI,sans-serif;white-space:normal">'+rows.map(([k,v])=>`<tr><td class="muted" style="white-space:nowrap">${k}</td><td>${typeof v==='string'&&!v.includes('<')?esc(v):v}</td></tr>`).join('')+'</table>'; $('#tr-copy').style.display='none'; }
+
 /* SNMP-Schnittstellen */
 const SN={host:null,ifIdx:0,hours:24,at:0};
 const fmtBit=v=>v>=1e9?(v/1e9).toLocaleString('de-DE',{maximumFractionDigits:2})+' Gbit/s':v>=1e6?(v/1e6).toLocaleString('de-DE',{maximumFractionDigits:1})+' Mbit/s':v>=1e3?Math.round(v/1e3)+' kbit/s':Math.round(v)+' bit/s';
@@ -960,7 +1006,7 @@ $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-
   try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ alert(e.message); } };
 
 /* Traceroute */
-function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#dlg-trace').showModal(); }
+function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#tr-copy').style.display=''; $('#dlg-trace').showModal(); }
 $('#tr-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText($('#tr-text').textContent); toast('Kopiert'); };
 $('#d-trace').onclick=async()=>{ const h=S.state.hosts.find(x=>x.id===S.hostId); if(!h) return; showTrace('Traceroute zu '+h.name,'läuft … (bis zu einer Minute'+(h.site!=='cloud'?', wird vom Agenten ausgeführt':'')+')');
   try{ const r=await api('/api/trace',{method:'POST',body:JSON.stringify({host:h.id})}); $('#tr-text').textContent=r.text; }catch(e){ $('#tr-text').textContent='Fehler: '+e.message; } };
