@@ -156,7 +156,7 @@ func shortErr(err error) string {
 	return s
 }
 
-func isCheckMethod(m string) bool { return m == "http" || m == "dns" }
+func isCheckMethod(m string) bool { return m == "http" || m == "dns" || m == "snmp" }
 
 // ---------- Zertifikats-Warnung ----------
 

@@ -34,7 +34,7 @@ struct LoginView: View {
                         .onSubmit { pwFocused = true }
                 }
                 Section("Zugang") {
-                    TextField("E-Mail (leer = Betreiber)", text: $email)
+                    TextField("E-Mail (Betreiber: admin)", text: $email)
                         .keyboardType(.emailAddress)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)

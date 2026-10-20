@@ -64,6 +64,9 @@ func probe(h HostCfg, res *resolver) (int32, string, string) {
 	if h.Method == "dns" && !simMode {
 		return dnsCheck(h, timeout)
 	}
+	if h.Method == "snmp" && !simMode {
+		return snmpProbe(h, timeout)
+	}
 	if simMode {
 		if h.Method == "http" && strings.HasPrefix(normalizeURL(h.Addr), "https://") {
 			certExp.Store(h.ID, time.Now().Add(10*24*time.Hour).UnixMilli())

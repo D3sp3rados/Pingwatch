@@ -125,7 +125,7 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .b-outage{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
 .b-loss{background:color-mix(in srgb,var(--loss) 18%,transparent);color:var(--loss)}
 .b-spike{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
-.b-device{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.b-port,.b-device{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
 .b-offline{background:color-mix(in srgb,var(--off) 22%,transparent);color:var(--mut)}
 .ev.live .dur{color:var(--bad)}
 /* Statistik */
@@ -237,6 +237,15 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
   </div>
   <div class="stats" id="d-stats"></div>
+  <div id="d-snmp" style="display:none">
+    <h2>Schnittstellen <span class="sub muted" id="sn-sub" style="font-weight:400;font-size:12.5px"></span></h2>
+    <div class="panel" style="overflow-x:auto"><table class="tbl" id="sn-tbl"></table></div>
+    <div class="panel" id="sn-chartbox" style="display:none;margin-top:10px;padding:12px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="sn-ctitle"></b><div class="seg" id="sn-range"><button data-h="24" class="on">24 h</button><button data-h="168">7 Tage</button><button data-h="720">30 Tage</button></div>
+        <span class="muted" style="font-size:12.5px"><i style="display:inline-block;width:10px;height:3px;background:var(--acc);vertical-align:middle"></i> Eingang · <i style="display:inline-block;width:10px;height:3px;background:#6366f1;vertical-align:middle"></i> Ausgang</span></div>
+      <canvas id="sn-chart" style="width:100%;height:200px;display:block;margin-top:8px"></canvas></div>
+    <p class="muted" style="font-size:12.5px">Haken bei „Alarm“ = Meldung, wenn der Port auf „down“ geht (z. B. Uplink, Kamera, AP).</p>
+  </div>
   <h2>Ereignisse im Zeitraum <span class="sub" id="d-evcount"></span></h2>
   <div class="panel evlist" id="d-events"></div>
 </section>
@@ -245,7 +254,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="filters">
     <select id="f-host"><option value="">Alle Hosts</option></select>
     <div class="seg" id="f-types">
-      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button>
+      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button>
     </div>
     <select id="f-range">
       <option value="1">Letzte 24 h</option><option value="7" selected>Letzte 7 Tage</option><option value="30">Letzte 30 Tage</option><option value="0">Alles</option>
@@ -504,10 +513,11 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field"><span id="hf-addrl">IP-Adresse oder Hostname</span><input name="addr" required placeholder="192.168.1.1 oder 8.8.8.8"></label>
       <label class="field">Pingt von<select name="site" id="hf-site"></select><small id="hf-sitehint"></small></label>
       <label class="field">Hängt ab von<select name="parent" id="hf-parent"></select><small>Fällt dieser Host aus, gibt es für diesen keinen Alarm.</small></label>
-      <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option><option value="http">Webseite (HTTP/HTTPS) · Pro</option><option value="dns">DNS-Auflösung · Pro</option></select></label>
+      <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option><option value="http">Webseite (HTTP/HTTPS) · Pro</option><option value="dns">DNS-Auflösung · Pro</option><option value="snmp">SNMP – Switch/Router · Pro</option></select></label>
+      <label class="field" id="hf-commf">SNMP-Community (v2c)<input name="community" placeholder="public" autocomplete="off"><small>Am Gerät SNMP v2c aktivieren. Schnittstellen werden jede Minute abgefragt.</small></label>
       <label class="field" id="hf-expf"><span id="hf-expl">Erwartet</span><input name="expect" maxlength="120"><small id="hf-exph"></small></label>
       <label class="field" id="hf-dnsf">DNS-Server<input name="dnsServer" placeholder="leer = Standard, z. B. 192.168.1.1"></label>
-      <label class="field" id="hf-portf">TCP-Port<input name="port" type="number" min="1" max="65535" value="443"></label>
+      <label class="field" id="hf-portf"><span id="hf-portl">TCP-Port</span><input name="port" type="number" min="1" max="65535" value="443"></label>
       <label class="field">Intervall (Sekunden)<select name="interval"><option value="500">0,5</option><option value="1000" selected>1</option><option value="2000">2</option><option value="5000">5</option><option value="10000">10</option><option value="30000">30</option><option value="60000">60</option></select></label>
       <label class="field">Timeout (ms)<input name="timeoutMs" type="number" min="100" max="10000" value="1000"></label>
       <label class="field">Spitze ab (ms)<input name="thresholdMs" type="number" min="0" placeholder="leer = automatisch"><small>Automatisch: 3× normaler Wert, mind. +30 ms</small></label>
@@ -547,7 +557,7 @@ function agg(a){ return a&&a!==0? {n:a[0],lost:a[1],spk:a[2],avg:a[3],min:a[4],m
 async function api(p,opt){ const r=await fetch(p,opt); if(r.status===401){location.href='/login';throw new Error('401');} if(!r.ok){throw new Error((await r.text())||r.statusText);} const ct=r.headers.get('content-type')||''; return ct.includes('json')? r.json() : r.text(); }
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200);}
 const STATUS={ok:['OK','--ok'],spike:['Latenzspitze','--warn'],loss:['Paketverlust','--loss'],down:['Keine Antwort','--bad'],stale:['Keine Daten','--off'],siteoff:['Standort offline','--off'],paused:['Pausiert','--off'],unknown:['Warte auf Daten','--off']};
-const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät'};
+const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down'};
 
 /* ---------- Tooltip ---------- */
 const tip=$('#tip');
@@ -644,6 +654,7 @@ function evText(e){
     case 'loss': return `${e.count}× keine Antwort`+(e.last>e.start?` innerhalb ${fmtDur(e.last-e.start)}`:'');
     case 'spike': return `${e.count} ${e.count===1?'Spitze':'Spitzen'} · max ${fmtMs(e.max)} · Ø ${fmtMs(Math.round(e.sum/e.count))}`;
     case 'offline': return 'Agent hat sich nicht gemeldet';
+    case 'port': return 'Schnittstelle war down';
     case 'device': return e.name==='UniFi-Konsole'?'Konsole nicht erreichbar':'offline in der UniFi-Konsole';
   } return ''; }
 function ackHTML(e){ if(e.type!=='outage'&&e.type!=='offline') return '';
@@ -671,7 +682,7 @@ const RANGES={'15m':15*60e3,'1h':36e5,'6h':6*36e5,'24h':864e5,'7d':7*864e5,'30d'
 let D={preset:'1h',from:0,to:0,data:null,scale:'lin',hover:-1,drag:null,stack:[]};
 function dRange(){ if(D.preset){ const to=Date.now(); return [to-RANGES[D.preset],to]; } return [D.from,D.to]; }
 async function loadDetail(){
-  const id=S.hostId; if(!id) return;
+  const id=S.hostId; if(!id) return; loadSNMP();
   const [from,to]=dRange(); const c=$('#chart'); const w=c.getBoundingClientRect().width||800;
   const n=Math.max(60,Math.min(1200,Math.round(w/2)));
   try{
@@ -816,7 +827,7 @@ function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return
 function renderSettings(){
   const st=S.state; if(!st) return;
   const hs=st.hosts;
-  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:!h.paused})}); refreshState(); });
   const sites=st.sites.filter(s=>s.id!=='cloud');
@@ -848,10 +859,41 @@ function renderSettings(){
   if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||''}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||''}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+/* SNMP-Schnittstellen */
+const SN={host:null,ifIdx:0,hours:24,at:0};
+const fmtBit=v=>v>=1e9?(v/1e9).toLocaleString('de-DE',{maximumFractionDigits:2})+' Gbit/s':v>=1e6?(v/1e6).toLocaleString('de-DE',{maximumFractionDigits:1})+' Mbit/s':v>=1e3?Math.round(v/1e3)+' kbit/s':Math.round(v)+' bit/s';
+async function loadSNMP(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); const box=$('#d-snmp');
+  if(!h||h.method!=='snmp'){ box.style.display='none'; return; } box.style.display='';
+  if(SN.host!==h.id){ SN.host=h.id; SN.ifIdx=0; $('#sn-chartbox').style.display='none'; } else if(!force&&Date.now()-SN.at<30000) return;
+  SN.at=Date.now(); let r; try{ r=await api(`/api/snmp?host=${h.id}${SN.ifIdx?'&if='+SN.ifIdx+'&hours='+SN.hours:''}`); }catch(e){ return; }
+  $('#sn-sub').textContent=r.err?'Fehler: '+r.err:r.at?'Stand '+fmtTime(r.at,false)+' · '+r.ifs.length+' Schnittstellen':'warte auf erste Abfrage (bis 1 Minute) …';
+  const ifs=r.ifs||[]; const canEd=!document.body.classList.contains('viewer');
+  $('#sn-tbl').innerHTML=ifs.length?'<tr><th>Alarm</th><th>Schnittstelle</th><th>Status</th><th class="hide-m">Speed</th><th>Eingang</th><th>Ausgang</th><th class="hide-m">Max 24 h</th><th class="hide-m">Fehler 24 h</th></tr>'+ifs.map(i=>`<tr data-if="${i.idx}" style="cursor:pointer${SN.ifIdx===i.idx?';background:var(--acc-a)':''}">
+    <td><input type="checkbox" data-w="${i.idx}"${i.watch?' checked':''}${canEd?'':' disabled'}></td><td><b>${esc(i.name)}</b>${i.alias?`<br><span class="muted" style="font-size:12px">${esc(i.alias)}</span>`:''}</td>
+    <td><span class="dot" style="display:inline-block;margin-right:6px;background:var(${i.up?'--ok':'--off'})"></span>${i.up?'up':'down'}<br><span class="muted" style="font-size:11.5px">seit ${fmtDT(i.since,false)}</span></td>
+    <td class="hide-m num">${i.speed?(i.speed>=1000?i.speed/1000+' G':i.speed+' M'):'–'}</td><td class="num">${i.up?fmtBit(i.in):'–'}</td><td class="num">${i.up?fmtBit(i.out):'–'}</td>
+    <td class="hide-m num">${fmtBit(Math.max(i.maxIn,i.maxOut))}</td><td class="hide-m num"${i.err24?' style="color:var(--bad);font-weight:600"':''}>${i.err24}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Daten.</td></tr>';
+  $$('#sn-tbl [data-w]').forEach(cb=>{ cb.onclick=e=>e.stopPropagation(); cb.onchange=async()=>{ const w=$$('#sn-tbl [data-w]:checked').map(x=>+x.dataset.w); try{ await api('/api/snmp/watch',{method:'POST',body:JSON.stringify({host:h.id,watch:w})}); toast('Port-Alarm gespeichert'); }catch(e){ alert(e.message); } }; });
+  $$('#sn-tbl [data-if]').forEach(tr=>tr.onclick=()=>{ SN.ifIdx=+tr.dataset.if; loadSNMP(true); });
+  if(SN.ifIdx&&r.series){ const i=ifs.find(x=>x.idx===SN.ifIdx); $('#sn-chartbox').style.display=''; $('#sn-ctitle').textContent=i?i.name+(i.alias?' · '+i.alias:''):''; drawIfChart(r.series); }
+}
+$$('#sn-range button').forEach(b=>b.onclick=()=>{ SN.hours=+b.dataset.h; $$('#sn-range button').forEach(x=>x.classList.toggle('on',x===b)); loadSNMP(true); });
+function drawIfChart(pts){ const c=$('#sn-chart'), dpr=devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight; c.width=W*dpr; c.height=H*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.body), acc=cs.getPropertyValue('--acc').trim(), mut=cs.getPropertyValue('--mut').trim(), line=cs.getPropertyValue('--line').trim();
+  if(!pts.length){ g.fillStyle=mut; g.font='13px system-ui'; g.fillText('Noch kein Verlauf – Werte kommen jede Minute.',10,24); return; }
+  const L=64,R=8,T=8,B=20, t0=pts[0].t, t1=pts[pts.length-1].t; const max=Math.max(1e3,...pts.map(p=>Math.max(p.in,p.out)))*1.1;
+  const x=t=>L+(W-L-R)*(t1>t0?(t-t0)/(t1-t0):1), y=v=>T+(H-T-B)*(1-v/max);
+  g.strokeStyle=line; g.fillStyle=mut; g.font='11px system-ui'; g.lineWidth=1;
+  for(let k=0;k<=4;k++){ const v=max*k/4, yy=y(v); g.beginPath(); g.moveTo(L,yy); g.lineTo(W-R,yy); g.stroke(); g.fillText(fmtBit(v),4,yy+4); }
+  g.fillText(fmtDT(t0,false),L,H-4); const te=fmtDT(t1,false); g.fillText(te,W-R-g.measureText(te).width,H-4);
+  for(const [k,col] of [['in',acc],['out','#6366f1']]){ g.strokeStyle=col; g.lineWidth=1.6; g.beginPath(); pts.forEach((p,i)=>{ const X=x(p.t),Y=y(p[k]); i?g.lineTo(X,Y):g.moveTo(X,Y); }); g.stroke(); }
+  g.fillStyle='rgba(220,38,38,.8)'; for(const p of pts) if(p.e>0||!p.u) g.fillRect(x(p.t)-1,T,2,4);
+}
 
 /* Netzwerk-Scan & UniFi-Import */
 const idlg=$('#dlg-import'), imf=$('#im-form'); let IM={};
@@ -1156,10 +1198,11 @@ function openHost(id){
   hf.dataset.id=h?h.id:'';
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
-  hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
+  hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
   syncHostForm(); dlg.showModal();
 }
-function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'?'':'none';
+function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'||mt==='snmp'?'':'none'; $('#hf-commf').style.display=mt==='snmp'?'':'none';
+  $('#hf-portl').textContent=mt==='snmp'?'SNMP-Port (UDP)':'TCP-Port'; if(mt==='snmp'&&(+hf.port.value===443||!hf.port.value)) hf.port.value=161; if(mt==='tcp'&&+hf.port.value===161) hf.port.value=443;
   $('#hf-expf').style.display=mt==='http'||mt==='dns'?'':'none'; $('#hf-dnsf').style.display=mt==='dns'?'':'none';
   $('#hf-addrl').textContent={http:'Adresse der Webseite',dns:'Name, der aufgelöst wird'}[mt]||'IP-Adresse oder Hostname';
   hf.addr.placeholder={http:'https://www.firma.de',dns:'www.firma.de'}[mt]||'192.168.1.1 oder 8.8.8.8';
@@ -1168,7 +1211,7 @@ function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=
   $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)'; }
 hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
-  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim()};
+  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
 $('#add-host').onclick=()=>openHost();

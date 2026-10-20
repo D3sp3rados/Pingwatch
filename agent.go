@@ -253,6 +253,9 @@ func (a *Agent) fetchConfig() bool {
 }
 
 func (a *Agent) worker(ah *agentHost) {
+	if ah.cfg.Method == "snmp" {
+		go a.snmpLoop(ah)
+	}
 	res := &resolver{addr: ah.cfg.Addr}
 	tk := time.NewTicker(time.Duration(ah.cfg.IntervalMs) * time.Millisecond)
 	defer tk.Stop()

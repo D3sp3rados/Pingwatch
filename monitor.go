@@ -32,6 +32,8 @@ type HostCfg struct {
 	Parent      string `json:"parent,omitempty"`    // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
 	Expect      string `json:"expect,omitempty"`    // http: Statuscode oder Text; dns: erwartete Adresse
 	DNSServer   string `json:"dnsServer,omitempty"` // dns: abzufragender Server (leer = System)
+	Community   string `json:"community,omitempty"` // snmp: Community (v2c)
+	Watch       string `json:"watch,omitempty"`     // snmp: überwachte Ports (ifIndex, Komma-getrennt)
 }
 
 type SiteCfg struct {
@@ -92,6 +94,19 @@ func (h *HostCfg) normalize() {
 		if h.TimeoutMs < 5000 {
 			h.TimeoutMs = 10000
 		}
+	case "snmp":
+		if h.Port <= 0 || h.Port > 65535 {
+			h.Port = 161
+		}
+		if h.Community == "" {
+			h.Community = "public"
+		}
+		if h.IntervalMs < 10000 {
+			h.IntervalMs = 10000
+		}
+		if h.TimeoutMs < 1000 {
+			h.TimeoutMs = 2000
+		}
 	case "dns":
 		h.Port = 0
 		if h.IntervalMs < 10000 {
@@ -106,6 +121,9 @@ func (h *HostCfg) normalize() {
 	}
 	if h.Method != "http" && h.Method != "dns" {
 		h.Expect, h.DNSServer = "", ""
+	}
+	if h.Method != "snmp" {
+		h.Community, h.Watch = "", ""
 	}
 	if h.Site == "" {
 		h.Site = "cloud"
@@ -274,6 +292,9 @@ func (m *Monitor) startWorker(h *Host) {
 	stop := make(chan struct{})
 	h.stop = stop
 	cfg := h.cfg
+	if cfg.Method == "snmp" {
+		go m.snmpLoopCloud(h, cfg, stop)
+	}
 	go func() {
 		res := &resolver{addr: cfg.Addr}
 		tk := time.NewTicker(time.Duration(cfg.IntervalMs) * time.Millisecond)

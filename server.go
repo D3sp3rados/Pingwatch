@@ -184,6 +184,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/trace", s.handleAgentTrace)
 	mux.HandleFunc("/api/agent/job", s.handleAgentJob)
 	mux.HandleFunc("/api/agent/unifi", s.handleAgentUniFi)
+	mux.HandleFunc("/api/agent/snmp", s.handleAgentSNMP)
 
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
@@ -235,6 +236,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
+	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
+	mux.HandleFunc("/api/snmp/watch", protect(s.handleSNMPWatch))
 	mux.HandleFunc("/api/statuspage", protect(s.handleStatusConfig))
 	mux.HandleFunc("/status/", s.handlePublicStatus)
 	mux.HandleFunc("/api/trace", protect(s.handleTraceNow))
@@ -757,9 +760,14 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		hc.Org = p.Org
+		if old := s.m.host(hc.ID); old != nil && hc.Watch == "" {
+			old.mu.Lock()
+			hc.Watch = old.cfg.Watch // überwachte Ports werden separat gepflegt
+			old.mu.Unlock()
+		}
 		if isCheckMethod(hc.Method) {
 			if o := s.m.orgByID(p.Org); o == nil || !planHas(o.Plan, "checks") {
-				http.Error(w, "Webseiten- und DNS-Prüfungen gibt es im Paket Pro", 402)
+				http.Error(w, "Webseiten-, DNS- und SNMP-Prüfungen gibt es im Paket Pro", 402)
 				return
 			}
 		}

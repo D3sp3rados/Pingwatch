@@ -50,6 +50,9 @@ var pgSchema = []string{
 	`CREATE INDEX IF NOT EXISTS pw_minutes_t ON pw_minutes (t)`,
 	`CREATE TABLE IF NOT EXISTS pw_events (id BIGINT PRIMARY KEY, start_t BIGINT NOT NULL, end_t BIGINT NOT NULL, data TEXT NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS pw_events_start ON pw_events (start_t)`,
+	`CREATE TABLE IF NOT EXISTS pw_if (host TEXT NOT NULL, t BIGINT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (host, t))`,
+	`CREATE INDEX IF NOT EXISTS pw_if_t ON pw_if (t)`,
+	`CREATE TABLE IF NOT EXISTS pw_ifinfo (host TEXT PRIMARY KEY, data TEXT NOT NULL)`,
 }
 
 // databaseDSN ermittelt die Verbindungsdaten aus der Umgebung.
@@ -366,6 +369,7 @@ func (s *PgStore) DayAgg(host, day string) []Agg {
 
 func (s *PgStore) Maintenance(retentionDays int) {
 	now := time.Now()
+	s.db.Exec(`DELETE FROM pw_if WHERE t < $1`, now.AddDate(0, 0, -ifKeepDays).UnixMilli())
 	rawCut := now.AddDate(0, 0, -rawKeepDays).UnixMilli()
 	if _, err := s.db.Exec(`DELETE FROM pw_samples WHERE t < $1`, rawCut); err != nil {
 		s.logErr("Aufräumen", err)
@@ -450,4 +454,57 @@ func (s *PgStore) DeleteEvents(ids []int64) {
 	if _, err := s.db.Exec(`DELETE FROM pw_events WHERE id = ANY($1)`, pq.Array(ids)); err != nil {
 		s.logErr("Ereignisse löschen", err)
 	}
+}
+
+// ---- Schnittstellen-Statistik (SNMP) ----
+
+const ifKeepDays = 30
+
+// AppendIfs speichert je Abfrage eine kompakte Zeile: [[idx, in kbit/s, out kbit/s, fehler, up], …]
+func (s *PgStore) AppendIfs(host string, t int64, pts map[int]ifPoint, info map[int]ifInfo) {
+	rows := make([][5]int64, 0, len(pts))
+	for idx, p := range pts {
+		up := int64(0)
+		if p.Up {
+			up = 1
+		}
+		rows = append(rows, [5]int64{int64(idx), int64(p.In / 1000), int64(p.Out / 1000), int64(p.Err), up})
+	}
+	b, _ := json.Marshal(rows)
+	if _, err := s.db.Exec(`INSERT INTO pw_if (host, t, data) VALUES ($1,$2,$3) ON CONFLICT (host, t) DO NOTHING`, host, t, string(b)); err != nil {
+		s.logErr("SNMP speichern", err)
+	}
+	ib, _ := json.Marshal(info)
+	s.db.Exec(`INSERT INTO pw_ifinfo (host, data) VALUES ($1,$2) ON CONFLICT (host) DO UPDATE SET data = EXCLUDED.data`, host, string(ib))
+}
+
+func (s *PgStore) LoadIfs(host string, from, to int64) (map[int][]ifPoint, map[int]ifInfo) {
+	pts := map[int][]ifPoint{}
+	info := map[int]ifInfo{}
+	if to <= 0 {
+		to = time.Now().Add(time.Hour).UnixMilli()
+	}
+	rows, err := s.db.Query(`SELECT t, data FROM pw_if WHERE host = $1 AND t >= $2 AND t <= $3 ORDER BY t`, host, from, to)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var t int64
+			var d string
+			if rows.Scan(&t, &d) != nil {
+				continue
+			}
+			var rs [][5]int64
+			if json.Unmarshal([]byte(d), &rs) != nil {
+				continue
+			}
+			for _, r := range rs {
+				pts[int(r[0])] = append(pts[int(r[0])], ifPoint{T: t, In: float64(r[1]) * 1000, Out: float64(r[2]) * 1000, Err: uint32(r[3]), Up: r[4] == 1})
+			}
+		}
+	}
+	var d string
+	if s.db.QueryRow(`SELECT data FROM pw_ifinfo WHERE host = $1`, host).Scan(&d) == nil {
+		json.Unmarshal([]byte(d), &info)
+	}
+	return pts, info
 }

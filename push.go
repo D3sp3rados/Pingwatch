@@ -220,6 +220,10 @@ func (d Device) wants(n notice) bool {
 		if !d.Outage {
 			return false
 		}
+	case "portdown", "portup":
+		if !d.Outage {
+			return false
+		}
 	case "devoff", "devon":
 		return d.Outage || d.Offline
 	}
