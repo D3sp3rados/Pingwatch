@@ -1,0 +1,370 @@
+import Foundation
+
+// MARK: - Gespeicherte Zugangsdaten (App Group, damit das Widget sie mitlesen kann)
+
+enum AppGroup {
+    static let id = "group.de.rst.pingwatch"
+    static var defaults: UserDefaults { UserDefaults(suiteName: id) ?? .standard }
+}
+
+struct Credentials: Codable, Equatable {
+    var server: URL
+    var token: String
+
+    static func load() -> Credentials? {
+        guard let d = AppGroup.defaults.data(forKey: "credentials") else { return nil }
+        return try? JSONDecoder().decode(Credentials.self, from: d)
+    }
+
+    func save() {
+        if let d = try? JSONEncoder().encode(self) {
+            AppGroup.defaults.set(d, forKey: "credentials")
+        }
+    }
+
+    static func clear() {
+        AppGroup.defaults.removeObject(forKey: "credentials")
+    }
+}
+
+// MARK: - Datenmodelle (entsprechen der Server-API, Zeiten in Zehntel-ms)
+
+/// Zusammenfassung eines Zeitabschnitts. Der Server sendet `0` (keine Daten)
+/// oder `[n, verloren, spitzen, avg, min, max]`.
+struct Agg: Decodable, Hashable {
+    var n = 0, lost = 0, spk = 0, avg = -1, min = -1, max = -1
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let a = try? c.decode([Int].self), a.count >= 6 {
+            n = a[0]; lost = a[1]; spk = a[2]; avg = a[3]; min = a[4]; max = a[5]
+        }
+    }
+
+    var good: Int { n - lost }
+    var lossRatio: Double { n > 0 ? Double(lost) / Double(n) : 0 }
+    var avgMs: Double? { avg >= 0 && good > 0 ? Double(avg) / 10 : nil }
+    var minMs: Double? { min >= 0 && good > 0 ? Double(min) / 10 : nil }
+    var maxMs: Double? { max >= 0 && good > 0 ? Double(max) / 10 : nil }
+}
+
+struct PWEvent: Decodable, Identifiable, Hashable {
+    let id: Int64
+    let host: String
+    let name: String
+    let site: String
+    let type: String
+    let start: Int64
+    let end: Int64
+    let last: Int64
+    let count: Int
+    let max: Int
+    let sum: Int64
+
+    var startDate: Date { Date(ms: start) }
+    var endDate: Date? { end > 0 ? Date(ms: end) : nil }
+    var isOngoing: Bool { end == 0 && (type == "outage" || type == "offline") }
+
+    var typeName: String {
+        switch type {
+        case "outage": return "Ausfall"
+        case "loss": return "Paketverlust"
+        case "spike": return "Latenzspitze"
+        case "offline": return "Standort offline"
+        default: return type
+        }
+    }
+
+    var detail: String {
+        switch type {
+        case "outage": return "\(count) Pings ohne Antwort"
+        case "loss": return "\(count)× keine Antwort"
+        case "spike":
+            let avg = count > 0 ? Int(sum) / count : 0
+            return "\(count) \(count == 1 ? "Spitze" : "Spitzen") · max \(fmtMs(max)) · Ø \(fmtMs(avg))"
+        case "offline": return "Agent hat sich nicht gemeldet"
+        default: return ""
+        }
+    }
+
+    var duration: TimeInterval {
+        let e = end > 0 ? end : (isOngoing ? Int64(Date().timeIntervalSince1970 * 1000) : last)
+        return TimeInterval(e - start) / 1000
+    }
+}
+
+struct HostView: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let addr: String
+    let site: String
+    let method: String
+    let port: Int
+    let intervalMs: Int
+    let thresholdMs: Int
+    let outageCount: Int
+    let paused: Bool
+    let ip: String
+    let status: String
+    let lastR: Int
+    let lastT: Int64
+    let lastErr: String
+    let consec: Int
+    let baseline: Int
+    let threshold: Int
+    let h1: Agg
+    let h24: Agg
+    let spark: [Int]
+    let ongoing: [PWEvent]?
+    let lastOutage: PWEvent?
+
+    var statusText: String {
+        switch status {
+        case "ok": return "OK"
+        case "spike": return "Latenzspitze"
+        case "loss": return "Paketverlust"
+        case "down": return "Keine Antwort"
+        case "stale": return "Keine Daten"
+        case "siteoff": return "Standort offline"
+        case "paused": return "Pausiert"
+        default: return "Warte auf Daten"
+        }
+    }
+
+    var isProblem: Bool { status == "down" || status == "loss" || status == "spike" }
+}
+
+struct SiteView: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let online: Bool
+    let lastSeen: Int64
+    let ip: String
+    let version: String
+    let hosts: Int
+}
+
+struct StateResponse: Decodable {
+    let now: Int64
+    let hosts: [HostView]
+    let sites: [SiteView]
+    let version: String
+    let push: Bool?
+}
+
+struct OverviewResponse: Decodable {
+    let from: Int64
+    let bucket: Int64
+    let n: Int
+    let hosts: [String: [Agg]]
+}
+
+struct SeriesResponse: Decodable {
+    let from: Int64
+    let to: Int64
+    let bucket: Int64
+    let b: [Agg]
+    let threshold: Int
+    let baseline: Int
+}
+
+struct DayStat: Decodable, Identifiable {
+    let day: String
+    let hours: [Agg]
+    let total: Agg
+    let outages: Int
+    let downtime: Int64
+    let lossEvents: Int
+    let spikeEvents: Int
+    var id: String { day }
+}
+
+struct StatsResponse: Decodable {
+    let days: [DayStat]
+}
+
+struct DevicePrefs: Codable {
+    var token: String
+    var name: String
+    var sandbox: Bool
+    var outage: Bool
+    var loss: Bool
+    var spike: Bool
+    var offline: Bool
+    var hosts: [String]
+}
+
+// MARK: - API-Client
+
+enum APIError: LocalizedError {
+    case unauthorized
+    case http(Int, String)
+    case invalidServer
+
+    var errorDescription: String? {
+        switch self {
+        case .unauthorized: return "Nicht angemeldet oder Passwort geändert."
+        case .http(let c, let m): return m.isEmpty ? "Serverfehler \(c)" : m
+        case .invalidServer: return "Server-Adresse ungültig."
+        }
+    }
+}
+
+struct API {
+    let creds: Credentials
+
+    static let session: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 20
+        c.httpCookieStorage = nil
+        c.httpShouldSetCookies = false
+        return URLSession(configuration: c)
+    }()
+
+    static func normalize(_ input: String) -> URL? {
+        var s = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty { return nil }
+        if !s.lowercased().hasPrefix("http") { s = "https://" + s }
+        while s.hasSuffix("/") { s.removeLast() }
+        return URL(string: s)
+    }
+
+    /// Meldet sich mit dem Dashboard-Passwort an und liefert das Zugangs-Token.
+    static func login(server: URL, password: String) async throws -> Credentials {
+        var req = URLRequest(url: server.appendingPathComponent("api/app/login"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(["password": password])
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.invalidServer }
+        if http.statusCode == 401 { throw APIError.http(401, "Passwort falsch.") }
+        guard http.statusCode == 200 else {
+            throw APIError.http(http.statusCode, String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        }
+        struct R: Decodable { let token: String }
+        guard let r = try? JSONDecoder().decode(R.self, from: data) else {
+            throw APIError.http(http.statusCode, "Das ist kein PingWatch-Server.")
+        }
+        return Credentials(server: server, token: r.token)
+    }
+
+    private func request(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> Data {
+        var comps = URLComponents(url: creds.server.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = method
+        req.setValue("Bearer \(creds.token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            req.httpBody = body
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (data, resp) = try await Self.session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.invalidServer }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(http.statusCode, String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        }
+        return data
+    }
+
+    private func get<T: Decodable>(_ path: String, _ query: [String: String] = [:]) async throws -> T {
+        try JSONDecoder().decode(T.self, from: try await request(path, query: query))
+    }
+
+    func state() async throws -> StateResponse { try await get("api/state") }
+
+    func overview(hours: Int = 24, n: Int = 48) async throws -> OverviewResponse {
+        try await get("api/overview", ["hours": "\(hours)", "n": "\(n)"])
+    }
+
+    func series(host: String, from: Date, to: Date, n: Int = 300) async throws -> SeriesResponse {
+        try await get("api/series", ["host": host, "from": "\(from.ms)", "to": "\(to.ms)", "n": "\(n)"])
+    }
+
+    func events(host: String? = nil, types: [String] = [], from: Date? = nil, to: Date? = nil, limit: Int = 300) async throws -> [PWEvent] {
+        var q = ["limit": "\(limit)"]
+        if let host { q["host"] = host }
+        if !types.isEmpty { q["types"] = types.joined(separator: ",") }
+        if let from { q["from"] = "\(from.ms)" }
+        if let to { q["to"] = "\(to.ms)" }
+        return try await get("api/events", q)
+    }
+
+    func stats(host: String, days: Int) async throws -> StatsResponse {
+        try await get("api/stats", ["host": host, "days": "\(days)"])
+    }
+
+    func registerDevice(_ prefs: DevicePrefs) async throws {
+        _ = try await request("api/app/device", method: "POST", body: try JSONEncoder().encode(prefs))
+    }
+
+    func unregisterDevice(token: String) async throws {
+        _ = try await request("api/app/device", query: ["id": token], method: "DELETE")
+    }
+
+    func pushTest() async throws -> String {
+        let d = try await request("api/app/pushtest", method: "POST")
+        struct R: Decodable { let sent: Int; let errors: [String]? }
+        let r = try JSONDecoder().decode(R.self, from: d)
+        if let e = r.errors, !e.isEmpty { return "Fehler: " + e.joined(separator: ", ") }
+        return "Testnachricht an \(r.sent) Gerät(e) gesendet."
+    }
+}
+
+// MARK: - Hilfsfunktionen
+
+extension Date {
+    init(ms: Int64) { self.init(timeIntervalSince1970: TimeInterval(ms) / 1000) }
+    var ms: Int64 { Int64(timeIntervalSince1970 * 1000) }
+}
+
+/// Formatiert Zehntel-ms als Text, z. B. 123 → "12,3 ms"
+func fmtMs(_ tenths: Int) -> String {
+    guard tenths >= 0 else { return "–" }
+    return fmtMs(Double(tenths) / 10)
+}
+
+func fmtMs(_ ms: Double?) -> String {
+    guard let ms else { return "–" }
+    if ms < 1 { return "<1 ms" }
+    if ms < 10 { return String(format: "%.1f ms", ms).replacingOccurrences(of: ".", with: ",") }
+    return "\(Int(ms.rounded())) ms"
+}
+
+func fmtPct(_ ratio: Double) -> String {
+    if ratio == 0 { return "0 %" }
+    let p = ratio * 100
+    if p < 1 { return String(format: "%.2f %%", p).replacingOccurrences(of: ".", with: ",") }
+    return String(format: "%.1f %%", p).replacingOccurrences(of: ".", with: ",")
+}
+
+func fmtDuration(_ seconds: TimeInterval) -> String {
+    let s = Int(seconds.rounded())
+    if s < 60 { return "\(s) s" }
+    let m = s / 60
+    if m < 60 { return m < 10 && s % 60 != 0 ? "\(m) min \(s % 60) s" : "\(m) min" }
+    let h = m / 60
+    if h < 24 { return m % 60 != 0 ? "\(h) h \(m % 60) min" : "\(h) h" }
+    return "\(h / 24) T \(h % 24) h"
+}
+
+private let timeFmt: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "de_DE"); f.dateFormat = "HH:mm"; return f }()
+private let timeSecFmt: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "de_DE"); f.dateFormat = "HH:mm:ss"; return f }()
+private let dayFmt: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "de_DE"); f.dateFormat = "EE dd.MM."; return f }()
+
+func fmtTime(_ d: Date, seconds: Bool = false) -> String {
+    (seconds ? timeSecFmt : timeFmt).string(from: d)
+}
+
+func fmtDay(_ d: Date) -> String {
+    let cal = Calendar.current
+    if cal.isDateInToday(d) { return "Heute" }
+    if cal.isDateInYesterday(d) { return "Gestern" }
+    return dayFmt.string(from: d)
+}
+
+func fmtDayTime(_ d: Date, seconds: Bool = false) -> String {
+    fmtDay(d) + " " + fmtTime(d, seconds: seconds)
+}

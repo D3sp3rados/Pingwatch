@@ -4,3 +4,10 @@
 pingwatch
 pingwatch-agent-*
 agent.json
+ios/PingWatch.xcodeproj/
+ios/PingWatch/Info.plist
+ios/PingWatch/PingWatch.entitlements
+ios/PingWatchWidget/Info.plist
+ios/PingWatchWidget/PingWatchWidget.entitlements
+ios/build/
+xcuserdata/
