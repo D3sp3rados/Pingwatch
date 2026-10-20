@@ -41,6 +41,7 @@ type Agent struct {
 	buf      []pushSample
 	hosts    map[string]*agentHost
 	siteName string
+	unifi    *UniFiCfg
 	cfgVer   int64
 	serverOK bool
 	lastOK   time.Time
@@ -130,6 +131,7 @@ func runAgent(args []string) {
 	a.loadPending()
 	log.Printf("PingWatch-Agent %s, Server %s", version, af.Server)
 	go a.configLoop()
+	go a.unifiLoop()
 	go a.sendLoop()
 	agentUI(a)
 	a.shutdown()
@@ -213,6 +215,7 @@ func (a *Agent) fetchConfig() bool {
 		Hosts   []HostCfg  `json:"hosts"`
 		Version int64      `json:"version"`
 		Jobs    []agentJob `json:"jobs"`
+		UniFi   *UniFiCfg  `json:"unifi"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
 		a.setServer(false, err.Error())
@@ -224,6 +227,7 @@ func (a *Agent) fetchConfig() bool {
 	a.setServer(true, "")
 	a.mu.Lock()
 	a.siteName = cfg.Site.Name
+	a.unifi = cfg.UniFi
 	a.cfgVer = cfg.Version
 	want := map[string]HostCfg{}
 	for _, hc := range cfg.Hosts {

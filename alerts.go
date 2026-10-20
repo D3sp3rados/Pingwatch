@@ -39,6 +39,7 @@ type Channel struct {
 	Report   bool     `json:"report"` // Monatsbericht (nur E-Mail)
 	Hosts    []string `json:"hosts"`  // leer = alle
 	Disabled bool     `json:"disabled,omitempty"`
+	Escalate int      `json:"escalate,omitempty"` // Minuten: nur Ausfälle, die so lange offen und nicht quittiert sind
 	Created  int64    `json:"created"`
 }
 
@@ -101,6 +102,10 @@ func (m *Monitor) dispatchAlerts(n notice) {
 	m.mu.RUnlock()
 	at := time.Now()
 	for _, c := range chans {
+		if c.Escalate > 0 {
+			m.escalate(c, n, o.Name)
+			continue
+		}
 		if n.kind == "loss" || n.kind == "spike" {
 			k := c.ID + "|" + n.hostID + "|" + n.kind
 			alertState.Lock()
@@ -125,6 +130,55 @@ func (m *Monitor) dispatchAlerts(n notice) {
 			}
 		}(c)
 	}
+}
+
+// escalate: Eskalationswege bekommen nur Host-Ausfälle, die nach c.Escalate Minuten
+// noch offen und nicht quittiert sind – und dann auch die Entwarnung.
+var escalated sync.Map // Kanal|Host → true
+
+var escalateUnit = time.Minute
+
+func (m *Monitor) escalate(c Channel, n notice, orgName string) {
+	key := c.ID + "|" + n.hostID
+	switch n.kind {
+	case "outage":
+		if n.hostID == "" {
+			return
+		}
+		time.AfterFunc(time.Duration(c.Escalate)*escalateUnit, func() {
+			if !m.outageOpenUnacked(n.hostID) {
+				return
+			}
+			nn := n
+			nn.title = "⏫ " + n.title
+			nn.body = fmt.Sprintf("%s – seit %d Minuten nicht quittiert", n.body, c.Escalate)
+			err := sendAlert(c, nn, time.Now(), orgName)
+			setChanStatus(c.ID, err)
+			if err == nil {
+				escalated.Store(key, true)
+			}
+		})
+	case "recovered":
+		if _, ok := escalated.LoadAndDelete(key); ok {
+			setChanStatus(c.ID, sendAlert(c, n, time.Now(), orgName))
+		}
+	}
+}
+
+func (m *Monitor) outageOpenUnacked(hostID string) bool {
+	h := m.host(hostID)
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	e := h.oOut
+	h.mu.Unlock()
+	if e == nil {
+		return false
+	}
+	m.evMu.Lock()
+	defer m.evMu.Unlock()
+	return e.End == 0 && e.AckAt == 0 && !e.quiet()
 }
 
 func planHas(plan, feature string) bool {
@@ -583,6 +637,13 @@ func validateChannel(c *Channel) error {
 	}
 	if c.Report && c.Type != "email" {
 		c.Report = false
+	}
+	if c.Escalate < 0 || c.Escalate > 1440 {
+		return errors.New("Eskalation: 0 bis 1440 Minuten")
+	}
+	if c.Escalate > 0 {
+		c.Loss, c.Spike = false, false // Eskalation nur für Ausfälle
+		c.Outage = true
 	}
 	return nil
 }

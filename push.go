@@ -220,6 +220,8 @@ func (d Device) wants(n notice) bool {
 		if !d.Outage {
 			return false
 		}
+	case "devoff", "devon":
+		return d.Outage || d.Offline
 	}
 	if len(d.Hosts) == 0 {
 		return true

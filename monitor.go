@@ -35,10 +35,11 @@ type HostCfg struct {
 }
 
 type SiteCfg struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Token string `json:"token"`
-	Org   string `json:"org,omitempty"`
+	ID    string    `json:"id"`
+	Name  string    `json:"name"`
+	Token string    `json:"token"`
+	Org   string    `json:"org,omitempty"`
+	UniFi *UniFiCfg `json:"unifi,omitempty"` // UniFi-Livestatus über den Agenten
 }
 
 type Config struct {

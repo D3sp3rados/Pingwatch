@@ -346,11 +346,14 @@ type Event struct {
 	Count    int    `json:"count"`
 	Max      int32  `json:"max"`
 	Sum      int64  `json:"sum"`
-	Cause    string `json:"cause,omitempty"` // Ausfall wegen übergeordnetem Host
-	Maint    bool   `json:"maint,omitempty"` // während Wartung
-	Trace    string `json:"trace,omitempty"` // Routenverfolgung beim Ausfall
-	Notified bool   `json:"-"`               // Beginn wurde gemeldet
-	Decided  bool   `json:"-"`               // Wartung/Ursache geprüft
+	Cause    string `json:"cause,omitempty"`   // Ausfall wegen übergeordnetem Host
+	Maint    bool   `json:"maint,omitempty"`   // während Wartung
+	Trace    string `json:"trace,omitempty"`   // Routenverfolgung beim Ausfall
+	AckBy    string `json:"ackBy,omitempty"`   // quittiert von
+	AckAt    int64  `json:"ackAt,omitempty"`   // quittiert um
+	AckNote  string `json:"ackNote,omitempty"` // Notiz beim Quittieren
+	Notified bool   `json:"-"`                 // Beginn wurde gemeldet
+	Decided  bool   `json:"-"`                 // Wartung/Ursache geprüft
 }
 
 func (s *FileStore) AppendEvent(e Event) {

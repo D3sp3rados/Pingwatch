@@ -183,6 +183,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/push", s.handleAgentPush)
 	mux.HandleFunc("/api/agent/trace", s.handleAgentTrace)
 	mux.HandleFunc("/api/agent/job", s.handleAgentJob)
+	mux.HandleFunc("/api/agent/unifi", s.handleAgentUniFi)
 
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
@@ -231,7 +232,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
+	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
+	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
 	mux.HandleFunc("/api/statuspage", protect(s.handleStatusConfig))
 	mux.HandleFunc("/status/", s.handlePublicStatus)
 	mux.HandleFunc("/api/trace", protect(s.handleTraceNow))
@@ -293,11 +296,12 @@ type HostView struct {
 
 type SiteView struct {
 	SiteCfg
-	Online   bool   `json:"online"`
-	LastSeen int64  `json:"lastSeen"`
-	IP       string `json:"ip"`
-	Version  string `json:"version"`
-	Hosts    int    `json:"hosts"`
+	Online   bool          `json:"online"`
+	LastSeen int64         `json:"lastSeen"`
+	IP       string        `json:"ip"`
+	Version  string        `json:"version"`
+	Hosts    int           `json:"hosts"`
+	UniFi    *unifiSummary `json:"unifi,omitempty"`
 }
 
 func (m *Monitor) hostList() []*Host {
@@ -429,6 +433,11 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
 		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name}, Online: on, Hosts: cnt[sc.ID]}
+		if sc.UniFi != nil {
+			u := unifiView(&sc)
+			u.Devices = nil
+			v.UniFi = &u
+		}
 		if st != nil {
 			st.mu.Lock()
 			v.LastSeen, v.IP, v.Version = st.lastSeen, st.ip, st.version
@@ -957,6 +966,9 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
 	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver}
+	if site.UniFi != nil && site.UniFi.On {
+		out["unifi"] = site.UniFi
+	}
 	if jb := takeJobs(site.ID); len(jb) > 0 {
 		out["jobs"] = jb
 	}

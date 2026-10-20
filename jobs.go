@@ -394,6 +394,11 @@ type unifiDevice struct {
 
 // unifiBase kann in Tests überschrieben werden.
 func unifiDevices(base, key, siteFilter string) ([]unifiDevice, error) {
+	return unifiFetch(base, key, siteFilter, false)
+}
+
+// unifiFetch holt die Geräte; all = auch Geräte ohne IP (für den Livestatus).
+func unifiFetch(base, key, siteFilter string, all bool) ([]unifiDevice, error) {
 	base = strings.TrimRight(strings.TrimSpace(base), "/")
 	cl := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{
 		Proxy:           nil,
@@ -449,7 +454,7 @@ func unifiDevices(base, key, siteFilter string) ([]unifiDevice, error) {
 				return nil, err
 			}
 			for _, d := range devs.Data {
-				if d.IPAddress == "" {
+				if d.IPAddress == "" && !all {
 					continue
 				}
 				out = append(out, unifiDevice{Name: d.Name, IP: d.IPAddress, MAC: strings.ToLower(d.MacAddress), Model: d.Model, State: d.State, Site: st.Name})

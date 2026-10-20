@@ -14,6 +14,7 @@ import (
 // Pfade, die auch Nur-Lesen-Benutzer per POST/DELETE aufrufen dürfen
 var readOnlyOK = map[string]bool{
 	"/api/settings":       true, // eigenes Passwort
+	"/api/events/ack":     true, // auch „Nur lesen“ darf quittieren
 	"/api/app/device":     true,
 	"/api/app/pushtest":   true,
 	"/api/billing/portal": false,
