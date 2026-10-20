@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"html/template"
 	"log"
 	"net/http"
@@ -27,6 +28,7 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	})
 	mux.HandleFunc("/api/me", protect(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.accountInfo(r)) }))
 	mux.HandleFunc("/api/users", protect(s.handleUsers))
+	mux.HandleFunc("/api/users/mail", protect(s.handleUserMail))
 	mux.HandleFunc("/api/admin/orgs", super(s.handleAdminOrgs))
 	mux.HandleFunc("/api/admin/switch", super(s.handleAdminSwitch))
 	mux.HandleFunc("/api/billing/checkout", protect(s.handleBillingCheckout))
@@ -618,4 +620,67 @@ func csvCell(s string) string {
 
 func euroDE(cents int) string {
 	return strings.Replace(fmt.Sprintf("%.2f", float64(cents)/100), ".", ",", 1)
+}
+
+// POST /api/users/mail {id, password} – Zugangsdaten per E-Mail an den Benutzer schicken.
+func (s *Server) handleUserMail(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID       string `json:"id"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	p := principal(r)
+	var u *User
+	s.m.mu.RLock()
+	for i := range s.m.cfg.Users {
+		x := s.m.cfg.Users[i]
+		if (x.Org == p.Org || p.Super) && (x.ID == req.ID || (req.ID == "" && strings.EqualFold(x.Email, req.Email))) {
+			u = &x
+		}
+	}
+	s.m.mu.RUnlock()
+	if u == nil || req.Password == "" {
+		http.Error(w, "Benutzer unbekannt", 404)
+		return
+	}
+	o := s.m.orgByID(u.Org)
+	orgName := ""
+	if o != nil {
+		orgName = o.Name
+	}
+	link := baseURL(r) + "/login"
+	from := "Ihr Administrator"
+	if p.User != nil {
+		from = p.User.Email
+		if p.User.Name != "" {
+			from = p.User.Name
+		}
+	}
+	role := map[string]string{"owner": "Inhaber", "admin": "Admin", "viewer": "Nur lesen"}[u.Role]
+	exp := ""
+	if u.Expires > 0 {
+		exp = "\nDer Zugang ist gültig bis " + time.UnixMilli(u.Expires).Format("02.01.2006") + "."
+	}
+	txt := fmt.Sprintf("Guten Tag%s,\n\n%s hat Ihnen einen Zugang zu PingWatch (%s) eingerichtet.\n\nAnmeldung: %s\nE-Mail: %s\nVorläufiges Passwort: %s\nRolle: %s%s\n\nBitte ändern Sie das Passwort nach der ersten Anmeldung unter Einstellungen → Allgemein.\n",
+		nameSuffix(u.Name), from, orgName, link, u.Email, req.Password, role, exp)
+	htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px">Guten Tag%s,<br><br>%s hat Ihnen einen Zugang zu <b>PingWatch</b> (%s) eingerichtet.<br><br>
+<table style="font-size:14px"><tr><td style="color:#64748b;padding-right:12px">Anmeldung</td><td><a href="%s">%s</a></td></tr><tr><td style="color:#64748b">E-Mail</td><td>%s</td></tr><tr><td style="color:#64748b">Vorläufiges Passwort</td><td><b style="font-family:monospace">%s</b></td></tr><tr><td style="color:#64748b">Rolle</td><td>%s</td></tr></table>%s
+<p>Bitte ändern Sie das Passwort nach der ersten Anmeldung unter <i>Einstellungen → Allgemein</i>.</p></div>`,
+		html.EscapeString(nameSuffix(u.Name)), html.EscapeString(from), html.EscapeString(orgName), link, link, html.EscapeString(u.Email),
+		html.EscapeString(req.Password), role, strings.ReplaceAll(html.EscapeString(exp), "\n", "<br>"))
+	if err := sendMail([]string{u.Email}, "Ihr Zugang zu PingWatch", txt, htm, nil); err != nil {
+		http.Error(w, "E-Mail konnte nicht gesendet werden: "+err.Error(), 502)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func nameSuffix(n string) string {
+	if n = strings.TrimSpace(n); n != "" {
+		return " " + n
+	}
+	return ""
 }

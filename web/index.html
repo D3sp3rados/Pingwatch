@@ -424,6 +424,31 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-user">
+  <form method="dialog" id="us-form">
+    <div class="dlg-h">Benutzer einladen</div>
+    <div class="dlg-b" style="display:block">
+      <label class="field">E-Mail-Adresse<input name="email" type="email" required placeholder="kollege@firma.de"></label>
+      <label class="field">Name (optional)<input name="name" maxlength="60"></label>
+      <label class="field">Rechte<select name="role"></select></label>
+      <label class="check" id="uf-superf" style="margin-top:8px"><input type="checkbox" name="super"> <span><b>Betreiber</b> – sieht und verwaltet zusätzlich alle Kunden (nur für RST-Mitarbeiter)</span></label>
+      <label class="check" style="margin-top:8px"><input type="checkbox" name="test"> <span><b>Testzugang</b> – Anmeldung nur bis zu einem Datum möglich</span></label>
+      <label class="field" id="uf-expf" style="display:none;max-width:220px">Gültig bis<input type="date" name="expires"></label>
+      <label class="check" style="margin-top:8px"><input type="checkbox" name="mail" checked> <span>Zugangsdaten gleich per E-Mail senden</span></label>
+    </div>
+    <div class="dlg-err" id="uf-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Einladen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-temp">
+  <form method="dialog">
+    <div class="dlg-h">Zugangsdaten</div>
+    <div class="dlg-b" style="display:block"><div id="tp-text"></div><div id="tp-status" style="font-size:13px;margin-top:6px"></div></div>
+    <div class="dlg-f"><button class="btn" type="button" id="tp-copy">Kopieren</button><button class="btn" type="button" id="tp-mail">Per E-Mail senden</button><button class="btn pri" value="ok">Fertig</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-group">
   <form method="dialog" id="gr-form">
     <div class="dlg-h" id="gf-title">Gruppe anlegen</div>
@@ -1164,10 +1189,30 @@ async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-
   $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!confirm(`${u.email} entfernen?`)) return;
     try{ await api('/api/users?id='+u.id,{method:'DELETE'}); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ alert(e.message); } });
 }
-function showTemp(email,pw){ prompt(`Zugang für ${email}\nAnmeldung: ${location.origin}/login\n\nVorläufiges Passwort (bitte jetzt kopieren und weitergeben – es wird nicht noch einmal angezeigt):`,pw); }
-$('#add-user').onclick=async()=>{ const email=prompt('E-Mail-Adresse des neuen Benutzers:'); if(!email) return; const name=prompt('Name (optional):')||'';
-  const role=confirm('Darf der Benutzer Hosts und Standorte ändern?\n\nOK = Admin · Abbrechen = Nur lesen')?'admin':'viewer';
-  try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({email,name,role})}); showTemp(email.trim().toLowerCase(),r.tempPassword); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ alert(e.message); } };
+/* Zugangsdaten anzeigen / per Mail senden */
+let TMP={};
+function showTemp(email,pw,mailNow){ TMP={email,pw};
+  $('#tp-text').innerHTML=`<table class="tbl" style="font-size:14px"><tr><td class="muted">Anmeldung</td><td>${esc(location.origin)}/login</td></tr><tr><td class="muted">E-Mail</td><td><b>${esc(email)}</b></td></tr><tr><td class="muted">Vorläufiges Passwort</td><td><b class="num" style="font-size:16px;letter-spacing:.03em">${esc(pw)}</b></td></tr></table><p class="muted" style="font-size:12.5px">Das Passwort wird nur jetzt angezeigt. Der Benutzer ändert es nach der ersten Anmeldung unter Einstellungen → Allgemein.</p>`;
+  $('#tp-status').textContent=''; $('#tp-mail').disabled=false; $('#dlg-temp').showModal(); if(mailNow) $('#tp-mail').click(); }
+$('#tp-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText(`PingWatch-Zugang\nAnmeldung: ${location.origin}/login\nE-Mail: ${TMP.email}\nPasswort: ${TMP.pw}`); toast('Zugangsdaten kopiert'); };
+$('#tp-mail').onclick=async()=>{ $('#tp-mail').disabled=true; $('#tp-status').textContent='sende …';
+  try{ await api('/api/users/mail',{method:'POST',body:JSON.stringify({email:TMP.email,password:TMP.pw})}); $('#tp-status').innerHTML='<b style="color:var(--ok)">✓ E-Mail an '+esc(TMP.email)+' gesendet</b>'; }
+  catch(e){ $('#tp-status').innerHTML='<span style="color:var(--bad)">'+esc(e.message)+'</span>'; $('#tp-mail').disabled=false; } };
+
+/* Benutzer einladen */
+const udlg=$('#dlg-user'), uf=$('#us-form');
+$('#add-user').onclick=()=>{ const st=S.state, me=st.me||{}, own=me.role==='owner'||me.super;
+  uf.reset(); $('#uf-err').textContent=''; $('#uf-expf').style.display='none';
+  uf.role.innerHTML=(own?'<option value="owner">Inhaber – alles, inkl. Abo und Benutzer</option>':'')+'<option value="admin" selected>Admin – Hosts, Standorte, Alarme, Benutzer</option><option value="viewer">Nur lesen – sieht alles, ändert nichts</option>';
+  $('#uf-superf').style.display=me.super&&st.org&&st.org.id==='default'?'':'none';
+  udlg.showModal(); setTimeout(()=>uf.email.focus(),50); };
+uf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const email=uf.email.value.trim().toLowerCase(), body={email,name:uf.name.value.trim(),role:uf.role.value};
+  if(uf.test.checked&&uf.expires.value) body.expires=new Date(uf.expires.value+'T23:59:59').getTime();
+  if($('#uf-superf').style.display!=='none') body.super=uf.super.checked;
+  try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify(body)}); udlg.close(); $('#users-tbl').dataset.sig=''; loadUsers(true); showTemp(email,r.tempPassword,uf.mail.checked); }
+  catch(err){ $('#uf-err').textContent=err.message; } });
+uf.test.onchange=()=>{ $('#uf-expf').style.display=uf.test.checked?'':'none'; if(uf.test.checked&&!uf.expires.value){ const d=new Date(Date.now()+14*864e5); uf.expires.value=d.toISOString().slice(0,10); } };
 
 /* Abo */
 const eur=c=>(c/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
