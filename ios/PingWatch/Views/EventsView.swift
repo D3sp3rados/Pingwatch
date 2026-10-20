@@ -48,12 +48,12 @@ struct EventsView: View {
     let hostID: String?
     @Environment(AppModel.self) private var model
     @State private var events: [PWEvent] = []
-    @State private var types: Set<String> = ["outage", "loss", "spike", "offline", "device", "port"]
+    @State private var types: Set<String> = ["outage", "loss", "spike", "offline", "device", "port", "reboot", "wan"]
     @State private var days = 7
     @State private var host: String = ""
     @State private var loaded = false
 
-    private let allTypes = [("outage", "Ausfälle"), ("loss", "Verlust"), ("spike", "Spitzen"), ("offline", "Offline"), ("device", "UniFi"), ("port", "Ports")]
+    private let allTypes = [("outage", "Ausfälle"), ("loss", "Verlust"), ("spike", "Spitzen"), ("offline", "Offline"), ("device", "UniFi"), ("port", "Ports"), ("reboot", "Neustarts"), ("wan", "WAN")]
 
     var body: some View {
         List {

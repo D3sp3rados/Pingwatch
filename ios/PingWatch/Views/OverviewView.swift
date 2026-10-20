@@ -18,12 +18,15 @@ struct OverviewView: View {
                 }
                 ForEach(st.sites) { site in
                     let hosts = st.hosts.filter { $0.site == site.id }
-                    if !hosts.isEmpty {
+                    if !hosts.isEmpty || site.unifi?.on == true {
                         Section {
                             ForEach(hosts) { h in
                                 NavigationLink(value: h.id) {
                                     HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
                                 }
+                            }
+                            if let u = site.unifi, u.on {
+                                UniFiSection(summary: u, siteName: site.name)
                             }
                         } header: {
                             SiteHeader(site: site)
@@ -128,5 +131,194 @@ struct HostRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// UniFi-Block eines Standorts in der Übersicht (aufklappbar).
+struct UniFiSection: View {
+    let summary: UniFiSummary
+    let siteName: String
+    @State private var expanded: Bool?
+
+    private var devices: [UniFiDevice] { summary.devices ?? [] }
+    private var hasProblem: Bool { summary.offline > 0 || (summary.wanDown ?? 0) > 0 }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: Binding(get: { expanded ?? hasProblem }, set: { expanded = $0 })) {
+            if let gw = devices.first(where: { $0.cat == "gateway" && !($0.wan ?? []).isEmpty }) {
+                HStack(spacing: 6) {
+                    ForEach(gw.wan ?? [], id: \.name) { w in
+                        WANPill(wan: w)
+                    }
+                }
+            }
+            ForEach(devices) { d in
+                NavigationLink {
+                    UniFiDeviceView(device: d, siteName: siteName)
+                } label: {
+                    UniFiDeviceRow(device: d)
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "wifi.router").foregroundStyle(PW.accent)
+                    Text("UniFi").bold()
+                    Text("\(summary.total) Geräte").foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    if let err = summary.err, !err.isEmpty {
+                        Text("Konsole nicht erreichbar").foregroundStyle(PW.bad)
+                    } else if summary.offline > 0 {
+                        Text("\(summary.offline) offline").foregroundStyle(PW.bad).bold()
+                    } else if summary.at != nil {
+                        Text("alle online").foregroundStyle(PW.ok)
+                    } else {
+                        Text("warte auf Daten …").foregroundStyle(.secondary)
+                    }
+                    if let b = summary.boots, b > 0 {
+                        Text("\(b)× Neustart").foregroundStyle(PW.warn)
+                    }
+                    if let w = summary.wanDown, w > 0 {
+                        Text("WAN getrennt").foregroundStyle(PW.bad)
+                    }
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+}
+
+struct WANPill: View {
+    let wan: UniFiWAN
+    var body: some View {
+        HStack(spacing: 4) {
+            StatusDot(color: wan.up ? PW.ok : PW.bad, size: 7)
+            Text(wan.name).font(.caption.bold())
+            if wan.up, let l = wan.latency, l > 0 {
+                Text("\(Int(l.rounded())) ms").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            } else if !wan.up {
+                Text("getrennt").font(.caption).foregroundStyle(PW.bad)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .overlay(Capsule().stroke(Color.gray.opacity(0.3)))
+    }
+}
+
+struct UniFiDeviceRow: View {
+    let device: UniFiDevice
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                StatusDot(color: device.isOffline ? PW.bad : (device.state == "ONLINE" ? PW.ok : PW.warn), size: 8)
+                Text(device.name).font(.subheadline.bold()).lineLimit(1)
+                Spacer()
+                if device.avail >= 0 {
+                    Text(String(format: "%.1f %%", device.avail)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
+            HStack(spacing: 8) {
+                Text(device.model)
+                if device.pingAvg >= 0 { Text(String(format: "%.1f ms", device.pingAvg)) }
+                if device.loss > 0 { Text(String(format: "%.0f %% Verlust", device.loss)).foregroundStyle(PW.loss) }
+                if !device.boots.isEmpty { Text("\(device.boots.count)× Neustart").foregroundStyle(PW.warn) }
+                if device.isOffline { Text("offline seit \(fmtTime(Date(ms: device.since)))").foregroundStyle(PW.bad) }
+            }
+            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            UniFiBar(levels: device.bar)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct UniFiBar: View {
+    let levels: [Int]
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(Array(levels.enumerated()), id: \.offset) { _, l in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(color(l))
+            }
+        }
+        .frame(height: 6)
+    }
+    private func color(_ l: Int) -> Color {
+        switch l {
+        case 1: return PW.ok
+        case 2: return PW.warn
+        case 3: return PW.bad
+        default: return Color.gray.opacity(0.25)
+        }
+    }
+}
+
+struct UniFiDeviceView: View {
+    let device: UniFiDevice
+    let siteName: String
+
+    var body: some View {
+        List {
+            Section {
+                row("Status", device.isOffline ? "offline" : device.state == "ONLINE" ? "online" : device.state.lowercased())
+                row("seit", fmtDayTime(Date(ms: device.since)))
+                row("Typ", device.catName)
+                row("Modell", device.model)
+                row("IP", device.ip.isEmpty ? "–" : device.ip)
+                row("MAC", device.mac.isEmpty ? "–" : device.mac)
+                if let fw = device.fw, !fw.isEmpty { row("Firmware", fw) }
+            }
+            Section("Zustand") {
+                if let up = device.uptime, up > 0 { row("Laufzeit", fmtDuration(TimeInterval(up))) }
+                if let c = device.cpu, let m = device.mem, c > 0 || m > 0 { row("CPU / RAM", String(format: "%.0f %% / %.0f %%", c, m)) }
+                row("Ping (1 h)", device.pingAvg >= 0 ? String(format: "Ø %.1f ms · max %.1f ms", device.pingAvg, device.pingMax) : "–")
+                row("Verlust (1 h)", String(format: "%.0f %%", device.loss))
+                row("Verfügbar (24 h)", device.avail >= 0 ? String(format: "%.2f %%", device.avail) : "–")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Letzte 24 h").font(.caption).foregroundStyle(.secondary)
+                    UniFiBar(levels: device.bar).frame(height: 10)
+                }
+            }
+            Section("Neustarts (24 h)") {
+                if device.boots.isEmpty {
+                    Text("keine").foregroundStyle(.secondary)
+                } else {
+                    ForEach(device.boots, id: \.self) { b in
+                        Label(fmtDayTime(Date(ms: b)), systemImage: "arrow.clockwise").foregroundStyle(PW.warn)
+                    }
+                }
+            }
+            if let wans = device.wan, !wans.isEmpty {
+                Section("Internet") {
+                    ForEach(wans, id: \.name) { w in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                StatusDot(color: w.up ? PW.ok : PW.bad, size: 8)
+                                Text(w.name + ((w.active ?? false) ? " (aktiv)" : "")).bold()
+                                Spacer()
+                                Text(w.up ? "verbunden" : "getrennt").foregroundStyle(w.up ? PW.ok : PW.bad)
+                            }
+                            HStack(spacing: 8) {
+                                if let ip = w.ip, !ip.isEmpty { Text(ip) }
+                                if let l = w.latency, l > 0 { Text(String(format: "%.1f ms", l)) }
+                                if let l = w.lat24, l > 0 { Text(String(format: "Ø 24 h %.1f ms", l)) }
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(device.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ k: String, _ v: String) -> some View {
+        HStack {
+            Text(k).foregroundStyle(.secondary)
+            Spacer()
+            Text(v).multilineTextAlignment(.trailing)
+        }
     }
 }

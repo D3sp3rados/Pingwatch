@@ -82,6 +82,8 @@ struct PWEvent: Decodable, Identifiable, Hashable {
         case "offline": return "Standort offline"
         case "device": return "UniFi-Gerät"
         case "port": return "Port down"
+        case "reboot": return "Neustart"
+        case "wan": return "WAN getrennt"
         default: return type
         }
     }
@@ -96,6 +98,8 @@ struct PWEvent: Decodable, Identifiable, Hashable {
         case "offline": return "Agent hat sich nicht gemeldet"
         case "device": return "offline in der UniFi-Konsole"
         case "port": return "Schnittstelle down"
+        case "reboot": return "UniFi-Gerät neu gestartet"
+        case "wan": return "Internetleitung getrennt"
         default: return ""
         }
     }
@@ -155,6 +159,62 @@ struct SiteView: Decodable, Identifiable, Hashable {
     let ip: String
     let version: String
     let hosts: Int
+    var unifi: UniFiSummary?
+}
+
+struct UniFiWAN: Decodable, Hashable {
+    let name: String
+    let up: Bool
+    var ip: String?
+    var latency: Double?
+    var avail: Double?
+    var active: Bool?
+    var lat24: Double?
+}
+
+struct UniFiDevice: Decodable, Hashable, Identifiable {
+    let name: String
+    let model: String
+    let mac: String
+    let ip: String
+    let state: String
+    let since: Int64
+    let cat: String
+    var fw: String?
+    var uptime: Int64?
+    var cpu: Double?
+    var mem: Double?
+    var tx: Double?
+    var rx: Double?
+    let pingAvg: Double
+    let pingMax: Double
+    let loss: Double
+    let avail: Double
+    let boots: [Int64]
+    let bar: [Int]
+    var wan: [UniFiWAN]?
+
+    var id: String { mac.isEmpty ? name : mac }
+    var isOffline: Bool { ["OFFLINE", "CONNECTION_INTERRUPTED", "ISOLATED", "DISCONNECTED"].contains(state) }
+    var catName: String {
+        switch cat {
+        case "gateway": return "Gateway"
+        case "switch": return "Switch"
+        case "ap": return "Access Point"
+        default: return "Sonstiges"
+        }
+    }
+}
+
+struct UniFiSummary: Decodable, Hashable {
+    let on: Bool
+    var at: Int64?
+    var err: String?
+    let total: Int
+    let offline: Int
+    var boots: Int?
+    var wanDown: Int?
+    var devices: [UniFiDevice]?
 }
 
 struct StateResponse: Decodable {
