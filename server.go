@@ -63,6 +63,14 @@ func runServer(args []string) {
 		store = NewFileStore(*dataDir)
 	}
 	m := NewMonitor(store)
+	m.notices = make(chan notice, 1000)
+	if p, err := newPusherFromEnv(); err != nil {
+		log.Printf("Push-Benachrichtigungen deaktiviert: %v", err)
+	} else if p != nil {
+		m.pusher = p
+		log.Printf("Push-Benachrichtigungen aktiv (Topic %s)", p.topic)
+	}
+	go m.pushLoop()
 	s := &Server{m: m, envPass: os.Getenv("ADMIN_PASSWORD"), agentDir: envOr("AGENT_DIR", "./downloads")}
 	if s.envPass == "" && m.cfg.PassHash == "" {
 		pw := randHex(5)
@@ -148,6 +156,9 @@ func (s *Server) sessionToken() string {
 }
 
 func (s *Server) authed(r *http.Request) bool {
+	if t := bearer(r); t != "" {
+		return hmac.Equal([]byte(t), []byte(s.sessionToken()))
+	}
 	c, err := r.Cookie("pw_session")
 	return err == nil && hmac.Equal([]byte(c.Value), []byte(s.sessionToken()))
 }
@@ -225,6 +236,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/sites", protect(s.handleSites))
 	mux.HandleFunc("/api/settings", protect(s.handleSettings))
 	mux.HandleFunc("/api/reset", protect(s.handleReset))
+	mux.HandleFunc("/api/app/login", s.handleAppLogin)
+	mux.HandleFunc("/api/app/device", protect(s.handleDevice))
+	mux.HandleFunc("/api/app/pushtest", protect(s.handlePushTest))
 	mux.HandleFunc("/api/export/events.csv", protect(s.exportEvents))
 	mux.HandleFunc("/api/export/samples.csv", protect(s.exportSamples))
 	mux.HandleFunc("/api/export/stats.csv", protect(s.exportStats))
@@ -381,6 +395,11 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		cnt[hc.Site]++
 	}
 	ret := m.cfg.RetentionDays
+	devs := []map[string]any{}
+	for _, d := range m.cfg.Devices {
+		devs = append(devs, map[string]any{"id": d.Token[:min(12, len(d.Token))], "name": d.Name, "added": d.Added,
+			"outage": d.Outage, "loss": d.Loss, "spike": d.Spike, "offline": d.Offline, "hosts": len(d.Hosts)})
+	}
 	m.mu.RUnlock()
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
 	for _, sc := range sites {
@@ -395,7 +414,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
-		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(),
+		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "devices": devs,
 	})
 }
 
@@ -1045,4 +1064,103 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 	}
 	n := s.m.Reset(req.Host, from, to, req.Samples, req.Events)
 	writeJSON(w, map[string]any{"ok": true, "events": n})
+}
+
+// ---------- iPhone-App ----------
+
+func (s *Server) handleAppLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if !s.passwordOK(req.Password) {
+		time.Sleep(800 * time.Millisecond)
+		http.Error(w, "Passwort falsch", 401)
+		return
+	}
+	writeJSON(w, map[string]any{"token": s.sessionToken(), "version": version})
+}
+
+func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
+	m := s.m
+	switch r.Method {
+	case http.MethodPost:
+		var d Device
+		if err := json.NewDecoder(r.Body).Decode(&d); err != nil || len(d.Token) < 32 {
+			http.Error(w, "Gerätetoken fehlt", 400)
+			return
+		}
+		d.Name = strings.TrimSpace(d.Name)
+		if d.Name == "" {
+			d.Name = "iPhone"
+		}
+		m.mu.Lock()
+		found := false
+		for i := range m.cfg.Devices {
+			if m.cfg.Devices[i].Token == d.Token {
+				d.Added = m.cfg.Devices[i].Added
+				m.cfg.Devices[i] = d
+				found = true
+			}
+		}
+		if !found {
+			d.Added = time.Now().UnixMilli()
+			m.cfg.Devices = append(m.cfg.Devices, d)
+		}
+		m.saveConfigLocked()
+		m.mu.Unlock()
+		writeJSON(w, map[string]any{"ok": true, "push": m.pusher != nil})
+	case http.MethodDelete:
+		id := r.URL.Query().Get("id")
+		m.mu.Lock()
+		out := m.cfg.Devices[:0]
+		for _, d := range m.cfg.Devices {
+			if id == "" || !strings.HasPrefix(d.Token, id) {
+				out = append(out, d)
+			}
+		}
+		m.cfg.Devices = out
+		m.saveConfigLocked()
+		m.mu.Unlock()
+		writeJSON(w, map[string]bool{"ok": true})
+	default:
+		tok := r.URL.Query().Get("token")
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		for _, d := range m.cfg.Devices {
+			if d.Token == tok {
+				writeJSON(w, d)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	}
+}
+
+// Testbenachrichtigung an alle Geräte
+func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	if s.m.pusher == nil {
+		http.Error(w, "Push nicht eingerichtet (APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID fehlen)", 400)
+		return
+	}
+	s.m.mu.RLock()
+	devs := append([]Device(nil), s.m.cfg.Devices...)
+	s.m.mu.RUnlock()
+	ok, errs := 0, []string{}
+	for _, d := range devs {
+		if err := s.m.pusher.send(d, notice{"test", "", "PingWatch", "Testbenachrichtigung – Push funktioniert ✅"}); err != nil {
+			errs = append(errs, d.Name+": "+err.Error())
+		} else {
+			ok++
+		}
+	}
+	writeJSON(w, map[string]any{"sent": ok, "errors": errs})
 }

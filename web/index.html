@@ -303,8 +303,12 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
     <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
   </div>
+  <h2>iPhone-App &amp; Push <button class="btn sm" id="push-test">Testnachricht senden</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="dev-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px" id="push-info"></p>
+
   <div class="panel help" style="margin-top:12px">
-    <b style="color:var(--fg)">Auf dem iPhone als App</b><br>
+    <b style="color:var(--fg)">Auf dem iPhone als Web-App</b><br>
     Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. PingWatch startet dann wie eine App im Vollbild.
   </div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
@@ -629,6 +633,11 @@ function renderSettings(){
   $$('#sites [data-ren]').forEach(b=>b.onclick=async()=>{ const n=prompt('Neuer Name:',siteName(b.dataset.ren)); if(!n) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.ren,name:n})}); refreshState(); });
   $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!confirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
   $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
+  const devs=st.devices||[]; const yes=b=>b?'✔':'–';
+  $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein iPhone verbunden. In der PingWatch-App anmelden und Benachrichtigungen erlauben.</td></tr>';
+  $$('#dev-tbl [data-deldev]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gerät entfernen? Es bekommt dann keine Benachrichtigungen mehr.')) return; await api('/api/app/device?id='+encodeURIComponent(b.dataset.deldev),{method:'DELETE'}); refreshState(); });
+  $('#push-info').innerHTML=st.push?'Push über Apple ist eingerichtet.':'<b style="color:var(--warn)">Push noch nicht eingerichtet</b> – in der rstcloud APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID und APNS_TOPIC setzen.';
+  $('#push-test').style.display=st.push&&devs.length?'':'none';
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
   $('#g-pw').style.display=st.envPassword?'none':'flex';
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
@@ -639,6 +648,8 @@ function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+$('#push-test').onclick=async()=>{ try{ const r=await api('/api/app/pushtest',{method:'POST'}); toast(r.errors&&r.errors.length?('Fehler: '+r.errors.join(', ')):`Testnachricht an ${r.sent} Gerät(e) gesendet`); }catch(e){ alert(e.message); } };
 
 /* Zurücksetzen */
 $('#r-range').onchange=()=>{ const d=$('#r-range').value==='day'; $('#r-fromf').style.display=$('#r-tof').style.display=d?'':'none'; };

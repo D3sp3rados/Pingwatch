@@ -41,6 +41,7 @@ type Config struct {
 	Sites         []SiteCfg `json:"sites"`
 	RetentionDays int       `json:"retentionDays"`
 	PassHash      string    `json:"passHash"`
+	Devices       []Device  `json:"devices"`
 	Secret        string    `json:"secret"`
 	Version       int64     `json:"version"`
 }
@@ -154,6 +155,8 @@ type Monitor struct {
 	nextEv  int64
 	started int64
 	icmpOK  string
+	pusher  *Pusher
+	notices chan notice
 }
 
 func NewMonitor(store Storage) *Monitor {
@@ -263,11 +266,25 @@ func (m *Monitor) newEvent(h *Host, typ string, start int64) *Event {
 	m.nextEv++
 	e := &Event{ID: m.nextEv, HostID: h.cfg.ID, HostName: h.cfg.Name, Site: h.cfg.Site, Type: typ, Start: start, Last: start}
 	m.events = append(m.events, e)
+	cp := *e
 	m.evMu.Unlock()
+	if typ == "outage" {
+		m.notifyEventStart(cp)
+	}
 	return e
 }
 
 func (m *Monitor) finishEvent(e *Event, end int64) {
+	m.evMu.Lock()
+	e.End = end
+	cp := *e
+	m.evMu.Unlock()
+	m.store.AppendEvent(cp)
+	m.notifyEventEnd(cp)
+}
+
+// finishEventQuiet schließt ein Ereignis ohne Benachrichtigung (Pause, Löschen, Neustart).
+func (m *Monitor) finishEventQuiet(e *Event, end int64) {
 	m.evMu.Lock()
 	e.End = end
 	cp := *e
@@ -404,7 +421,7 @@ func (m *Monitor) closeAll(h *Host) {
 	h.mu.Unlock()
 	for _, e := range evs {
 		if e != nil {
-			m.finishEvent(e, e.Last)
+			m.finishEventQuiet(e, e.Last)
 		}
 	}
 }
@@ -453,8 +470,10 @@ func (m *Monitor) housekeeping() {
 				m.nextEv++
 				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Type: "offline", Start: st.lastSeen, Last: st.lastSeen}
 				m.events = append(m.events, e)
+				cp := *e
 				m.evMu.Unlock()
 				st.offEv = e
+				m.notifyEventStart(cp)
 			}
 			st.mu.Unlock()
 		}
