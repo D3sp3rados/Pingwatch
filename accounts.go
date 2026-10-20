@@ -105,6 +105,8 @@ type userView struct {
 	Role      string `json:"role"`
 	Created   int64  `json:"created"`
 	LastLogin int64  `json:"lastLogin"`
+	Super     bool   `json:"super,omitempty"`
+	Expires   int64  `json:"expires,omitempty"`
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +118,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		m.mu.RLock()
 		for _, u := range m.cfg.Users {
 			if u.Org == p.Org {
-				out = append(out, userView{u.ID, u.Email, u.Name, u.Role, u.Created, u.LastLogin})
+				out = append(out, userView{u.ID, u.Email, u.Name, u.Role, u.Created, u.LastLogin, u.isSuper(), u.Expires})
 			}
 		}
 		m.mu.RUnlock()
@@ -125,6 +127,8 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID, Email, Name, Role, Password string
 			ResetPassword                   bool
+			Super                           *bool  // Betreiber-Admin (nur in der Betreiber-Org)
+			Expires                         *int64 // Zugang bis (ms), 0 = unbegrenzt
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -158,6 +162,12 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			}
 			u := User{ID: randHex(6), Email: email, Name: strings.TrimSpace(req.Name), Org: p.Org, Role: req.Role,
 				PassHash: hashPassword(pw), Created: time.Now().UnixMilli()}
+			if req.Super != nil && p.Super && p.Org == defaultOrgID {
+				u.Super = *req.Super
+			}
+			if req.Expires != nil {
+				u.Expires = *req.Expires
+			}
 			m.cfg.Users = append(m.cfg.Users, u)
 		} else {
 			found := false
@@ -182,6 +192,12 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 				if req.ResetPassword {
 					temp = tempPassword()
 					u.PassHash = hashPassword(temp)
+				}
+				if req.Super != nil && p.Super && p.Org == defaultOrgID && (p.User == nil || p.User.ID != u.ID) {
+					u.Super = *req.Super
+				}
+				if req.Expires != nil && (p.User == nil || p.User.ID != u.ID) {
+					u.Expires = *req.Expires
 				}
 			}
 			if !found {
@@ -360,6 +376,7 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			ID, Name, Plan, Billing, OwnerEmail, OwnerName, Email string
 			Sites                                                 int
 			Disabled                                              *bool
+			Expires                                               *int64 // Testzugang bis (ms), 0 = unbegrenzt
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -378,6 +395,9 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			}
 			o := Org{ID: randHex(5), Name: strings.TrimSpace(req.Name), Plan: req.Plan, Sites: req.Sites, Billing: req.Billing,
 				Created: time.Now().UnixMilli(), Status: "active", Email: strings.TrimSpace(req.Email)}
+			if req.Expires != nil {
+				o.Expires = *req.Expires
+			}
 			if o.Plan == "" {
 				o.Plan = "free"
 			}
@@ -423,6 +443,9 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Disabled != nil && o.ID != defaultOrgID {
 				o.Disabled = *req.Disabled
+			}
+			if req.Expires != nil && o.ID != defaultOrgID {
+				o.Expires = *req.Expires
 			}
 			m.saveConfigLocked()
 			writeJSON(w, map[string]bool{"ok": true})

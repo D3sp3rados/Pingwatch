@@ -398,6 +398,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Abrechnung<select name="billing"><option value="invoice">Rechnung (manuell)</option><option value="stripe">Stripe (online)</option><option value="free">Kostenlos</option></select></label>
       <label class="field" id="of-ownerf">E-Mail des Inhabers (bekommt Zugang)<input name="ownerEmail" type="email" placeholder="kunde@firma.de"></label>
       <label class="field" id="of-ownernf">Name des Inhabers<input name="ownerName" maxlength="60"></label>
+      <label class="field">Testzugang bis (leer = unbegrenzt)<input type="date" name="expires"><small>Danach ist keine Anmeldung mehr möglich, die Überwachung läuft weiter.</small></label>
       <label class="check" id="of-disf"><input type="checkbox" name="disabled"> Zugang gesperrt</label>
       <div class="err" id="of-err" style="color:var(--bad);font-size:13px"></div>
     </div>
@@ -1062,11 +1063,18 @@ let usersAt=0;
 async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-tbl').dataset.sig) return; usersAt=Date.now(); let us; try{ us=await api('/api/users'); }catch(e){ return; }
   const st=S.state, me=st.me||{}, canEd=me.role!=='viewer', own=me.role==='owner'||me.super;
   const sig=JSON.stringify(us)+me.role; if($('#users-tbl').dataset.sig===sig) return; $('#users-tbl').dataset.sig=sig;
-  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="tag">Sie</span>':''}</td><td>${esc(u.email)}</td>
+  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="tag">Sie</span>':''}${u.super?' <span class="tag ok">Betreiber</span>':''}${u.expires?` <span class="tag ${u.expires<Date.now()?'bad':'warn'}">bis ${fmtDate(u.expires)}</span>`:''}</td><td>${esc(u.email)}</td>
     <td>${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<select data-role="${u.id}">${Object.entries(ROLES).filter(([k])=>k!=='owner'||own).map(([k,v])=>`<option value="${k}"${k===u.role?' selected':''}>${v}</option>`).join('')}</select>`:ROLES[u.role]||u.role}</td>
     <td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td>
-    <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
+    <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`${me.super&&st.org&&st.org.id==='default'?`<button class="btn sm" data-sup="${u.id}">${u.super?'Betreiber entziehen':'Zum Betreiber'}</button> `:''}<button class="btn sm" data-uexp="${u.id}">Gültig bis</button> <button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
   $$('#users-tbl [data-role]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:sel.dataset.role,role:sel.value})}); toast('Rolle geändert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+  $$('#users-tbl [data-sup]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.sup);
+    if(!u.super&&!confirm(`${u.email} zum Betreiber machen? Er sieht und verwaltet dann alle Kunden.`)) return;
+    try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,super:!u.super})}); toast('Gespeichert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+  $$('#users-tbl [data-uexp]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.uexp);
+    const v=prompt('Zugang gültig bis (TT.MM.JJJJ), leer = unbegrenzt:',u.expires?fmtDate(u.expires).replace(/^\D+ /,'')+new Date(u.expires).getFullYear():''); if(v===null) return;
+    let ms=0; if(v.trim()){ const m=v.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/); if(!m){ alert('Bitte im Format TT.MM.JJJJ'); return; } const y=+m[3]<100?2000+ +m[3]:+m[3]; ms=new Date(y,+m[2]-1,+m[1],23,59,59).getTime(); }
+    try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,expires:ms})}); toast('Gespeichert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
   $$('#users-tbl [data-rpw]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.rpw); if(!confirm(`Neues Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
     try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,resetPassword:true})}); showTemp(u.email,r.tempPassword); }catch(e){ alert(e.message); } });
   $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!confirm(`${u.email} entfernen?`)) return;
@@ -1130,9 +1138,9 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
     <div><span>Monatsumsatz (netto)</span><b>${eur(mrr)}</b></div><div><span>Standorte gesamt</span><b>${ORGS.reduce((a,o)=>a+o.usedSites,0)}</b></div><div><span>Hosts gesamt</span><b>${ORGS.reduce((a,o)=>a+o.usedHosts,0)}</b></div>`;
   const cur=S.state&&S.state.org&&S.state.org.id;
   const list=ORGS.filter(o=>!q||(o.name+' '+(o.owner||'')+' '+(o.email||'')).toLowerCase().includes(q));
-  $('#a-tbl').innerHTML=list.length?'<tr><th>Kunde</th><th>Paket</th><th>Status</th><th>Standorte</th><th class="hide-m">Hosts</th><th class="hide-m">Benutzer</th><th class="hide-m">€/Monat</th><th class="hide-m">Seit</th><th></th></tr>'+list.map(o=>{ const [t,c]=o.disabled?['gesperrt','bad']:(STAT[o.status||'active']||[o.status,'']);
+  $('#a-tbl').innerHTML=list.length?'<tr><th>Kunde</th><th>Paket</th><th>Status</th><th>Standorte</th><th class="hide-m">Hosts</th><th class="hide-m">Benutzer</th><th class="hide-m">€/Monat</th><th class="hide-m">Seit</th><th></th></tr>'+list.map(o=>{ const [t,c]=o.disabled?['gesperrt','bad']:o.expires&&o.expires<Date.now()?['abgelaufen','bad']:(STAT[o.status||'active']||[o.status,'']);
     return `<tr><td><b>${esc(o.name)}</b>${o.id===cur?' <span class="tag ok">geöffnet</span>':''}<br><span class="muted" style="font-size:12px">${esc(o.owner||o.email||'')}</span></td>
-    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="tag">Stripe</span>':o.billing==='invoice'?' <span class="tag">Rechnung</span>':''}</td><td><span class="tag ${c}">${t}</span></td>
+    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="tag">Stripe</span>':o.billing==='invoice'?' <span class="tag">Rechnung</span>':''}</td><td><span class="tag ${c}">${t}</span>${o.expires&&o.expires>=Date.now()?`<br><span class="tag warn">Test bis ${fmtDate(o.expires)}</span>`:''}</td>
     <td class="num">${o.usedSites} / ${o.sites||(o.plan==='free'?1:'∞')}</td><td class="hide-m num">${o.usedHosts}</td><td class="hide-m num">${o.users}</td><td class="hide-m num">${o.mrr?eur(o.mrr):'–'}</td><td class="hide-m">${fmtDay(o.created)}</td>
     <td class="act"><button class="btn sm pri" data-open="${o.id}">Öffnen</button> <button class="btn sm" data-oed="${o.id}">Bearbeiten</button></td></tr>`; }).join(''):'<tr><td class="empty">Keine Kunden gefunden.</td></tr>';
   $$('#a-tbl [data-open]').forEach(b=>b.onclick=()=>switchOrg(b.dataset.open,'#/'));
@@ -1148,11 +1156,13 @@ function openOrg(id){ const o=id&&ORGS.find(x=>x.id===id);
   $('#of-plan').innerHTML=['free','basis','pro','partner','internal'].map(p=>`<option value="${p}">${{free:'Free',basis:'Basis',pro:'Pro',partner:'Partner',internal:'Intern (unbegrenzt)'}[p]}</option>`).join('');
   of.dataset.id=o?o.id:''; of.name.value=o?o.name:''; of.plan.value=o?o.plan:'basis'; of.sites.value=o?o.sites:1; of.billing.value=o?(o.billing||'free'):'invoice';
   of.ownerEmail.value=''; of.ownerName.value=''; of.disabled.checked=o?!!o.disabled:false;
+  of.expires.value=o&&o.expires?new Date(o.expires-new Date(o.expires).getTimezoneOffset()*6e4).toISOString().slice(0,10):'';
   $('#of-ownerf').style.display=$('#of-ownernf').style.display=o?'none':''; $('#of-disf').style.display=o&&o.id!=='default'?'':'none';
   $('#of-del').style.display=o&&o.id!=='default'?'':'none'; odlg.showModal(); }
 of.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:of.dataset.id,name:of.name.value.trim(),plan:of.plan.value,sites:+of.sites.value||0,billing:of.billing.value||'free',ownerEmail:of.ownerEmail.value.trim(),ownerName:of.ownerName.value.trim()};
   if(of.dataset.id) body.disabled=of.disabled.checked;
+  body.expires=of.expires.value?new Date(of.expires.value+'T23:59:59').getTime():0;
   try{ const r=await api('/api/admin/orgs',{method:'POST',body:JSON.stringify(body)}); odlg.close(); toast('Gespeichert'); if(r.tempPassword) showTemp(body.ownerEmail,r.tempPassword); loadAdmin(); refreshState(); }catch(err){ $('#of-err').textContent=err.message; } });
 $('#of-del').onclick=async()=>{ const o=ORGS.find(x=>x.id===of.dataset.id); if(!o) return;
   if(prompt(`Kunde „${o.name}“ mit allen Hosts, Standorten, Messwerten und Benutzern endgültig löschen?\n\nZur Bestätigung den Namen eingeben:`)!==o.name) return;

@@ -28,7 +28,7 @@ enum PW {
 
     static func color(forEvent type: String) -> Color {
         switch type {
-        case "outage": return bad
+        case "outage", "device", "port": return bad
         case "loss": return loss
         case "spike": return warn
         default: return off

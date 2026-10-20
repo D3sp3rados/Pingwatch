@@ -21,6 +21,13 @@ struct EventRow: View {
                     if showHost { Text(event.name).font(.subheadline.bold()).lineLimit(1) }
                 }
                 Text(event.detail).font(.caption).foregroundStyle(.secondary)
+                if let by = event.ackBy, event.isAcked {
+                    Label("quittiert: \(by)", systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(PW.ok)
+                } else if let c = event.cause, !c.isEmpty {
+                    Text("wegen \(c)").font(.caption2).foregroundStyle(.secondary)
+                } else if event.maint == true {
+                    Text("Wartung").font(.caption2).foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 1) {
@@ -41,12 +48,12 @@ struct EventsView: View {
     let hostID: String?
     @Environment(AppModel.self) private var model
     @State private var events: [PWEvent] = []
-    @State private var types: Set<String> = ["outage", "loss", "spike", "offline"]
+    @State private var types: Set<String> = ["outage", "loss", "spike", "offline", "device", "port"]
     @State private var days = 7
     @State private var host: String = ""
     @State private var loaded = false
 
-    private let allTypes = [("outage", "Ausfälle"), ("loss", "Verlust"), ("spike", "Spitzen"), ("offline", "Offline")]
+    private let allTypes = [("outage", "Ausfälle"), ("loss", "Verlust"), ("spike", "Spitzen"), ("offline", "Offline"), ("device", "UniFi"), ("port", "Ports")]
 
     var body: some View {
         List {
@@ -83,10 +90,18 @@ struct EventsView: View {
                     Text("Keine Ereignisse im gewählten Zeitraum 👍").foregroundStyle(.secondary)
                 }
                 ForEach(events) { e in
-                    if e.host.isEmpty {
-                        EventRow(event: e)
-                    } else {
-                        NavigationLink(value: e.host) { EventRow(event: e) }
+                    Group {
+                        if e.host.isEmpty {
+                            EventRow(event: e)
+                        } else {
+                            NavigationLink(value: e.host) { EventRow(event: e) }
+                        }
+                    }
+                    .swipeActions(edge: .leading) {
+                        if e.canAck {
+                            Button { Task { await ack(e) } } label: { Label("Quittieren", systemImage: "checkmark.circle") }
+                                .tint(PW.ok)
+                        }
                     }
                 }
             }
@@ -94,6 +109,13 @@ struct EventsView: View {
         .navigationTitle("Ereignisse")
         .task(id: "\(types.sorted())\(days)\(host)") { await load() }
         .refreshable { await load() }
+    }
+
+    private func ack(_ e: PWEvent) async {
+        guard let api = model.api else { return }
+        try? await api.ack(event: e.id)
+        await load()
+        await model.refresh()
     }
 
     private func load() async {

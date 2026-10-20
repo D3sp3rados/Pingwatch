@@ -61,7 +61,7 @@ Dashboard in Safari öffnen → Teilen → **Zum Home-Bildschirm**. Danach start
 
 ## Kunden, Benutzer & Abo
 
-- **Betreiber** (RST): Anmeldung mit leerer E-Mail + `ADMIN_PASSWORD`. Reiter **Kunden**: Kunden anlegen, Paket/Standorte setzen, sperren, löschen, per „Öffnen“ in den Kunden wechseln. Die bisherigen Hosts gehören zur Organisation „RST-Datentechnik“ (Paket Intern, unbegrenzt).
+- **Betreiber** (RST): Anmeldung mit E-Mail `admin` + `ADMIN_PASSWORD` (oder als Betreiber-Benutzer mit eigener E-Mail). Reiter **Kunden**: Kunden anlegen, Paket/Standorte setzen, sperren, löschen, per „Öffnen“ in den Kunden wechseln. Die bisherigen Hosts gehören zur Organisation „RST-Datentechnik“ (Paket Intern, unbegrenzt).
 - **Kunden** melden sich mit E-Mail + Passwort an und sehen nur ihre eigenen Hosts, Standorte, Ereignisse und iPhones. Rollen: Inhaber (inkl. Abo), Admin, Nur lesen.
 - **Pakete** (pro Standort/Monat netto): Free 0 € (1 Standort, 5 Hosts, 7 Tage), Basis 4,90 € (25 Hosts, 90 Tage), Pro 9,90 € (100 Hosts, 1 Jahr, Bericht, Traceroute, Statusseite), Partner 3,90 € (ab 10 Standorten).
 
@@ -103,6 +103,10 @@ Hinweis rstcloud: ausgehende Verbindungen auf 25/465/587 sind dort gesperrt – 
 - **Netzwerk-Scan & UniFi-Import:** in der Standort-Karte; der Agent durchsucht sein Netz bzw. fragt die UniFi-Konsole (Integration-API, API-Schlüssel) ab.
 - **Öffentliche Statusseite:** `https://<app>/status/<name>` mit 90-Tage-Verlauf und Vorfällen (ohne IP-Adressen).
 - **Abrechnung:** Reiter Kunden → „Abrechnung (CSV)“ für das eigene Rechnungsprogramm.
+- **SNMP (Switch/Router):** Methode „SNMP“ (v2c, Community). Schnittstellen mit Traffic, Fehlern und Status, Verlauf 24 h / 7 / 30 Tage; Haken „Alarm“ meldet, wenn ein Port auf „down“ geht.
+- **UniFi-Livestatus:** in der Standort-Karte „UniFi-Livestatus“ – der Agent fragt die Konsole jede Minute ab und meldet Geräte, die offline gehen.
+- **Quittieren & Eskalation:** laufende Ausfälle „quittieren“ (Web, iPhone: in der Ereignisliste nach rechts wischen). Alarmwege mit „Eskalation nach X Minuten“ bekommen nur Ausfälle, die bis dahin niemand quittiert hat.
+- **Betreiber-Benutzer & Testzugänge:** im Team der Betreiber-Organisation „Zum Betreiber“; bei Kunden „Testzugang bis“.
 
 Die neuen Funktionen am Standort brauchen den Agenten ab Version 1.1.0 – einfach die neue `pingwatch-agent.exe` über die alte kopieren.
 

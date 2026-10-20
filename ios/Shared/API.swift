@@ -62,10 +62,17 @@ struct PWEvent: Decodable, Identifiable, Hashable {
     let count: Int
     let max: Int
     let sum: Int64
+    var ackBy: String?
+    var ackAt: Int64?
+    var cause: String?
+    var maint: Bool?
+
+    var isAcked: Bool { (ackAt ?? 0) > 0 }
+    var canAck: Bool { end == 0 && !isAcked && (type == "outage" || type == "offline" || type == "device" || type == "port") }
 
     var startDate: Date { Date(ms: start) }
     var endDate: Date? { end > 0 ? Date(ms: end) : nil }
-    var isOngoing: Bool { end == 0 && (type == "outage" || type == "offline") }
+    var isOngoing: Bool { end == 0 && (type == "outage" || type == "offline" || type == "device" || type == "port") }
 
     var typeName: String {
         switch type {
@@ -73,6 +80,8 @@ struct PWEvent: Decodable, Identifiable, Hashable {
         case "loss": return "Paketverlust"
         case "spike": return "Latenzspitze"
         case "offline": return "Standort offline"
+        case "device": return "UniFi-Gerät"
+        case "port": return "Port down"
         default: return type
         }
     }
@@ -85,6 +94,8 @@ struct PWEvent: Decodable, Identifiable, Hashable {
             let avg = count > 0 ? Int(sum) / count : 0
             return "\(count) \(count == 1 ? "Spitze" : "Spitzen") · max \(fmtMs(max)) · Ø \(fmtMs(avg))"
         case "offline": return "Agent hat sich nicht gemeldet"
+        case "device": return "offline in der UniFi-Konsole"
+        case "port": return "Schnittstelle down"
         default: return ""
         }
     }
@@ -290,6 +301,12 @@ struct API {
         if let from { q["from"] = "\(from.ms)" }
         if let to { q["to"] = "\(to.ms)" }
         return try await get("api/events", q)
+    }
+
+    /// Ereignis quittieren („ich kümmere mich“) – stoppt die Eskalation.
+    func ack(event id: Int64, note: String = "") async throws {
+        struct Body: Encodable { let id: Int64; let note: String }
+        _ = try await request("api/events/ack", method: "POST", body: try JSONEncoder().encode(Body(id: id, note: note)))
     }
 
     func stats(host: String, days: Int) async throws -> StatsResponse {
