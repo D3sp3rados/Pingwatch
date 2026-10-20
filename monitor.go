@@ -29,7 +29,7 @@ type HostCfg struct {
 	OutageCount int    `json:"outageCount"`
 	Paused      bool   `json:"paused"`
 	Org         string `json:"org,omitempty"`
-	Parent      string `json:"parent,omitempty"` // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
+	Parent      string `json:"parent,omitempty"`    // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
 	Expect      string `json:"expect,omitempty"`    // http: Statuscode oder Text; dns: erwartete Adresse
 	DNSServer   string `json:"dnsServer,omitempty"` // dns: abzufragender Server (leer = System)
 }
