@@ -34,6 +34,7 @@ type HostCfg struct {
 	DNSServer   string `json:"dnsServer,omitempty"` // dns: abzufragender Server (leer = System)
 	Community   string `json:"community,omitempty"` // snmp: Community (v2c)
 	Watch       string `json:"watch,omitempty"`     // snmp: überwachte Ports (ifIndex, Komma-getrennt)
+	Group       string `json:"group,omitempty"`     // Gruppe/Ordner (z. B. Endkunde)
 }
 
 type SiteCfg struct {
@@ -54,6 +55,7 @@ type Config struct {
 	Users         []User    `json:"users"`
 	Channels      []Channel `json:"channels"`
 	Maints        []Maint   `json:"maints"`
+	Groups        []Group   `json:"groups"`
 	Secret        string    `json:"secret"`
 	Version       int64     `json:"version"`
 }

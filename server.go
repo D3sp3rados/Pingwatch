@@ -234,6 +234,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
+	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
@@ -451,6 +452,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
 		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "devices": devs,
+		"groups": m.groupsOf(p.Org),
 	}
 	for k, v := range s.accountInfo(r) {
 		out[k] = v
@@ -770,6 +772,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Webseiten-, DNS- und SNMP-Prüfungen gibt es im Paket Pro", 402)
 				return
 			}
+		}
+		if !s.m.groupOK(p.Org, hc.Group) {
+			hc.Group = ""
 		}
 		if err := s.m.validParent(p.Org, hc.ID, hc.Parent); err != nil {
 			http.Error(w, err.Error(), 400)

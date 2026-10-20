@@ -16,6 +16,40 @@ struct OverviewView: View {
                     ContentUnavailableView("Noch keine Hosts", systemImage: "network",
                                            description: Text("Hosts legst du im Dashboard unter Einstellungen an."))
                 }
+                let groups = st.groups ?? []
+                if !groups.isEmpty {
+                    ForEach(groups) { g in
+                        let hosts = st.hosts.filter { $0.group == g.id }
+                        if !hosts.isEmpty {
+                            Section {
+                                ForEach(hosts) { h in
+                                    NavigationLink(value: h.id) {
+                                        HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
+                                    }
+                                }
+                            } header: {
+                                Label(g.name, systemImage: "folder")
+                            }
+                        }
+                    }
+                    let rest = st.hosts.filter { h in !groups.contains { $0.id == h.group } }
+                    if !rest.isEmpty {
+                        Section("Ohne Gruppe") {
+                            ForEach(rest) { h in
+                                NavigationLink(value: h.id) {
+                                    HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
+                                }
+                            }
+                        }
+                    }
+                    ForEach(st.sites.filter { $0.unifi?.on == true }) { site in
+                        Section {
+                            if let u = site.unifi { UniFiSection(summary: u, siteName: site.name) }
+                        } header: {
+                            SiteHeader(site: site)
+                        }
+                    }
+                } else {
                 ForEach(st.sites) { site in
                     let hosts = st.hosts.filter { $0.site == site.id }
                     if !hosts.isEmpty || site.unifi?.on == true {
@@ -32,6 +66,7 @@ struct OverviewView: View {
                             SiteHeader(site: site)
                         }
                     }
+                }
                 }
             } else if model.lastError == nil {
                 HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)

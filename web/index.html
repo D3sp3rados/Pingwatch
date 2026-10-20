@@ -215,7 +215,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </div></header>
 
 <main>
-<section id="v-overview"><div id="ov"></div></section>
+<section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div></div><div id="ov"></div></section>
 
 <section id="v-host">
   <div class="det-h">
@@ -300,6 +300,9 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <section id="v-settings">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
+
+  <h2>Gruppen <button class="btn sm pri ed" id="add-group">+ Gruppe</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="grp-tbl"></table></div>
 
   <h2>Standorte (Agenten) <button class="btn sm pri ed" id="add-site">+ Standort hinzufügen</button></h2>
   <div class="sites" id="sites"></div>
@@ -523,6 +526,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Name<input name="name" placeholder="z. B. Antenne Dogern" maxlength="60"></label>
       <label class="field"><span id="hf-addrl">IP-Adresse oder Hostname</span><input name="addr" required placeholder="192.168.1.1 oder 8.8.8.8"></label>
       <label class="field">Pingt von<select name="site" id="hf-site"></select><small id="hf-sitehint"></small></label>
+      <label class="field">Gruppe / Kunde<select name="group" id="hf-group"></select><small>Ordner in der Übersicht, z. B. „Oli Pfeiffer“ für Antenne und Firewall.</small></label>
       <label class="field">Hängt ab von<select name="parent" id="hf-parent"></select><small>Fällt dieser Host aus, gibt es für diesen keinen Alarm.</small></label>
       <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option><option value="http">Webseite (HTTP/HTTPS) · Pro</option><option value="dns">DNS-Auflösung · Pro</option><option value="snmp">SNMP – Switch/Router · Pro</option></select></label>
       <label class="field" id="hf-commf">SNMP-Community (v2c)<input name="community" placeholder="public" autocomplete="off"><small>Am Gerät SNMP v2c aktivieren. Schnittstellen werden jede Minute abgefragt.</small></label>
@@ -604,30 +608,42 @@ function renderOverview(){
   const st=S.state; if(!st) return;
   const root=$('#ov');
   if(!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
-  // Gruppen nach Standort
-  const groups=[]; for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id); if(hs.length||(s.unifi&&s.unifi.on)) groups.push([s,hs]); }
-  const sig=groups.map(([s,hs])=>s.id+':'+hs.map(h=>h.id).join(',')+(s.unifi&&s.unifi.on?':u':'')).join('|');
+  // Abschnitte: nach Gruppe (Ordner) oder nach Standort
+  const gs=st.groups||[]; const mode=ovMode();
+  $('#ovbar').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  const secs=[];
+  if(mode==='group'){
+    for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id); if(hs.length) secs.push({key:'g'+g.id,kind:'group',group:g,hosts:hs}); }
+    const rest=st.hosts.filter(h=>!h.group||!gs.some(g=>g.id===h.group)); if(rest.length) secs.push({key:'g-',kind:'group',group:{name:'Ohne Gruppe'},hosts:rest});
+    for(const s of st.sites) if(s.unifi&&s.unifi.on) secs.push({key:'u'+s.id,kind:'site',site:s,hosts:[]});
+  } else {
+    for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id); if(hs.length||(s.unifi&&s.unifi.on)) secs.push({key:'s'+s.id,kind:'site',site:s,hosts:hs}); }
+  }
+  const sig=mode+'|'+secs.map(x=>x.key+':'+x.hosts.map(h=>h.id).join(',')+(x.site&&x.site.unifi&&x.site.unifi.on?':u':'')).join('|');
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
-    for(const [s,hs] of groups){
-      const h=document.createElement('div'); h.className='site-h'; h.dataset.site=s.id; root.appendChild(h);
+    for(const sec of secs){
+      const h=document.createElement('div'); h.className='site-h'; h.dataset.sec=sec.key; root.appendChild(h);
       const g=document.createElement('div'); g.className='grid'; root.appendChild(g);
-      if(s.unifi&&s.unifi.on){ const u=document.createElement('div'); u.className='panel uf'; u.dataset.site=s.id; root.appendChild(u); }
-      for(const host of hs){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div>`;
+      if(sec.site&&sec.site.unifi&&sec.site.unifi.on){ const u=document.createElement('div'); u.className='panel uf'; u.dataset.site=sec.site.id; root.appendChild(u); }
+      for(const host of sec.hosts){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div>`;
         c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
         const bar=c.querySelector('.bar'); bar.addEventListener('mousemove',e=>barHover(e,host.id)); bar.addEventListener('mouseleave',hideTip); bar.addEventListener('click',e=>barClick(e,host.id));
         g.appendChild(c); cards[host.id]=c; }
     }
   }
-  for(const [s] of groups){ const h=root.querySelector(`.site-h[data-site="${s.id}"]`); if(!h) continue;
-    const on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
-  for(const [s] of groups){ const u=root.querySelector(`.uf[data-site="${s.id}"]`); if(u) renderUniFi(u,s); }
+  for(const sec of secs){ const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
+    if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
+    else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
+      h.innerHTML=`<span class="dot" style="background:var(${dn?'--bad':wn?'--warn':ok<act.length?'--off':'--ok'})"></span>📁 ${esc(sec.group.name)} <span class="muted">${ok}/${act.length} OK${dn?` · <b style="color:var(--bad)">${dn} ohne Antwort</b>`:''}${sec.group.note?' · '+esc(sec.group.note):''}</span>`; }
+  }
+  for(const sec of secs){ if(!sec.site) continue; const u=root.querySelector(`.uf[data-site="${sec.site.id}"]`); if(u) renderUniFi(u,sec.site); }
   for(const h of st.hosts){ const c=cards[h.id]; if(!c) continue;
     const [lbl,col]=STATUS[h.status]||STATUS.unknown;
     c.classList.toggle('down',h.status==='down');
     c.querySelector('.dot').style.background=`var(${col})`;
     c.querySelector('.card-t b').textContent=h.name;
-    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'');
+    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+(ovMode()==='group'?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
     const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
     const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
@@ -845,7 +861,7 @@ function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return
 function renderSettings(){
   const st=S.state; if(!st) return;
   const hs=st.hosts;
-  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:!h.paused})}); refreshState(); });
   const sites=st.sites.filter(s=>s.id!=='cloud');
@@ -871,16 +887,20 @@ function renderSettings(){
   $('#g-retrow').style.display=sup?'flex':'none';
   $('#g-pw').style.display=sup&&st.envPassword?'none':'flex';
   if(st.org) $('#team-sub').textContent=st.org.name;
-  loadUsers(); loadAlerts(); loadMaint(); loadStatusPage();
+  loadUsers(); loadAlerts(); loadMaint(); loadStatusPage(); renderGroups();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
   if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||''}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||''}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+/* Übersicht: Gruppen oder Standorte */
+function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
+$$('#ovmode button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_ovmode',b.dataset.m); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); });
 
 /* UniFi in der Übersicht */
 const UF={open:{}}; try{ UF.open=JSON.parse(localStorage.getItem('pw_ufopen')||'{}'); }catch(e){}
@@ -1244,6 +1264,20 @@ $('#r-go').onclick=async()=>{
   try{ const r=await api('/api/reset',{method:'POST',body:JSON.stringify(body)}); toast(ev?`Gelöscht – ${r.events} Ereignisse entfernt`:'Messwerte gelöscht'); refreshOverview(); refreshState(); }catch(e){ alert(e.message); }
 };
 
+/* Gruppen */
+function fillGroupSelect(v){ const gs=S.state.groups||[]; $('#hf-group').innerHTML='<option value="">– keine –</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')+'<option value="__new">+ Neue Gruppe …</option>'; $('#hf-group').value=gs.some(g=>g.id===v)?v:''; }
+async function newGroup(){ const n=prompt('Name der Gruppe (z. B. Kundenname):'); if(!n||!n.trim()) return null; try{ const g=await api('/api/groups',{method:'POST',body:JSON.stringify({name:n.trim()})}); await refreshState(); return g; }catch(e){ alert(e.message); return null; } }
+$('#hf-group').onchange=async()=>{ if($('#hf-group').value!=='__new') return; const g=await newGroup(); fillGroupSelect(g?g.id:''); };
+function renderGroups(){ const gs=S.state.groups||[]; const cnt=id=>S.state.hosts.filter(h=>h.group===id).length;
+  const sig=JSON.stringify(gs)+S.state.hosts.map(h=>h.group).join(); if($('#grp-tbl').dataset.sig===sig) return; $('#grp-tbl').dataset.sig=sig;
+  $('#grp-tbl').innerHTML=gs.length?'<tr><th>Gruppe</th><th>Hosts</th><th class="hide-m">Notiz</th><th></th></tr>'+gs.map(g=>`<tr><td><b>📁 ${esc(g.name)}</b></td><td class="num">${cnt(g.id)}</td><td class="hide-m muted">${esc(g.note||'')}</td><td class="act"><button class="btn sm ed" data-gren="${g.id}">Umbenennen</button> <button class="btn sm ed" data-gnote="${g.id}">Notiz</button> <button class="btn sm danger ed" data-gdel="${g.id}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Gruppen. Fasse z. B. alle Hosts eines Kunden in einer Gruppe zusammen.</td></tr>';
+  const G=id=>gs.find(g=>g.id===id);
+  $$('#grp-tbl [data-gren]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gren); const n=prompt('Neuer Name:',g.name); if(!n) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,name:n})}); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#grp-tbl [data-gnote]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gnote); const n=prompt('Notiz (z. B. Ansprechpartner, Telefon):',g.note||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,note:n})}); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); if(!confirm(`Gruppe „${g.name}“ löschen? Die Hosts bleiben erhalten (ohne Gruppe).`)) return; await api('/api/groups?id='+g.id,{method:'DELETE'}); refreshState(); });
+}
+$('#add-group').onclick=async()=>{ if(await newGroup()) toast('Gruppe angelegt – jetzt Hosts zuordnen (Bearbeiten → Gruppe)'); };
+
 /* Host-Dialog */
 const dlg=$('#dlg-host'), hf=$('#host-form');
 function openHost(id){
@@ -1251,6 +1285,7 @@ function openHost(id){
   $('#hf-title').textContent=h?'Host bearbeiten':'Host hinzufügen'; $('#hf-del').style.display=h?'':'none'; $('#hf-err').textContent='';
   $('#hf-site').innerHTML=S.state.sites.map(s=>`<option value="${s.id}">${s.id==='cloud'?'Cloud (öffentliche IPs)':esc(s.name)+' (Agent)'}</option>`).join('');
   $('#hf-parent').innerHTML='<option value="">– nichts –</option>'+S.state.hosts.filter(x=>!h||x.id!==h.id).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  fillGroupSelect(h?h.group||'':(S.newHostGroup||''));
   hf.dataset.id=h?h.id:'';
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
@@ -1267,7 +1302,7 @@ function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=
   $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)'; }
 hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
-  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
+  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,group:hf.group.value==='__new'?'':hf.group.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
 $('#add-host').onclick=()=>openHost();

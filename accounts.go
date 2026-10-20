@@ -506,6 +506,13 @@ func (s *Server) deleteOrg(id string) {
 		}
 	}
 	m.cfg.Devices = keepD
+	keepG := m.cfg.Groups[:0]
+	for _, g := range m.cfg.Groups {
+		if g.Org != id {
+			keepG = append(keepG, g)
+		}
+	}
+	m.cfg.Groups = keepG
 	keepC := m.cfg.Channels[:0]
 	for _, c := range m.cfg.Channels {
 		if c.Org != id {

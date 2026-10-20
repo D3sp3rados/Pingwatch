@@ -134,6 +134,7 @@ struct HostView: Decodable, Identifiable, Hashable {
     let spark: [Int]
     let ongoing: [PWEvent]?
     let lastOutage: PWEvent?
+    var group: String?
 
     var statusText: String {
         switch status {
@@ -217,10 +218,17 @@ struct UniFiSummary: Decodable, Hashable {
     var devices: [UniFiDevice]?
 }
 
+struct PWGroup: Decodable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    var note: String?
+}
+
 struct StateResponse: Decodable {
     let now: Int64
     let hosts: [HostView]
     let sites: [SiteView]
+    var groups: [PWGroup]?
     let version: String
     let push: Bool?
 }
