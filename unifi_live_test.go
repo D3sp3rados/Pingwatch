@@ -126,7 +126,7 @@ func TestUniFiRebootWANAndView(t *testing.T) {
 
 func TestParseWANs(t *testing.T) {
 	g := map[string]any{"wan1": map[string]any{"up": true, "ip": "1.2.3.4"}, "wan2": map[string]any{"up": false, "ip": ""},
-		"uptime_stats": map[string]any{"WAN": map[string]any{"latency_average": 11.5, "availability": 99.9}}, "active_wan": "wan1"}
+		"uptime_stats": map[string]any{"WAN": map[string]any{"latency_average": 11.5, "availability": 99.9}, "WAN2": map[string]any{"availability": 80.0}}, "active_wan": "wan1"}
 	w := parseWANs(g)
 	if len(w) != 2 || !w[0].Up || w[0].Latency != 11.5 || !w[0].Active || w[1].Up || w[1].Name != "WAN2" {
 		t.Fatalf("%+v", w)
