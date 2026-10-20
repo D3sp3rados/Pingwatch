@@ -235,6 +235,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
+	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))

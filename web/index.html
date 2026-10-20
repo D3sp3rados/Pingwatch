@@ -215,7 +215,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </div></header>
 
 <main>
-<section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div></div><div id="ov"></div></section>
+<section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></section>
 
 <section id="v-host">
   <div class="det-h">
@@ -424,6 +424,20 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-group">
+  <form method="dialog" id="gr-form">
+    <div class="dlg-h" id="gf-title">Gruppe anlegen</div>
+    <div class="dlg-b" style="display:block">
+      <label class="field">Name (z. B. Kunde)<input name="name" maxlength="80" required placeholder="Oli Pfeiffer"></label>
+      <label class="field">Notiz (optional)<input name="note" maxlength="200" placeholder="Ansprechpartner, Telefon …"></label>
+      <div style="margin-top:10px"><b style="font-size:13px">Diese Hosts gehören dazu</b> <input type="search" id="gf-q" placeholder="filtern …" style="float:right;font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--fg)">
+        <div id="gf-hosts" style="margin-top:8px;max-height:45vh;overflow:auto;display:grid;gap:4px"></div></div>
+    </div>
+    <div class="dlg-err" id="gf-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-import">
   <form method="dialog" id="im-form">
     <div class="dlg-h" id="im-title">Netzwerk scannen</div>
@@ -612,7 +626,7 @@ function renderOverview(){
   if(!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
   // Abschnitte: nach Gruppe (Ordner) oder nach Standort
   const gs=st.groups||[]; const mode=ovMode();
-  $('#ovbar').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  $('#ovbar').style.display=st.hosts.length>1?'flex':'none'; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
   const secs=[];
   if(mode==='group'){
     for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id); if(hs.length) secs.push({key:'g'+g.id,kind:'group',group:g,hosts:hs}); }
@@ -1274,14 +1288,29 @@ async function newGroup(){ const n=prompt('Name der Gruppe (z. B. Kundenname):')
 $('#hf-group').onchange=async()=>{ if($('#hf-group').value!=='__new') return; const g=await newGroup(); fillGroupSelect(g?g.id:''); };
 function renderGroups(){ const gs=S.state.groups||[]; const cnt=id=>S.state.hosts.filter(h=>h.group===id).length;
   const sig=JSON.stringify(gs)+S.state.hosts.map(h=>h.group).join(); if($('#grp-tbl').dataset.sig===sig) return; $('#grp-tbl').dataset.sig=sig;
-  $('#grp-tbl').innerHTML=gs.length?'<tr><th>Gruppe</th><th>Hosts</th><th class="hide-m">Notiz</th><th></th></tr>'+gs.map(g=>`<tr><td><b>📁 ${esc(g.name)}</b></td><td class="num">${cnt(g.id)}</td><td class="hide-m muted">${esc(g.note||'')}${g.reportTo?`<br><span class="tag">Bericht an ${esc(g.reportTo)}</span>`:''}</td><td class="act"><button class="btn sm ed" data-grep="${g.id}">Monatsbericht</button> <button class="btn sm ed" data-gren="${g.id}">Umbenennen</button> <button class="btn sm ed" data-gnote="${g.id}">Notiz</button> <button class="btn sm danger ed" data-gdel="${g.id}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Gruppen. Fasse z. B. alle Hosts eines Kunden in einer Gruppe zusammen.</td></tr>';
+  $('#grp-tbl').innerHTML=gs.length?'<tr><th>Gruppe</th><th>Hosts</th><th class="hide-m">Notiz</th><th></th></tr>'+gs.map(g=>`<tr><td><b>📁 ${esc(g.name)}</b></td><td class="num">${cnt(g.id)}</td><td class="hide-m muted">${esc(g.note||'')}${g.reportTo?`<br><span class="tag">Bericht an ${esc(g.reportTo)}</span>`:''}</td><td class="act"><button class="btn sm ed" data-gmem="${g.id}">Hosts</button> <button class="btn sm ed" data-grep="${g.id}">Monatsbericht</button> <button class="btn sm ed" data-gren="${g.id}">Umbenennen</button> <button class="btn sm ed" data-gnote="${g.id}">Notiz</button> <button class="btn sm danger ed" data-gdel="${g.id}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Gruppen. Fasse z. B. alle Hosts eines Kunden in einer Gruppe zusammen.</td></tr>';
   const G=id=>gs.find(g=>g.id===id);
   $$('#grp-tbl [data-gren]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gren); const n=prompt('Neuer Name:',g.name); if(!n) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,name:n})}); refreshState(); }catch(e){ alert(e.message); } });
   $$('#grp-tbl [data-gnote]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gnote); const n=prompt('Notiz (z. B. Ansprechpartner, Telefon):',g.note||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,note:n})}); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#grp-tbl [data-gmem]').forEach(b=>b.onclick=()=>openGroup(b.dataset.gmem));
   $$('#grp-tbl [data-grep]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.grep); const n=prompt(`Monatsbericht nur für „${g.name}“ am 1. jedes Monats per E-Mail an (mehrere mit Komma, leer = aus):`,g.reportTo||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,reportTo:n})}); toast(n.trim()?'Gruppen-Bericht eingerichtet':'Gruppen-Bericht aus'); refreshState(); }catch(e){ alert(e.message); } });
   $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); if(!confirm(`Gruppe „${g.name}“ löschen? Die Hosts bleiben erhalten (ohne Gruppe).`)) return; await api('/api/groups?id='+g.id,{method:'DELETE'}); refreshState(); });
 }
-$('#add-group').onclick=async()=>{ if(await newGroup()) toast('Gruppe angelegt – jetzt Hosts zuordnen (Bearbeiten → Gruppe)'); };
+const gdlg=$('#dlg-group'), gf=$('#gr-form');
+function openGroup(id){ const st=S.state, g=id&&(st.groups||[]).find(x=>x.id===id);
+  $('#gf-title').textContent=g?'Gruppe „'+g.name+'“ bearbeiten':'Gruppe anlegen'; $('#gf-err').textContent=''; gf.dataset.id=g?g.id:'';
+  gf.name.value=g?g.name:''; gf.note.value=g?g.note||'':''; $('#gf-q').value='';
+  const gn=gid=>((st.groups||[]).find(x=>x.id===gid)||{}).name;
+  $('#gf-hosts').innerHTML=st.hosts.map(h=>`<label class="check" data-n="${esc((h.name+' '+h.addr).toLowerCase())}"><input type="checkbox" value="${h.id}"${g&&h.group===g.id?' checked':''}> <b>${esc(h.name)}</b> <span class="muted" style="font-size:12px">${esc(h.addr)} · ${esc(siteName(h.site))}${h.group&&(!g||h.group!==g.id)&&gn(h.group)?' · jetzt in „'+esc(gn(h.group))+'“':''}</span></label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
+  gdlg.showModal(); setTimeout(()=>gf.name.focus(),50); }
+$('#gf-q').oninput=()=>{ const q=$('#gf-q').value.toLowerCase(); $$('#gf-hosts label').forEach(l=>l.style.display=!q||l.dataset.n.includes(q)?'':'none'); };
+gf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const old=(S.state.groups||[]).find(x=>x.id===gf.dataset.id)||{};
+  try{ const g=await api('/api/groups',{method:'POST',body:JSON.stringify({...old,id:gf.dataset.id,name:gf.name.value.trim(),note:gf.note.value.trim()})});
+    const r=await api('/api/groups/members',{method:'POST',body:JSON.stringify({group:g.id,hosts:$$('#gf-hosts input:checked').map(i=>i.value)})});
+    gdlg.close(); toast(`Gruppe „${g.name}“ gespeichert`); $('#ov').dataset.sig=''; await refreshState(); }catch(err){ $('#gf-err').textContent=err.message; } });
+$('#add-group').onclick=()=>openGroup();
+$('#ov-group').onclick=()=>openGroup();
 
 /* Host-Dialog */
 const dlg=$('#dlg-host'), hf=$('#host-form');

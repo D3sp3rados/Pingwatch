@@ -178,3 +178,41 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Methode nicht erlaubt", 405)
 	}
 }
+
+// POST /api/groups/members {group, hosts:[…]} – legt fest, welche Hosts in der Gruppe sind.
+func (s *Server) handleGroupMembers(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Group string   `json:"group"`
+		Hosts []string `json:"hosts"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	p := principal(r)
+	if s.m.groupByID(p.Org, req.Group) == nil {
+		http.Error(w, "Gruppe unbekannt", 404)
+		return
+	}
+	want := map[string]bool{}
+	for _, id := range req.Hosts {
+		want[id] = true
+	}
+	var changed []HostCfg
+	for _, h := range s.m.hostsOf(p.Org) {
+		h.mu.Lock()
+		cfg := h.cfg
+		h.mu.Unlock()
+		switch {
+		case want[cfg.ID] && cfg.Group != req.Group:
+			cfg.Group = req.Group
+			changed = append(changed, cfg)
+		case !want[cfg.ID] && cfg.Group == req.Group:
+			cfg.Group = ""
+			changed = append(changed, cfg)
+		}
+	}
+	for _, hc := range changed {
+		s.m.UpsertHost(hc)
+	}
+	writeJSON(w, map[string]any{"ok": true, "changed": len(changed)})
+}
