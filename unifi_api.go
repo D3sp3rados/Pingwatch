@@ -268,9 +268,13 @@ func parseWANs(g map[string]any) []unifiWAN {
 			name = "WAN" + k[3:]
 		}
 		x := unifiWAN{Name: name, Up: up, IP: ip}
-		if s, ok := stats[strings.ToUpper(strings.Replace(name, "WAN1", "WAN", 1))].(map[string]any); ok {
+		s, hasStats := stats[strings.ToUpper(strings.Replace(name, "WAN1", "WAN", 1))].(map[string]any)
+		if hasStats {
 			x.Latency = fnum(s["latency_average"])
 			x.Avail = fnum(s["availability"])
+		}
+		if !up && ip == "" && !hasStats {
+			continue // Anschluss nicht eingerichtet
 		}
 		if en, ok := w["enable"].(bool); ok && !en {
 			continue // nicht konfigurierte Leitung
@@ -306,13 +310,19 @@ func unifiCategory(d unifiDevice) string {
 	if isGateway(d) {
 		return "gateway"
 	}
-	for _, f := range d.Features {
-		switch strings.ToLower(f) {
-		case "accesspoint":
-			return "ap"
-		case "switching":
-			return "switch"
+	has := func(x string) bool {
+		for _, f := range d.Features {
+			if strings.EqualFold(f, x) {
+				return true
+			}
 		}
+		return false
+	}
+	if has("accessPoint") { // APs mit LAN-Ports melden zusätzlich „switching“
+		return "ap"
+	}
+	if has("switching") {
+		return "switch"
 	}
 	m := strings.ToUpper(d.Model)
 	switch {

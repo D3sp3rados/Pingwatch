@@ -132,3 +132,13 @@ func TestParseWANs(t *testing.T) {
 		t.Fatalf("%+v", w)
 	}
 }
+
+func TestUniFiCategoryAndUnusedWAN(t *testing.T) {
+	if c := unifiCategory(unifiDevice{Model: "UAP-AC-M-Pro", Features: []string{"switching", "accessPoint"}}); c != "ap" {
+		t.Fatal(c)
+	}
+	w := parseWANs(map[string]any{"wan1": map[string]any{"up": true, "ip": "1.2.3.4"}, "wan3": map[string]any{"up": false}})
+	if len(w) != 1 {
+		t.Fatalf("%+v", w)
+	}
+}
