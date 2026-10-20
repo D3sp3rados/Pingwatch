@@ -36,6 +36,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations: {}
         UIApplicationSupportsIndirectInputEvents: true
         UIBackgroundModes: [remote-notification]
         ITSAppUsesNonExemptEncryption: false
