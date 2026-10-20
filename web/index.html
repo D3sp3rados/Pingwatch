@@ -41,8 +41,20 @@ a{color:var(--acc)}
 .tabs a{padding:6px 12px;border-radius:7px;color:var(--mut);text-decoration:none;font-weight:500;white-space:nowrap}
 .tabs a.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
 main{max-width:1400px;margin:0 auto;padding:16px}
+body.viewer .ed{display:none!important}
+.orgsw{font-size:12.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);max-width:200px}
+.plans{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.plan{padding:14px;display:flex;flex-direction:column;gap:8px}
+.plan.cur{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.plan .pr{font-size:22px;font-weight:700}.plan .pr small{font-size:12.5px;font-weight:400;color:var(--mut)}
+.plan .tx{font-size:13px;color:var(--mut);flex:1}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}.meter i{display:block;height:100%;background:var(--acc)}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:14px}
+.kv b{display:block;font-size:18px}.kv span{font-size:12.5px;color:var(--mut)}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;border:1px solid var(--line);color:var(--mut)}
+.badge.warn{color:var(--warn);border-color:var(--warn)}.badge.bad{color:var(--bad);border-color:var(--bad)}.badge.ok{color:var(--ok);border-color:var(--ok)}
 section{display:none}section.on{display:block}
-h2{font-size:15px;margin:22px 0 10px;display:flex;align-items:center;gap:10px}
+h2{font-size:15px;margin:22px 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 h2:first-child{margin-top:4px}
 h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .muted{color:var(--mut)}
@@ -180,11 +192,14 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <header class="top"><div class="top-in">
   <div class="brand"><img src="/icon.svg" alt="">PingWatch</div>
   <div class="summary" id="summary"></div>
+  <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
   <nav class="tabs" id="tabs">
     <a href="#/" data-v="overview">Übersicht</a>
     <a href="#/events" data-v="events">Ereignisse</a>
     <a href="#/stats" data-v="stats">Statistik</a>
     <a href="#/settings" data-v="settings">Einstellungen</a>
+    <a href="#/billing" data-v="billing" id="tab-billing" style="display:none">Abo</a>
+    <a href="#/admin" data-v="admin" id="tab-admin" style="display:none">Kunden</a>
   </nav>
 </div></header>
 
@@ -256,10 +271,10 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <h2>Hosts <button class="btn sm pri" id="add-host">+ Host hinzufügen</button></h2>
+  <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
 
-  <h2>Standorte (Agenten) <button class="btn sm pri" id="add-site">+ Standort hinzufügen</button></h2>
+  <h2>Standorte (Agenten) <button class="btn sm pri ed" id="add-site">+ Standort hinzufügen</button></h2>
   <div class="sites" id="sites"></div>
   <div class="panel help" style="margin-top:12px">
     <b style="color:var(--fg)">So kommt ein Standort dazu (lokale IPs pingen)</b>
@@ -272,8 +287,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     Fällt das Internet am Standort aus, puffert der Agent die Messwerte und schickt sie nach. Für einen Raspberry Pi gibt es den Linux-Agent (<code>pingwatch-agent-linux-arm64 agent -config agent.json</code>).
   </div>
 
-  <h2>Daten zurücksetzen</h2>
-  <div class="panel">
+  <h2 class="ed">Daten zurücksetzen</h2>
+  <div class="panel ed">
     <div class="formrow">
       <label class="field">Host<select id="r-host"><option value="">Alle Hosts</option></select></label>
       <label class="field">Zeitraum<select id="r-range">
@@ -290,9 +305,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
   </div>
 
+  <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="users-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px">Rollen: <b>Inhaber</b> = alles inkl. Abo · <b>Admin</b> = Hosts, Standorte, Benutzer · <b>Nur lesen</b> = sieht alles, ändert nichts.</p>
+
   <h2>Allgemein</h2>
   <div class="panel">
-    <div class="formrow">
+    <div class="formrow" id="g-retrow">
       <label class="field">Messwerte aufbewahren (Tage)<input type="number" id="g-ret" min="7" max="730"></label>
       <button class="btn" id="g-save">Speichern</button>
     </div>
@@ -313,7 +332,44 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
 </section>
+
+<section id="v-billing">
+  <h2>Ihr Paket</h2>
+  <div class="panel kv" id="b-cur"></div>
+  <div class="panel help" id="b-msg" style="display:none;margin-top:12px"></div>
+  <h2>Pakete <span class="muted" style="font-weight:400;font-size:12.5px">Preise pro Standort und Monat, zzgl. MwSt., monatlich kündbar</span></h2>
+  <div class="formrow" style="padding:0 0 12px"><label class="field" style="max-width:220px">Anzahl Standorte<input type="number" id="b-sites" min="1" max="500" value="1"></label><span class="muted" id="b-sum" style="font-size:13px"></span></div>
+  <div class="plans" id="b-plans"></div>
+  <p class="muted" style="font-size:12.5px;margin-top:14px" id="b-legal"></p>
+</section>
+
+<section id="v-admin">
+  <div class="panel kv" id="a-kpi"></div>
+  <h2>Kunden <button class="btn sm pri" id="a-new">+ Kunde anlegen</button>
+    <input type="search" id="a-q" placeholder="Suchen …" style="margin-left:auto;width:200px;max-width:45%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="a-tbl"></table></div>
+</section>
 </main>
+
+<dialog id="dlg-org">
+  <form method="dialog" id="org-form">
+    <div class="dlg-h" id="of-title">Kunde anlegen</div>
+    <div class="dlg-b">
+      <label class="field">Firma<input name="name" required maxlength="80"></label>
+      <label class="field">Paket<select name="plan" id="of-plan"></select></label>
+      <label class="field">Standorte (gebucht)<input name="sites" type="number" min="0" max="500" value="1"></label>
+      <label class="field">Abrechnung<select name="billing"><option value="invoice">Rechnung (manuell)</option><option value="stripe">Stripe (online)</option><option value="free">Kostenlos</option></select></label>
+      <label class="field" id="of-ownerf">E-Mail des Inhabers (bekommt Zugang)<input name="ownerEmail" type="email" placeholder="kunde@firma.de"></label>
+      <label class="field" id="of-ownernf">Name des Inhabers<input name="ownerName" maxlength="60"></label>
+      <label class="check" id="of-disf"><input type="checkbox" name="disabled"> Zugang gesperrt</label>
+      <div class="err" id="of-err" style="color:var(--bad);font-size:13px"></div>
+    </div>
+    <div class="dlg-f">
+      <button class="btn danger" type="button" id="of-del" style="margin-right:auto">Löschen</button>
+      <button class="btn" value="cancel">Abbrechen</button><button class="btn pri" value="ok">Speichern</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="dlg-host">
   <form method="dialog" id="host-form">
@@ -622,32 +678,152 @@ function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return
 function renderSettings(){
   const st=S.state; if(!st) return;
   const hs=st.hosts;
-  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${h.method==='tcp'?'TCP '+h.port:'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${h.method==='tcp'?'TCP '+h.port:'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:!h.paused})}); refreshState(); });
   const sites=st.sites.filter(s=>s.id!=='cloud');
   $('#sites').innerHTML=sites.length? sites.map(s=>`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
     <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)}</dd>`:''}</dl>
-    <div class="row"><a class="btn sm pri" href="/download/agent.json?site=${s.id}">agent.json</a><a class="btn sm" href="/download/pingwatch-agent.exe">Windows-Agent</a><a class="btn sm" href="/download/pingwatch-agent-linux-arm64">Pi (ARM64)</a><a class="btn sm" href="/download/pingwatch-agent-linux-amd64">Linux x64</a></div>
-    <div class="row" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
+    <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a><a class="btn sm" href="/download/pingwatch-agent.exe">Windows-Agent</a><a class="btn sm" href="/download/pingwatch-agent-linux-arm64">Pi (ARM64)</a><a class="btn sm" href="/download/pingwatch-agent-linux-amd64">Linux x64</a></div>
+    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
   $$('#sites [data-ren]').forEach(b=>b.onclick=async()=>{ const n=prompt('Neuer Name:',siteName(b.dataset.ren)); if(!n) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.ren,name:n})}); refreshState(); });
   $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!confirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
   $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
   const devs=st.devices||[]; const yes=b=>b?'✔':'–';
-  $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein iPhone verbunden. In der PingWatch-App anmelden und Benachrichtigungen erlauben.</td></tr>';
+  $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger ed" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein iPhone verbunden. In der PingWatch-App anmelden und Benachrichtigungen erlauben.</td></tr>';
   $$('#dev-tbl [data-deldev]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gerät entfernen? Es bekommt dann keine Benachrichtigungen mehr.')) return; await api('/api/app/device?id='+encodeURIComponent(b.dataset.deldev),{method:'DELETE'}); refreshState(); });
   $('#push-info').innerHTML=st.push?'Push über Apple ist eingerichtet.':'<b style="color:var(--warn)">Push noch nicht eingerichtet</b> – in der rstcloud APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID und APNS_TOPIC setzen.';
   $('#push-test').style.display=st.push&&devs.length?'':'none';
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
-  $('#g-pw').style.display=st.envPassword?'none':'flex';
+  const sup=st.me&&st.me.super;
+  $('#g-retrow').style.display=sup?'flex':'none';
+  $('#g-pw').style.display=sup&&st.envPassword?'none':'flex';
+  if(st.org) $('#team-sub').textContent=st.org.name;
+  loadUsers();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
+  if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+/* Team */
+const ROLES={owner:'Inhaber',admin:'Admin',viewer:'Nur lesen'};
+let usersAt=0;
+async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-tbl').dataset.sig) return; usersAt=Date.now(); let us; try{ us=await api('/api/users'); }catch(e){ return; }
+  const st=S.state, me=st.me||{}, canEd=me.role!=='viewer', own=me.role==='owner'||me.super;
+  const sig=JSON.stringify(us)+me.role; if($('#users-tbl').dataset.sig===sig) return; $('#users-tbl').dataset.sig=sig;
+  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="badge">Sie</span>':''}</td><td>${esc(u.email)}</td>
+    <td>${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<select data-role="${u.id}">${Object.entries(ROLES).filter(([k])=>k!=='owner'||own).map(([k,v])=>`<option value="${k}"${k===u.role?' selected':''}>${v}</option>`).join('')}</select>`:ROLES[u.role]||u.role}</td>
+    <td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td>
+    <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
+  $$('#users-tbl [data-role]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:sel.dataset.role,role:sel.value})}); toast('Rolle geändert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+  $$('#users-tbl [data-rpw]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.rpw); if(!confirm(`Neues Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
+    try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,resetPassword:true})}); showTemp(u.email,r.tempPassword); }catch(e){ alert(e.message); } });
+  $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!confirm(`${u.email} entfernen?`)) return;
+    try{ await api('/api/users?id='+u.id,{method:'DELETE'}); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ alert(e.message); } });
+}
+function showTemp(email,pw){ prompt(`Zugang für ${email}\nAnmeldung: ${location.origin}/login\n\nVorläufiges Passwort (bitte jetzt kopieren und weitergeben – es wird nicht noch einmal angezeigt):`,pw); }
+$('#add-user').onclick=async()=>{ const email=prompt('E-Mail-Adresse des neuen Benutzers:'); if(!email) return; const name=prompt('Name (optional):')||'';
+  const role=confirm('Darf der Benutzer Hosts und Standorte ändern?\n\nOK = Admin · Abbrechen = Nur lesen')?'admin':'viewer';
+  try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({email,name,role})}); showTemp(email.trim().toLowerCase(),r.tempPassword); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ alert(e.message); } };
+
+/* Abo */
+const eur=c=>(c/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
+const STAT={active:['aktiv','ok'],trialing:['Test','ok'],past_due:['Zahlung offen','warn'],unpaid:['unbezahlt','bad'],canceled:['gekündigt','bad']};
+function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.org, me=st.me||{}, own=me.role==='owner'||me.super;
+  const q=new URLSearchParams((location.hash.split('?')[1])||'');
+  const lim=v=>v>0?v:'∞', bar=(u,l)=>l>0?`<div class="meter"><i style="width:${Math.min(100,u*100/l)}%"></i></div>`:'';
+  const [stx,scl]=STAT[o.status||'active']||[o.status,''];
+  $('#b-cur').innerHTML=`<div><span>Paket</span><b>${esc(o.planName)}</b> <span class="badge ${scl}">${stx}</span></div>
+    <div><span>Standorte</span><b>${o.usedSites} / ${lim(o.siteLimit)}</b>${bar(o.usedSites,o.siteLimit)}</div>
+    <div><span>Hosts</span><b>${o.usedHosts} / ${lim(o.hostLimit)}</b>${bar(o.usedHosts,o.hostLimit)}</div>
+    <div><span>Verlauf</span><b>${o.retention} Tage</b></div>
+    <div><span>Kleinstes Intervall</span><b>${(o.minInterval/1000).toLocaleString('de-DE')} s</b></div>
+    ${o.paidUntil?`<div><span>Bezahlt bis</span><b>${fmtDay(o.paidUntil)}</b></div>`:''}`;
+  let msg='';
+  if(q.get('ok')) msg='<b style="color:var(--ok)">Danke! Die Zahlung ist eingegangen.</b> Das Paket wird in wenigen Sekunden freigeschaltet.';
+  else if(o.plan==='internal') msg='Diese Organisation ist intern und ohne Begrenzung.';
+  else if(!st.billingEnabled) msg='Online-Zahlung ist noch nicht eingerichtet. Für ein Upgrade bitte '+(st.provider&&st.provider.email?`<a href="mailto:${esc(st.provider.email)}">${esc(st.provider.email)}</a>`:'den Anbieter')+' kontaktieren.';
+  else if(!own) msg='Nur der Inhaber kann das Abo ändern.';
+  else if(o.status==='past_due') msg='<b style="color:var(--warn)">Die letzte Zahlung ist fehlgeschlagen.</b> Bitte Zahlungsmethode im Kundenportal aktualisieren.';
+  $('#b-msg').innerHTML=msg+(own&&o.hasStripe&&st.billingEnabled?` <button class="btn sm" id="b-portal" style="margin-left:8px">Rechnungen &amp; Zahlungsmethode</button>`:'');
+  $('#b-msg').style.display=$('#b-msg').innerHTML.trim()?'':'none';
+  if($('#b-portal')) $('#b-portal').onclick=async()=>{ try{ const r=await api('/api/billing/portal',{method:'POST'}); location.href=r.url; }catch(e){ alert(e.message); } };
+  const si=$('#b-sites'); if(document.activeElement!==si&&!si.dataset.touched) si.value=Math.max(1,o.usedSites,o.plan!=='free'?o.sites:1);
+  const n=Math.max(1,+si.value||1), sub=o.hasStripe&&o.status!=='canceled';
+  $('#b-plans').innerHTML=(st.plans||[]).map(p=>{ const qty=Math.max(n,p.minSites||0), cur=p.id===o.plan;
+    const can=own&&st.billingEnabled&&p.priceCents>0&&o.plan!=='internal';
+    const lbl=cur?(sub&&qty!==o.sites?'Standorte ändern':'Aktuelles Paket'):(sub?'Wechseln':'Buchen');
+    return `<div class="panel plan${cur?' cur':''}"><div><b>${esc(p.name)}</b></div>
+      <div class="pr">${p.priceCents?eur(p.priceCents)+' <small>/ Standort</small>':'0 €'}</div>
+      <div class="tx">${esc(p.text)}${p.minSites>1?`<br>Mindestens ${p.minSites} Standorte.`:''}</div>
+      ${p.priceCents?`<div class="muted" style="font-size:12.5px">${qty} × ${eur(p.priceCents)} = <b style="color:var(--fg)">${eur(qty*p.priceCents)}</b> / Monat</div>`:''}
+      ${can?`<button class="btn ${cur?'':'pri'}" data-buy="${p.id}" ${cur&&!(sub&&qty!==o.sites)?'disabled':''}>${lbl}</button>`:''}</div>`; }).join('');
+  $$('#b-plans [data-buy]').forEach(b=>b.onclick=async()=>{ const p=st.plans.find(x=>x.id===b.dataset.buy), qty=Math.max(n,p.minSites||0);
+    if(!confirm(`${p.name} mit ${qty} Standort(en) für ${eur(qty*p.priceCents)} / Monat zzgl. MwSt.${sub?' – Änderung wird anteilig verrechnet.':''}\n\nFortfahren?`)) return;
+    b.disabled=true;
+    try{ if(sub){ await api('/api/billing/change',{method:'POST',body:JSON.stringify({plan:p.id,sites:qty})}); toast('Paket geändert'); si.dataset.touched=''; refreshState(); }
+      else { const r=await api('/api/billing/checkout',{method:'POST',body:JSON.stringify({plan:p.id,sites:qty})}); location.href=r.url; } }
+    catch(e){ alert(e.message); b.disabled=false; } });
+  $('#b-sum').textContent=o.plan==='free'?'Free: 1 Standort inklusive':'';
+  const pv=st.provider||{}; const L=(u,t)=>u?`<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`:'';
+  $('#b-legal').innerHTML=`Anbieter: ${esc(pv.name||'')} ${[L(pv.imprint,'Impressum'),L(pv.privacy,'Datenschutz'),L(pv.terms,'AGB')].filter(Boolean).join(' · ')}. Zahlung über Stripe (Karte, SEPA-Lastschrift u. a.).`;
+}
+$('#b-sites').oninput=()=>{ $('#b-sites').dataset.touched='1'; renderBilling(); };
+
+/* Betreiber: Kunden */
+let ORGS=[];
+async function loadAdmin(){ try{ ORGS=await api('/api/admin/orgs'); }catch(e){ return; } renderAdmin(); }
+function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
+  const mrr=ORGS.reduce((a,o)=>a+((o.billing==='stripe'||o.billing==='invoice')&&!o.disabled?o.mrr:0),0), paying=ORGS.filter(o=>o.mrr>0&&o.status!=='canceled').length;
+  $('#a-kpi').innerHTML=`<div><span>Kunden</span><b>${ORGS.length}</b></div><div><span>Zahlend</span><b>${paying}</b></div>
+    <div><span>Monatsumsatz (netto)</span><b>${eur(mrr)}</b></div><div><span>Standorte gesamt</span><b>${ORGS.reduce((a,o)=>a+o.usedSites,0)}</b></div><div><span>Hosts gesamt</span><b>${ORGS.reduce((a,o)=>a+o.usedHosts,0)}</b></div>`;
+  const cur=S.state&&S.state.org&&S.state.org.id;
+  const list=ORGS.filter(o=>!q||(o.name+' '+(o.owner||'')+' '+(o.email||'')).toLowerCase().includes(q));
+  $('#a-tbl').innerHTML=list.length?'<tr><th>Kunde</th><th>Paket</th><th>Status</th><th>Standorte</th><th class="hide-m">Hosts</th><th class="hide-m">Benutzer</th><th class="hide-m">€/Monat</th><th class="hide-m">Seit</th><th></th></tr>'+list.map(o=>{ const [t,c]=o.disabled?['gesperrt','bad']:(STAT[o.status||'active']||[o.status,'']);
+    return `<tr><td><b>${esc(o.name)}</b>${o.id===cur?' <span class="badge ok">geöffnet</span>':''}<br><span class="muted" style="font-size:12px">${esc(o.owner||o.email||'')}</span></td>
+    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="badge">Stripe</span>':o.billing==='invoice'?' <span class="badge">Rechnung</span>':''}</td><td><span class="badge ${c}">${t}</span></td>
+    <td class="num">${o.usedSites} / ${o.sites||(o.plan==='free'?1:'∞')}</td><td class="hide-m num">${o.usedHosts}</td><td class="hide-m num">${o.users}</td><td class="hide-m num">${o.mrr?eur(o.mrr):'–'}</td><td class="hide-m">${fmtDay(o.created)}</td>
+    <td class="act"><button class="btn sm pri" data-open="${o.id}">Öffnen</button> <button class="btn sm" data-oed="${o.id}">Bearbeiten</button></td></tr>`; }).join(''):'<tr><td class="empty">Keine Kunden gefunden.</td></tr>';
+  $$('#a-tbl [data-open]').forEach(b=>b.onclick=()=>switchOrg(b.dataset.open,'#/'));
+  $$('#a-tbl [data-oed]').forEach(b=>b.onclick=()=>openOrg(b.dataset.oed));
+}
+$('#a-q').oninput=renderAdmin;
+async function switchOrg(id,go){ try{ await api('/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ alert(e.message); return; }
+  $('#ov').dataset.sig=''; $$('[data-sig]').forEach(e=>e.dataset.sig=''); $('#users-tbl').dataset.sig='';
+  await refreshState(); await refreshOverview(); if(go&&location.hash!==go) location.hash=go; else route(); toast('Geöffnet: '+(S.state.org?S.state.org.name:id)); }
+const odlg=$('#dlg-org'), of=$('#org-form');
+function openOrg(id){ const o=id&&ORGS.find(x=>x.id===id);
+  $('#of-title').textContent=o?'Kunde bearbeiten':'Kunde anlegen'; $('#of-err').textContent='';
+  $('#of-plan').innerHTML=['free','basis','pro','partner','internal'].map(p=>`<option value="${p}">${{free:'Free',basis:'Basis',pro:'Pro',partner:'Partner',internal:'Intern (unbegrenzt)'}[p]}</option>`).join('');
+  of.dataset.id=o?o.id:''; of.name.value=o?o.name:''; of.plan.value=o?o.plan:'basis'; of.sites.value=o?o.sites:1; of.billing.value=o?(o.billing||'free'):'invoice';
+  of.ownerEmail.value=''; of.ownerName.value=''; of.disabled.checked=o?!!o.disabled:false;
+  $('#of-ownerf').style.display=$('#of-ownernf').style.display=o?'none':''; $('#of-disf').style.display=o&&o.id!=='default'?'':'none';
+  $('#of-del').style.display=o&&o.id!=='default'?'':'none'; odlg.showModal(); }
+of.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const body={id:of.dataset.id,name:of.name.value.trim(),plan:of.plan.value,sites:+of.sites.value||0,billing:of.billing.value||'free',ownerEmail:of.ownerEmail.value.trim(),ownerName:of.ownerName.value.trim()};
+  if(of.dataset.id) body.disabled=of.disabled.checked;
+  try{ const r=await api('/api/admin/orgs',{method:'POST',body:JSON.stringify(body)}); odlg.close(); toast('Gespeichert'); if(r.tempPassword) showTemp(body.ownerEmail,r.tempPassword); loadAdmin(); refreshState(); }catch(err){ $('#of-err').textContent=err.message; } });
+$('#of-del').onclick=async()=>{ const o=ORGS.find(x=>x.id===of.dataset.id); if(!o) return;
+  if(prompt(`Kunde „${o.name}“ mit allen Hosts, Standorten, Messwerten und Benutzern endgültig löschen?\n\nZur Bestätigung den Namen eingeben:`)!==o.name) return;
+  try{ await api('/api/admin/orgs?id='+o.id,{method:'DELETE'}); odlg.close(); toast('Gelöscht'); if(S.state.org&&S.state.org.id===o.id) await switchOrg('default'); loadAdmin(); }catch(e){ alert(e.message); } };
+$('#a-new').onclick=()=>openOrg();
+
+/* Kopfzeile: Organisation */
+function renderOrgBox(){ const st=S.state; if(!st) return; const me=st.me||{}, o=st.org||{};
+  document.body.classList.toggle('viewer',me.role==='viewer'&&!me.super);
+  $('#tab-admin').style.display=me.super?'':'none';
+  $('#tab-billing').style.display=me.super||(o.plan&&o.plan!=='internal')?'':'none';
+  const box=$('#orgbox');
+  if(me.super&&st.orgs&&st.orgs.length>1){ const sig=JSON.stringify(st.orgs)+o.id; if(box.dataset.sig===sig) return; box.dataset.sig=sig;
+    box.innerHTML=`<select class="orgsw" id="orgsw" title="Kunde wechseln">${st.orgs.map(x=>`<option value="${x.id}"${x.id===o.id?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
+    $('#orgsw').onchange=e=>switchOrg(e.target.value); }
+  else { const html=o.name&&(me.super||o.plan!=='internal')?`<span class="pill" title="${esc(me.email||'')}">${esc(o.name)} · ${esc(o.planName||'')}</span>`:''; if(box.innerHTML!==html) box.innerHTML=html; box.dataset.sig=''; }
+}
 
 $('#push-test').onclick=async()=>{ try{ const r=await api('/api/app/pushtest',{method:'POST'}); toast(r.errors&&r.errors.length?('Fehler: '+r.errors.join(', ')):`Testnachricht an ${r.sent} Gerät(e) gesendet`); }catch(e){ alert(e.message); } };
 
@@ -695,7 +871,8 @@ function fillHostSelects(){ const st=S.state; if(!st) return;
   const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=opts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
-  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings'].includes(v)) v='overview';
+  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','billing','admin'].includes(v)) v='overview';
+  if(v==='admin'&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
   S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||(v==='host'&&a.dataset.v==='overview')));
   hideTip();
@@ -706,12 +883,15 @@ function route(){
   if(v==='events') loadEvents();
   if(v==='stats'){ fillHostSelects(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
   if(v==='settings') renderSettings();
+  if(v==='billing') renderBilling();
+  if(v==='admin') loadAdmin();
   if(v==='overview') { renderOverview(); }
   window.scrollTo(0,0);
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects();
+  renderSummary(); fillHostSelects(); renderOrgBox();
+  if(S.view==='billing') renderBilling();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();
   if(S.view==='settings') renderSettings();

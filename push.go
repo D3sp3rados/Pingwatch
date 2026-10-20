@@ -23,6 +23,9 @@ import (
 // Device ist ein registriertes iPhone/iPad der PingWatch-App.
 type Device struct {
 	Token    string   `json:"token"`
+	Org      string   `json:"org,omitempty"`
+	User     string   `json:"user,omitempty"`
+	AllOrgs  bool     `json:"allOrgs,omitempty"` // Betreiber: Meldungen aller Kunden
 	Name     string   `json:"name"`
 	Sandbox  bool     `json:"sandbox"`
 	Outage   bool     `json:"outage"`  // Ausfall + wieder erreichbar
@@ -39,6 +42,7 @@ type notice struct {
 	hostID string
 	title  string
 	body   string
+	org    string
 }
 
 // Pusher versendet Benachrichtigungen über Apple Push Notification service (APNs).
@@ -246,6 +250,9 @@ func (m *Monitor) pushLoop() {
 		m.mu.RUnlock()
 		var bad []string
 		for _, d := range devs {
+			if !d.AllOrgs && d.Org != n.org {
+				continue
+			}
 			if !d.wants(n) {
 				continue
 			}
@@ -321,10 +328,10 @@ func (m *Monitor) notifyEventStart(e Event) {
 	switch e.Type {
 	case "outage":
 		m.notify(notice{"outage", e.HostID, "🔴 " + e.HostName + " antwortet nicht",
-			fmt.Sprintf("Seit %s keine Antwort (%s)", at, m.siteNameOf(e.Site))})
+			fmt.Sprintf("Seit %s keine Antwort (%s)", at, m.siteNameOf(e.Site)), e.Org})
 	case "offline":
 		m.notify(notice{"offline", "", "⚪️ Standort " + e.HostName + " offline",
-			fmt.Sprintf("Agent meldet sich seit %s nicht mehr", at)})
+			fmt.Sprintf("Agent meldet sich seit %s nicht mehr", at), e.Org})
 	}
 }
 
@@ -333,19 +340,19 @@ func (m *Monitor) notifyEventEnd(e Event) {
 	switch e.Type {
 	case "outage":
 		m.notify(notice{"recovered", e.HostID, "🟢 " + e.HostName + " wieder erreichbar",
-			fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur)})
+			fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur), e.Org})
 	case "loss":
 		m.notify(notice{"loss", e.HostID, "🟠 Paketverlust bei " + e.HostName,
-			fmt.Sprintf("%d Pings verloren um %s", e.Count, time.UnixMilli(e.Start).Format("15:04"))})
+			fmt.Sprintf("%d Pings verloren um %s", e.Count, time.UnixMilli(e.Start).Format("15:04")), e.Org})
 	case "spike":
 		avg := int64(0)
 		if e.Count > 0 {
 			avg = e.Sum / int64(e.Count)
 		}
 		m.notify(notice{"spike", e.HostID, "🟡 Hohe Antwortzeit bei " + e.HostName,
-			fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04"))})
+			fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04")), e.Org})
 	case "offline":
 		m.notify(notice{"online", "", "🟢 Standort " + e.HostName + " wieder online",
-			fmt.Sprintf("Agent war %s offline", dur)})
+			fmt.Sprintf("Agent war %s offline", dur), e.Org})
 	}
 }

@@ -59,6 +59,25 @@ Als Dienst z. B. per systemd (`ExecStart=/opt/pingwatch/pingwatch-agent-linux-ar
 
 Dashboard in Safari öffnen → Teilen → **Zum Home-Bildschirm**. Danach startet es wie eine App im Vollbild.
 
+## Kunden, Benutzer & Abo
+
+- **Betreiber** (RST): Anmeldung mit leerer E-Mail + `ADMIN_PASSWORD`. Reiter **Kunden**: Kunden anlegen, Paket/Standorte setzen, sperren, löschen, per „Öffnen“ in den Kunden wechseln. Die bisherigen Hosts gehören zur Organisation „RST-Datentechnik“ (Paket Intern, unbegrenzt).
+- **Kunden** melden sich mit E-Mail + Passwort an und sehen nur ihre eigenen Hosts, Standorte, Ereignisse und iPhones. Rollen: Inhaber (inkl. Abo), Admin, Nur lesen.
+- **Pakete** (pro Standort/Monat netto): Free 0 € (1 Standort, 5 Hosts, 7 Tage), Basis 4,90 € (25 Hosts, 90 Tage), Pro 9,90 € (100 Hosts, 1 Jahr, Bericht, Traceroute, Statusseite), Partner 3,90 € (ab 10 Standorten).
+
+Umgebungsvariablen (alle optional):
+
+| Variable | Zweck |
+|---|---|
+| `ALLOW_SIGNUP=1` | Selbst-Registrierung unter `/signup` (startet im Free-Paket) |
+| `STRIPE_SECRET_KEY` | Stripe-Geheimschlüssel (`sk_live_…` bzw. `sk_test_…`) |
+| `STRIPE_WEBHOOK_SECRET` | Signatur-Geheimnis des Webhooks `https://<app>/api/stripe/webhook` (`whsec_…`) |
+| `STRIPE_PRICE_BASIS`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PARTNER` | Preis-IDs (`price_…`, monatlich, pro Einheit) |
+| `STRIPE_AUTOMATIC_TAX=1` | Stripe Tax für die USt. verwenden |
+| `PROVIDER_NAME`, `PROVIDER_EMAIL`, `PROVIDER_IMPRINT_URL`, `PROVIDER_PRIVACY_URL`, `PROVIDER_TERMS_URL` | Angaben auf Abo- und Registrierungsseite |
+
+Stripe-Webhook-Ereignisse: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. Für Rechnungen und Zahlungsmethode leitet PingWatch Kunden ins Stripe-Kundenportal (im Stripe-Dashboard aktivieren).
+
 ## Daten
 
 **Mit Datenbank (PostgreSQL):** PingWatch legt die Tabellen beim Start selbst an (`pw_config`, `pw_samples`, `pw_minutes`, `pw_events`).

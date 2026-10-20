@@ -26,9 +26,9 @@ final class AppModel {
 
     var api: API? { creds.map { API(creds: $0) } }
 
-    func login(server: String, password: String) async throws {
+    func login(server: String, email: String, password: String) async throws {
         guard let url = API.normalize(server) else { throw APIError.invalidServer }
-        let c = try await API.login(server: url, password: password)
+        let c = try await API.login(server: url, email: email, password: password)
         c.save()
         creds = c
         await refresh()

@@ -3,6 +3,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("lastServer") private var server = "pingwatch-a4029c.apps.rstcloud.de"
+    @AppStorage("lastEmail") private var email = ""
     @State private var password = ""
     @State private var busy = false
     @State private var error: String?
@@ -31,6 +32,15 @@ struct LoginView: View {
                         .autocorrectionDisabled()
                         .submitLabel(.next)
                         .onSubmit { pwFocused = true }
+                }
+                Section("Zugang") {
+                    TextField("E-Mail (leer = Betreiber)", text: $email)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.next)
+                        .onSubmit { pwFocused = true }
                     SecureField("Passwort", text: $password)
                         .textContentType(.password)
                         .focused($pwFocused)
@@ -55,7 +65,7 @@ struct LoginView: View {
                     }
                     .disabled(busy || server.isEmpty || password.isEmpty)
                 } footer: {
-                    Text("Gleiches Passwort wie im Dashboard. Danach fragt die App, ob sie Benachrichtigungen senden darf.")
+                    Text("Gleiche Zugangsdaten wie im Dashboard. Danach fragt die App, ob sie Benachrichtigungen senden darf.")
                 }
             }
         }
@@ -65,7 +75,7 @@ struct LoginView: View {
         busy = true
         error = nil
         do {
-            try await model.login(server: server, password: password)
+            try await model.login(server: server, email: email, password: password)
             password = ""
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

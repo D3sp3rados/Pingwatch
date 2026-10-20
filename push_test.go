@@ -59,7 +59,7 @@ func TestPushRoundtrip(t *testing.T) {
 	p.client.Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	p.client.Transport.(*http.Transport).ForceAttemptHTTP2 = true
 	apnsBase = srv.URL
-	if err := p.send(Device{Token: "aabbcc", Sandbox: true}, notice{"outage", "h1", "Titel", "Text"}); err != nil {
+	if err := p.send(Device{Token: "aabbcc", Sandbox: true}, notice{"outage", "h1", "Titel", "Text", ""}); err != nil {
 		t.Fatal(err)
 	}
 	if gotPath != "/3/device/aabbcc" || gotTopic != "de.rst.pingwatch" {
@@ -80,7 +80,7 @@ func TestPushRoundtrip(t *testing.T) {
 	if !ecdsa.Verify(&k.PublicKey, h[:], new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:])) {
 		t.Fatal("Signatur ungültig")
 	}
-	if err := p.send(Device{Token: "dead"}, notice{"outage", "h1", "x", "y"}); err != errBadToken {
+	if err := p.send(Device{Token: "dead"}, notice{"outage", "h1", "x", "y", ""}); err != errBadToken {
 		t.Fatalf("erwartet errBadToken, bekam %v", err)
 	}
 }

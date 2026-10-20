@@ -2,7 +2,6 @@ package main
 
 import (
 	"compress/gzip"
-	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
@@ -141,28 +140,6 @@ func (s *Server) passwordOK(pw string) bool {
 	return subtle.ConstantTimeCompare([]byte(s.hashPw(pw)), []byte(s.m.cfg.PassHash)) == 1
 }
 
-func (s *Server) sessionToken() string {
-	s.m.mu.RLock()
-	key := s.m.cfg.Secret
-	ref := s.m.cfg.PassHash
-	s.m.mu.RUnlock()
-	if s.envPass != "" {
-		h := sha256.Sum256([]byte(s.envPass))
-		ref = hex.EncodeToString(h[:])
-	}
-	mac := hmac.New(sha256.New, []byte(key))
-	mac.Write([]byte("session|" + ref))
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
-func (s *Server) authed(r *http.Request) bool {
-	if t := bearer(r); t != "" {
-		return hmac.Equal([]byte(t), []byte(s.sessionToken()))
-	}
-	c, err := r.Cookie("pw_session")
-	return err == nil && hmac.Equal([]byte(c.Value), []byte(s.sessionToken()))
-}
-
 func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
@@ -206,7 +183,8 @@ func (s *Server) routes() http.Handler {
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if !s.authed(r) {
+			p := s.authenticate(r)
+			if p == nil {
 				if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/download/") {
 					http.Error(w, "nicht angemeldet", http.StatusUnauthorized)
 					return
@@ -214,9 +192,24 @@ func (s *Server) routes() http.Handler {
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
-			h(w, r)
+			// Nur-Lesen-Benutzer dürfen nichts ändern
+			if r.Method != http.MethodGet && !p.canEdit() && !readOnlyOK[r.URL.Path] {
+				http.Error(w, "Keine Berechtigung (nur Lesezugriff)", http.StatusForbidden)
+				return
+			}
+			h(w, s.withPrincipal(r, p))
 		}
 	}
+	super := func(h http.HandlerFunc) http.HandlerFunc {
+		return protect(func(w http.ResponseWriter, r *http.Request) {
+			if !principal(r).Super {
+				http.Error(w, "Nur für den Betreiber", http.StatusForbidden)
+				return
+			}
+			h(w, r)
+		})
+	}
+	s.registerTenantRoutes(mux, protect, super)
 	mux.HandleFunc("/", protect(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -249,9 +242,9 @@ func (s *Server) routes() http.Handler {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		r.ParseForm()
-		if s.passwordOK(r.FormValue("password")) {
-			http.SetCookie(w, &http.Cookie{Name: "pw_session", Value: s.sessionToken(), Path: "/",
-				MaxAge: 365 * 24 * 3600, HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode})
+		tok, _, err := s.login(r.FormValue("email"), r.FormValue("password"))
+		if err == nil {
+			s.setSession(w, r, tok)
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
@@ -323,8 +316,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	m := s.m
 	now := time.Now().UnixMilli()
 	h1, h24 := now-3600_000, now-24*3600_000
+	p := principal(r)
 	hv := []HostView{}
-	for _, h := range m.hostList() {
+	for _, h := range m.hostsOf(p.Org) {
 		siteOn, _ := m.siteOnline(h.cfg.Site)
 		h.mu.Lock()
 		v := HostView{HostCfg: h.cfg, IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
@@ -389,16 +383,26 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		hv = append(hv, v)
 	}
 	m.mu.RLock()
-	sites := append([]SiteCfg(nil), m.cfg.Sites...)
+	var sites []SiteCfg
+	for _, sc := range m.cfg.Sites {
+		if sc.Org == p.Org {
+			sites = append(sites, sc)
+		}
+	}
 	cnt := map[string]int{}
 	for _, hc := range m.cfg.Hosts {
-		cnt[hc.Site]++
+		if hc.Org == p.Org {
+			cnt[hc.Site]++
+		}
 	}
 	ret := m.cfg.RetentionDays
 	devs := []map[string]any{}
 	for _, d := range m.cfg.Devices {
+		if d.Org != p.Org && !(p.Super && d.AllOrgs) {
+			continue
+		}
 		devs = append(devs, map[string]any{"id": d.Token[:min(12, len(d.Token))], "name": d.Name, "added": d.Added,
-			"outage": d.Outage, "loss": d.Loss, "spike": d.Spike, "offline": d.Offline, "hosts": len(d.Hosts)})
+			"outage": d.Outage, "loss": d.Loss, "spike": d.Spike, "offline": d.Offline, "hosts": len(d.Hosts), "allOrgs": d.AllOrgs})
 	}
 	m.mu.RUnlock()
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
@@ -412,10 +416,14 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		}
 		sv = append(sv, v)
 	}
-	writeJSON(w, map[string]any{
+	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
 		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "devices": devs,
-	})
+	}
+	for k, v := range s.accountInfo(r) {
+		out[k] = v
+	}
+	writeJSON(w, out)
 }
 
 func (m *Monitor) host(id string) *Host {
@@ -525,14 +533,14 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	// an Bucket-Grenzen ausrichten, damit Balken nicht "wandern"
 	from = from - from%bucket + bucket
 	out := map[string][]Agg{}
-	for _, h := range s.m.hostList() {
+	for _, h := range s.m.hostsOf(principal(r).Org) {
 		out[h.cfg.ID] = bucketMem(h, from, from+bucket*n, bucket)
 	}
 	writeJSON(w, map[string]any{"from": from, "bucket": bucket, "n": n, "hosts": out})
 }
 
 func (s *Server) handleSeries(w http.ResponseWriter, r *http.Request) {
-	h := s.m.host(r.URL.Query().Get("host"))
+	h := s.hostFor(r, r.URL.Query().Get("host"))
 	if h == nil {
 		http.Error(w, "unbekannter Host", 404)
 		return
@@ -619,7 +627,7 @@ func (m *Monitor) dayStats(h *Host, days int) []DayStat {
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	h := s.m.host(r.URL.Query().Get("host"))
+	h := s.hostFor(r, r.URL.Query().Get("host"))
 	if h == nil {
 		http.Error(w, "unbekannter Host", 404)
 		return
@@ -631,12 +639,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"days": s.m.dayStats(h, days)})
 }
 
-func (m *Monitor) queryEvents(host, site string, types map[string]bool, from, to int64, limit int) []Event {
+func (m *Monitor) queryEvents(org, host, site string, types map[string]bool, from, to int64, limit int) []Event {
 	m.evMu.Lock()
 	defer m.evMu.Unlock()
 	out := []Event{}
 	for i := len(m.events) - 1; i >= 0 && len(out) < limit; i-- {
 		e := m.events[i]
+		if org != "" && e.Org != org {
+			continue
+		}
 		if host != "" && e.HostID != host {
 			continue
 		}
@@ -675,10 +686,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 || limit > 5000 {
 		limit = 300
 	}
-	writeJSON(w, s.m.queryEvents(q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), limit))
+	writeJSON(w, s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), limit))
 }
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
+	p := principal(r)
 	switch r.Method {
 	case http.MethodPost:
 		var hc HostCfg
@@ -691,19 +703,49 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		if hc.Name == "" {
 			hc.Name = hc.Addr
 		}
+		if hc.ID != "" {
+			if s.hostFor(r, hc.ID) == nil {
+				http.Error(w, "unbekannter Host", 404)
+				return
+			}
+		} else if err := s.checkLimits(p.Org, 0, 1); err != nil {
+			http.Error(w, err.Error(), http.StatusPaymentRequired)
+			return
+		}
+		if hc.Site != "" && hc.Site != "cloud" && s.siteFor(r, hc.Site) == nil {
+			http.Error(w, "unbekannter Standort", 400)
+			return
+		}
+		if o := s.m.orgByID(p.Org); o != nil {
+			if mi := planByID(o.Plan).MinInterval; hc.IntervalMs < mi {
+				hc.IntervalMs = mi
+			}
+		}
+		hc.Org = p.Org
 		writeJSON(w, s.m.UpsertHost(hc))
 	case http.MethodDelete:
-		s.m.DeleteHost(r.URL.Query().Get("id"))
+		id := r.URL.Query().Get("id")
+		if s.hostFor(r, id) == nil {
+			http.Error(w, "unbekannter Host", 404)
+			return
+		}
+		s.m.DeleteHost(id)
 		writeJSON(w, map[string]bool{"ok": true})
 	default:
 		s.m.mu.RLock()
 		defer s.m.mu.RUnlock()
-		out := append([]HostCfg{}, s.m.cfg.Hosts...)
+		out := []HostCfg{}
+		for _, hc := range s.m.cfg.Hosts {
+			if hc.Org == p.Org {
+				out = append(out, hc)
+			}
+		}
 		writeJSON(w, out)
 	}
 }
 
 func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
+	p := principal(r)
 	switch r.Method {
 	case http.MethodPost:
 		var sc SiteCfg
@@ -712,18 +754,38 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sc.Name = strings.TrimSpace(sc.Name)
-		if sc.ID == "" && sc.Name == "" {
-			http.Error(w, "Name fehlt", 400)
+		if sc.ID == "" {
+			if sc.Name == "" {
+				http.Error(w, "Name fehlt", 400)
+				return
+			}
+			if err := s.checkLimits(p.Org, 1, 0); err != nil {
+				http.Error(w, err.Error(), http.StatusPaymentRequired)
+				return
+			}
+			sc.Org = p.Org
+		} else if s.siteFor(r, sc.ID) == nil {
+			http.Error(w, "unbekannter Standort", 404)
 			return
 		}
 		writeJSON(w, s.m.UpsertSite(sc))
 	case http.MethodDelete:
-		s.m.DeleteSite(r.URL.Query().Get("id"))
+		id := r.URL.Query().Get("id")
+		if s.siteFor(r, id) == nil {
+			http.Error(w, "unbekannter Standort", 404)
+			return
+		}
+		s.m.DeleteSite(id)
 		writeJSON(w, map[string]bool{"ok": true})
 	default:
 		s.m.mu.RLock()
 		defer s.m.mu.RUnlock()
-		out := append([]SiteCfg{}, s.m.cfg.Sites...)
+		out := []SiteCfg{}
+		for _, sc := range s.m.cfg.Sites {
+			if sc.Org == p.Org {
+				out = append(out, sc)
+			}
+		}
 		writeJSON(w, out)
 	}
 }
@@ -733,6 +795,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST", 405)
 		return
 	}
+	p := principal(r)
 	var req struct {
 		RetentionDays int    `json:"retentionDays"`
 		OldPassword   string `json:"oldPassword"`
@@ -742,6 +805,34 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ungültig", 400)
 		return
 	}
+	if req.NewPassword != "" && len(req.NewPassword) < 8 {
+		http.Error(w, "Mindestens 8 Zeichen", 400)
+		return
+	}
+	if req.NewPassword != "" && p.User != nil {
+		// eigenes Benutzerpasswort
+		if !checkPassword(p.User.PassHash, req.OldPassword) {
+			http.Error(w, "Altes Passwort falsch", 403)
+			return
+		}
+		h := hashPassword(req.NewPassword)
+		s.m.mu.Lock()
+		for i := range s.m.cfg.Users {
+			if s.m.cfg.Users[i].ID == p.User.ID {
+				s.m.cfg.Users[i].PassHash = h
+			}
+		}
+		s.m.saveConfigLocked()
+		s.m.mu.Unlock()
+		u := s.m.userByID(p.User.ID)
+		s.setSession(w, r, s.makeToken(u.ID, userRef(u)))
+		writeJSON(w, map[string]bool{"ok": true})
+		return
+	}
+	if !p.Super {
+		http.Error(w, "Nur für den Betreiber", 403)
+		return
+	}
 	if req.NewPassword != "" {
 		if s.envPass != "" {
 			http.Error(w, "Passwort ist per ADMIN_PASSWORD festgelegt", 400)
@@ -749,10 +840,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if !s.passwordOK(req.OldPassword) {
 			http.Error(w, "Altes Passwort falsch", 403)
-			return
-		}
-		if len(req.NewPassword) < 8 {
-			http.Error(w, "Mindestens 8 Zeichen", 400)
 			return
 		}
 	}
@@ -766,8 +853,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	s.m.saveConfigLocked()
 	s.m.mu.Unlock()
 	if req.NewPassword != "" {
-		http.SetCookie(w, &http.Cookie{Name: "pw_session", Value: s.sessionToken(), Path: "/",
-			MaxAge: 365 * 24 * 3600, HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode})
+		s.setSession(w, r, s.makeToken("admin", s.adminRef()))
 	}
 	writeJSON(w, map[string]bool{"ok": true})
 }
@@ -775,16 +861,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/download/")
 	if name == "agent.json" {
-		id := r.URL.Query().Get("site")
-		s.m.mu.RLock()
-		var site *SiteCfg
-		for i := range s.m.cfg.Sites {
-			if s.m.cfg.Sites[i].ID == id {
-				cp := s.m.cfg.Sites[i]
-				site = &cp
-			}
-		}
-		s.m.mu.RUnlock()
+		site := s.siteFor(r, r.URL.Query().Get("site"))
 		if site == nil {
 			http.NotFound(w, r)
 			return
@@ -931,7 +1008,7 @@ func csvHeader(w http.ResponseWriter, name string) {
 
 func (s *Server) exportEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	evs := s.m.queryEvents(q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
+	evs := s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
 	csvHeader(w, "pingwatch-ereignisse.csv")
 	fmt.Fprintln(w, "Beginn;Ende;Dauer (s);Host;Typ;Anzahl;Max (ms);Ø (ms)")
 	for _, e := range evs {
@@ -955,7 +1032,7 @@ func (s *Server) exportEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) exportSamples(w http.ResponseWriter, r *http.Request) {
-	h := s.m.host(r.URL.Query().Get("host"))
+	h := s.hostFor(r, r.URL.Query().Get("host"))
 	if h == nil {
 		http.Error(w, "unbekannter Host", 404)
 		return
@@ -981,7 +1058,7 @@ func (s *Server) exportSamples(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) exportStats(w http.ResponseWriter, r *http.Request) {
-	h := s.m.host(r.URL.Query().Get("host"))
+	h := s.hostFor(r, r.URL.Query().Get("host"))
 	if h == nil {
 		http.Error(w, "unbekannter Host", 404)
 		return
@@ -1025,7 +1102,7 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ungültig", 400)
 		return
 	}
-	if req.Host != "" && s.m.host(req.Host) == nil {
+	if req.Host != "" && s.hostFor(r, req.Host) == nil {
 		http.Error(w, "unbekannter Host", 404)
 		return
 	}
@@ -1062,7 +1139,7 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 		from = now.Add(-time.Duration(req.Hours) * time.Hour).UnixMilli()
 		to = now.Add(time.Minute).UnixMilli()
 	}
-	n := s.m.Reset(req.Host, from, to, req.Samples, req.Events)
+	n := s.m.Reset(principal(r).Org, req.Host, from, to, req.Samples, req.Events)
 	writeJSON(w, map[string]any{"ok": true, "events": n})
 }
 
@@ -1074,15 +1151,17 @@ func (s *Server) handleAppLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	if !s.passwordOK(req.Password) {
+	tok, _, err := s.login(req.Email, req.Password)
+	if err != nil {
 		time.Sleep(800 * time.Millisecond)
-		http.Error(w, "Passwort falsch", 401)
+		http.Error(w, err.Error(), 401)
 		return
 	}
-	writeJSON(w, map[string]any{"token": s.sessionToken(), "version": version})
+	writeJSON(w, map[string]any{"token": tok, "version": version})
 }
 
 func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
@@ -1097,6 +1176,12 @@ func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
 		d.Name = strings.TrimSpace(d.Name)
 		if d.Name == "" {
 			d.Name = "iPhone"
+		}
+		p := principal(r)
+		d.Org = p.Org
+		d.AllOrgs = d.AllOrgs && p.Super
+		if p.User != nil {
+			d.User = p.User.ID
 		}
 		m.mu.Lock()
 		found := false
@@ -1118,8 +1203,9 @@ func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
 		m.mu.Lock()
 		out := m.cfg.Devices[:0]
+		org := principal(r).Org
 		for _, d := range m.cfg.Devices {
-			if id == "" || !strings.HasPrefix(d.Token, id) {
+			if id == "" || !strings.HasPrefix(d.Token, id) || (d.Org != org && !principal(r).Super) {
 				out = append(out, d)
 			}
 		}
@@ -1151,12 +1237,18 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Push nicht eingerichtet (APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID fehlen)", 400)
 		return
 	}
+	org := principal(r).Org
 	s.m.mu.RLock()
-	devs := append([]Device(nil), s.m.cfg.Devices...)
+	var devs []Device
+	for _, d := range s.m.cfg.Devices {
+		if d.Org == org {
+			devs = append(devs, d)
+		}
+	}
 	s.m.mu.RUnlock()
 	ok, errs := 0, []string{}
 	for _, d := range devs {
-		if err := s.m.pusher.send(d, notice{"test", "", "PingWatch", "Testbenachrichtigung – Push funktioniert ✅"}); err != nil {
+		if err := s.m.pusher.send(d, notice{"test", "", "PingWatch", "Testbenachrichtigung – Push funktioniert ✅", ""}); err != nil {
 			errs = append(errs, d.Name+": "+err.Error())
 		} else {
 			ok++

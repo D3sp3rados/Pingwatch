@@ -231,15 +231,15 @@ struct API {
         return URL(string: s)
     }
 
-    /// Meldet sich mit dem Dashboard-Passwort an und liefert das Zugangs-Token.
-    static func login(server: URL, password: String) async throws -> Credentials {
+    /// Meldet sich mit E-Mail und Passwort an (E-Mail leer = Betreiber-Zugang) und liefert das Zugangs-Token.
+    static func login(server: URL, email: String = "", password: String) async throws -> Credentials {
         var req = URLRequest(url: server.appendingPathComponent("api/app/login"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONEncoder().encode(["password": password])
+        req.httpBody = try JSONEncoder().encode(["email": email.trimmingCharacters(in: .whitespaces).lowercased(), "password": password])
         let (data, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw APIError.invalidServer }
-        if http.statusCode == 401 { throw APIError.http(401, "Passwort falsch.") }
+        if http.statusCode == 401 { throw APIError.http(401, "E-Mail oder Passwort falsch.") }
         guard http.statusCode == 200 else {
             throw APIError.http(http.statusCode, String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
         }

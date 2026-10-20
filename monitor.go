@@ -28,12 +28,14 @@ type HostCfg struct {
 	ThresholdMs int    `json:"thresholdMs"` // 0 = automatisch
 	OutageCount int    `json:"outageCount"`
 	Paused      bool   `json:"paused"`
+	Org         string `json:"org,omitempty"`
 }
 
 type SiteCfg struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Token string `json:"token"`
+	Org   string `json:"org,omitempty"`
 }
 
 type Config struct {
@@ -42,6 +44,8 @@ type Config struct {
 	RetentionDays int       `json:"retentionDays"`
 	PassHash      string    `json:"passHash"`
 	Devices       []Device  `json:"devices"`
+	Orgs          []Org     `json:"orgs"`
+	Users         []User    `json:"users"`
 	Secret        string    `json:"secret"`
 	Version       int64     `json:"version"`
 }
@@ -177,7 +181,9 @@ func NewMonitor(store Storage) *Monitor {
 	if m.cfg.Secret == "" {
 		m.cfg.Secret = randHex(32)
 	}
+	m.migrateTenancy()
 	m.events = m.store.LoadEvents(m.cfg.RetentionDays)
+	m.fixEventOrgs()
 	for _, e := range m.events {
 		if e.ID >= m.nextEv {
 			m.nextEv = e.ID
@@ -264,7 +270,7 @@ func (m *Monitor) startWorker(h *Host) {
 func (m *Monitor) newEvent(h *Host, typ string, start int64) *Event {
 	m.evMu.Lock()
 	m.nextEv++
-	e := &Event{ID: m.nextEv, HostID: h.cfg.ID, HostName: h.cfg.Name, Site: h.cfg.Site, Type: typ, Start: start, Last: start}
+	e := &Event{ID: m.nextEv, HostID: h.cfg.ID, HostName: h.cfg.Name, Site: h.cfg.Site, Org: h.cfg.Org, Type: typ, Start: start, Last: start}
 	m.events = append(m.events, e)
 	cp := *e
 	m.evMu.Unlock()
@@ -468,7 +474,7 @@ func (m *Monitor) housekeeping() {
 			if st.lastSeen > 0 && nowMs-st.lastSeen > 45_000 && st.offEv == nil {
 				m.evMu.Lock()
 				m.nextEv++
-				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Type: "offline", Start: st.lastSeen, Last: st.lastSeen}
+				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Org: s.Org, Type: "offline", Start: st.lastSeen, Last: st.lastSeen}
 				m.events = append(m.events, e)
 				cp := *e
 				m.evMu.Unlock()
@@ -482,7 +488,10 @@ func (m *Monitor) housekeeping() {
 			m.mu.RLock()
 			ret := m.cfg.RetentionDays
 			m.mu.RUnlock()
-			go m.store.Maintenance(ret)
+			go func() {
+				m.store.Maintenance(ret)
+				m.applyOrgRetention()
+			}()
 			m.evMu.Lock()
 			c := now.AddDate(0, 0, -ret).UnixMilli()
 			keep := m.events[:0]
@@ -679,15 +688,17 @@ func (m *Monitor) siteByToken(tok string) (SiteCfg, bool) {
 
 // Reset löscht Ereignisse (und optional Messwerte) im Zeitraum [from, to) für einen Host oder alle ("").
 // Liefert die Anzahl gelöschter Ereignisse.
-func (m *Monitor) Reset(hostID string, from, to int64, samples, events bool) int {
+func (m *Monitor) Reset(org, hostID string, from, to int64, samples, events bool) int {
 	in := func(t int64) bool { return t >= from && t < to }
 	var hosts []*Host
 	m.mu.RLock()
 	if hostID == "" {
 		for _, h := range m.hosts {
-			hosts = append(hosts, h)
+			if h.cfg.Org == org {
+				hosts = append(hosts, h)
+			}
 		}
-	} else if h := m.hosts[hostID]; h != nil {
+	} else if h := m.hosts[hostID]; h != nil && h.cfg.Org == org {
 		hosts = append(hosts, h)
 	}
 	m.mu.RUnlock()
@@ -746,7 +757,7 @@ func (m *Monitor) Reset(hostID string, from, to int64, samples, events bool) int
 	m.evMu.Lock()
 	keep := m.events[:0]
 	for _, e := range m.events {
-		match := in(e.Start) && (ids[e.HostID] || (hostID == "" && e.Type == "offline"))
+		match := in(e.Start) && (ids[e.HostID] || (hostID == "" && e.Type == "offline" && e.Org == org))
 		if match {
 			removed = append(removed, e.ID)
 			continue

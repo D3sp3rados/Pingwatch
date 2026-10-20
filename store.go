@@ -338,6 +338,7 @@ type Event struct {
 	HostID   string `json:"host"`
 	HostName string `json:"name"`
 	Site     string `json:"site"`
+	Org      string `json:"org,omitempty"`
 	Type     string `json:"type"` // outage, loss, spike, offline
 	Start    int64  `json:"start"`
 	End      int64  `json:"end"`  // 0 = läuft noch
