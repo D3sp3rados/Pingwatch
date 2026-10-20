@@ -28,8 +28,9 @@ Dauer-Ping mit Protokoll: Du siehst auf einen Blick, **wann** Pings verloren gin
 2. In der rstcloud unter **Apps** eine App aus dem Repo anlegen. Gebaut wird über das `Dockerfile`.
 3. Einstellungen der App:
    - **Port:** `8080`
-   - **Persistenter Speicher:** auf `/data` mounten. Ohne Volume sind die Messwerte nach jedem Neu-Deploy weg.
-   - **Umgebungsvariable:** `ADMIN_PASSWORD=<dein Passwort>`. Fehlt sie, erzeugt der Server beim ersten Start ein Passwort und schreibt es ins Log sowie nach `/data/ERSTPASSWORT.txt`.
+   - **Umgebungsvariable** `ADMIN_PASSWORD=<dein Passwort>` (Scope RUN_TIME, Secret).
+   - **Umgebungsvariable** `DATABASE_URL=postgres://user:passwort@host:port/datenbank` (Scope RUN_TIME, Secret). Apps auf der rstcloud haben **keinen dauerhaften Speicher**, deshalb liegt alles in einer Managed PostgreSQL. Ohne `DATABASE_URL` speichert PingWatch in Dateien unter `/data`; das geht bei jedem Redeploy verloren.
+     Alternativ zu `DATABASE_URL`: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (optional `DB_SSLMODE`). Bietet der Server kein SSL, schaltet PingWatch automatisch auf `sslmode=disable` um.
 4. Dashboard über die App-URL öffnen (HTTPS), anmelden und Hosts anlegen.
 
 **ICMP in der Cloud:** Unter *Einstellungen → Allgemein* steht, ob der Container ICMP darf. Falls „nicht erlaubt“, Cloud-Hosts mit der Methode **TCP** anlegen, z. B. Port 443 oder 80. Ein geschlossener Port, der mit RST antwortet, zählt ebenfalls als erreichbar.
@@ -60,7 +61,13 @@ Dashboard in Safari öffnen → Teilen → **Zum Home-Bildschirm**. Danach start
 
 ## Daten
 
-- Messwerte: `/data/samples/<host>/<YYYY-MM-DD>.csv`. Ältere Tage werden gzip-komprimiert, nach der Aufbewahrungszeit gelöscht (Standard 60 Tage, einstellbar).
+**Mit Datenbank (PostgreSQL):** PingWatch legt die Tabellen beim Start selbst an (`pw_config`, `pw_samples`, `pw_minutes`, `pw_events`).
+- Jede einzelne Messung bleibt 3 Tage erhalten (Rohwerte), danach nur noch Minuten-Zusammenfassungen (Pings, Verluste, Spitzen, Ø/Min/Max).
+- Minutenwerte und Ereignisse werden nach der Aufbewahrungszeit gelöscht (Standard 60 Tage, einstellbar).
+- Platzbedarf: ca. 5 MB pro Host und Tag Rohwerte bei 1 s Intervall (nur 3 Tage), Minutenwerte ca. 100 KB pro Host und Tag.
+
+**Ohne Datenbank (Dateien):**
+- Messwerte: `/data/samples/<host>/<YYYY-MM-DD>.csv`. Ältere Tage werden gzip-komprimiert.
 - Ereignisse: `/data/events.jsonl`, Konfiguration: `/data/config.json`
 - Exporte als CSV (Excel-tauglich, Semikolon, deutsche Dezimalkommas): Ereignisse, Statistik nach Stunde, Rohwerte.
 - Platzbedarf: ca. 1–1,5 MB pro Host und Tag bei 1 s Intervall, komprimiert deutlich weniger.

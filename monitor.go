@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
-	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -148,10 +146,9 @@ type siteState struct {
 type Monitor struct {
 	mu      sync.RWMutex
 	cfg     Config
-	cfgPath string
 	hosts   map[string]*Host
 	sites   map[string]*siteState
-	store   *Store
+	store   Storage
 	evMu    sync.Mutex
 	events  []*Event
 	nextEv  int64
@@ -159,17 +156,16 @@ type Monitor struct {
 	icmpOK  string
 }
 
-func NewMonitor(dataDir string) *Monitor {
+func NewMonitor(store Storage) *Monitor {
 	m := &Monitor{
-		cfgPath: filepath.Join(dataDir, "config.json"),
 		hosts:   map[string]*Host{},
 		sites:   map[string]*siteState{},
-		store:   NewStore(dataDir),
+		store:   store,
 		started: time.Now().UnixMilli(),
 	}
-	if b, err := os.ReadFile(m.cfgPath); err == nil {
+	if b, err := store.LoadConfig(); err == nil && len(b) > 0 {
 		if err := json.Unmarshal(b, &m.cfg); err != nil {
-			log.Fatalf("config.json fehlerhaft: %v", err)
+			log.Fatalf("Konfiguration fehlerhaft: %v", err)
 		}
 	}
 	if m.cfg.RetentionDays <= 0 {
@@ -194,9 +190,8 @@ func NewMonitor(dataDir string) *Monitor {
 func (m *Monitor) saveConfigLocked() {
 	m.cfg.Version = time.Now().UnixNano()
 	b, _ := json.MarshalIndent(m.cfg, "", "  ")
-	tmp := m.cfgPath + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err == nil {
-		os.Rename(tmp, m.cfgPath)
+	if err := m.store.SaveConfig(b); err != nil {
+		log.Printf("Konfiguration speichern fehlgeschlagen: %v", err)
 	}
 }
 

@@ -614,7 +614,8 @@ function renderSettings(){
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
   $('#g-pw').style.display=st.envPassword?'none':'flex';
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
-  $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
+  const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
+  $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };

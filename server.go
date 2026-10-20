@@ -50,7 +50,19 @@ func runServer(args []string) {
 	log.SetFlags(log.LstdFlags)
 	log.Printf("PingWatch-Server %s startet, Daten in %s, Zeitzone %s", version, *dataDir, time.Local)
 
-	m := NewMonitor(*dataDir)
+	var store Storage
+	if dsn, ok := databaseDSN(); ok {
+		pg, err := NewPgStore(dsn)
+		if err != nil {
+			log.Fatalf("Datenbank: %v", err)
+		}
+		log.Printf("Speicher: PostgreSQL-Datenbank")
+		store = pg
+	} else {
+		log.Printf("Speicher: Dateien in %s (keine DATABASE_URL gesetzt)", *dataDir)
+		store = NewFileStore(*dataDir)
+	}
+	m := NewMonitor(store)
 	s := &Server{m: m, envPass: os.Getenv("ADMIN_PASSWORD"), agentDir: envOr("AGENT_DIR", "./downloads")}
 	if s.envPass == "" && m.cfg.PassHash == "" {
 		pw := randHex(5)
@@ -382,7 +394,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
-		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "",
+		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(),
 	})
 }
 

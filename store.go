@@ -101,19 +101,19 @@ type dayFile struct {
 	w   *bufio.Writer
 }
 
-type Store struct {
+type FileStore struct {
 	dir      string
 	mu       sync.Mutex
 	writers  map[string]*dayFile
 	aggCache map[string][]Agg
 }
 
-func NewStore(dir string) *Store {
+func NewFileStore(dir string) *FileStore {
 	os.MkdirAll(filepath.Join(dir, "samples"), 0o755)
-	return &Store{dir: dir, writers: map[string]*dayFile{}, aggCache: map[string][]Agg{}}
+	return &FileStore{dir: dir, writers: map[string]*dayFile{}, aggCache: map[string][]Agg{}}
 }
 
-func (s *Store) hostDir(host string) string { return filepath.Join(s.dir, "samples", host) }
+func (s *FileStore) hostDir(host string) string { return filepath.Join(s.dir, "samples", host) }
 
 func fmtR(r int32) string {
 	if r < 0 {
@@ -124,7 +124,7 @@ func fmtR(r int32) string {
 
 var flagChars = []byte{'o', 's', 'l'}
 
-func (s *Store) Append(host string, sm Sample) {
+func (s *FileStore) Append(host string, sm Sample) {
 	day := dayOf(sm.T)
 	line := fmt.Sprintf("%d;%s;%c\n", sm.T, fmtR(sm.R), flagChars[sm.F])
 	s.mu.Lock()
@@ -157,7 +157,7 @@ func (s *Store) Append(host string, sm Sample) {
 	delete(s.aggCache, host+"|"+day)
 }
 
-func (s *Store) appendDirect(host, day, line string) {
+func (s *FileStore) appendDirect(host, day, line string) {
 	os.MkdirAll(s.hostDir(host), 0o755)
 	f, err := os.OpenFile(filepath.Join(s.hostDir(host), day+".csv"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *Store) appendDirect(host, day, line string) {
 	delete(s.aggCache, host+"|"+day)
 }
 
-func (s *Store) Flush() {
+func (s *FileStore) Flush() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, df := range s.writers {
@@ -176,7 +176,7 @@ func (s *Store) Flush() {
 	}
 }
 
-func (s *Store) Close() {
+func (s *FileStore) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for k, df := range s.writers {
@@ -221,7 +221,7 @@ func parseSamples(r io.Reader, out []Sample) []Sample {
 }
 
 // ReadDay liest alle Messungen eines Tages (sortiert).
-func (s *Store) ReadDay(host, day string) []Sample {
+func (s *FileStore) ReadDay(host, day string) []Sample {
 	var out []Sample
 	base := filepath.Join(s.hostDir(host), day)
 	if f, err := os.Open(base + ".csv.gz"); err == nil {
@@ -242,7 +242,7 @@ func (s *Store) ReadDay(host, day string) []Sample {
 }
 
 // DayAgg liefert 1440 Minuten-Aggregate eines vergangenen Tages (gecacht).
-func (s *Store) DayAgg(host, day string) []Agg {
+func (s *FileStore) DayAgg(host, day string) []Agg {
 	key := host + "|" + day
 	s.mu.Lock()
 	if a, ok := s.aggCache[key]; ok {
@@ -280,7 +280,7 @@ func minuteAggs(samples []Sample, day string) []Agg {
 }
 
 // Maintenance: alte Tage komprimieren, abgelaufene löschen.
-func (s *Store) Maintenance(retentionDays int) {
+func (s *FileStore) Maintenance(retentionDays int) {
 	s.Flush()
 	root := filepath.Join(s.dir, "samples")
 	hosts, _ := os.ReadDir(root)
@@ -310,7 +310,7 @@ func (s *Store) Maintenance(retentionDays int) {
 	}
 }
 
-func (s *Store) compressDay(host, day string) {
+func (s *FileStore) compressDay(host, day string) {
 	samples := s.ReadDay(host, day)
 	base := filepath.Join(s.hostDir(host), day)
 	tmp := base + ".csv.gz.tmp"
@@ -347,7 +347,7 @@ type Event struct {
 	Sum      int64  `json:"sum"`
 }
 
-func (s *Store) AppendEvent(e Event) {
+func (s *FileStore) AppendEvent(e Event) {
 	f, err := os.OpenFile(filepath.Join(s.dir, "events.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
@@ -357,7 +357,7 @@ func (s *Store) AppendEvent(e Event) {
 	f.Close()
 }
 
-func (s *Store) LoadEvents(retentionDays int) []*Event {
+func (s *FileStore) LoadEvents(retentionDays int) []*Event {
 	f, err := os.Open(filepath.Join(s.dir, "events.jsonl"))
 	if err != nil {
 		return nil
@@ -376,7 +376,7 @@ func (s *Store) LoadEvents(retentionDays int) []*Event {
 	return out
 }
 
-func (s *Store) RewriteEvents(evs []*Event) {
+func (s *FileStore) RewriteEvents(evs []*Event) {
 	tmp := filepath.Join(s.dir, "events.jsonl.tmp")
 	f, err := os.Create(tmp)
 	if err != nil {
@@ -394,3 +394,33 @@ func (s *Store) RewriteEvents(evs []*Event) {
 	f.Close()
 	os.Rename(tmp, filepath.Join(s.dir, "events.jsonl"))
 }
+
+// Storage ist die gemeinsame Schnittstelle für Datei- und Datenbank-Speicher.
+type Storage interface {
+	Append(host string, sm Sample)
+	Flush()
+	Close()
+	ReadDay(host, day string) []Sample
+	DayAgg(host, day string) []Agg
+	Maintenance(retentionDays int)
+	AppendEvent(e Event)
+	LoadEvents(retentionDays int) []*Event
+	RewriteEvents(evs []*Event)
+	LoadConfig() ([]byte, error)
+	SaveConfig(b []byte) error
+	Kind() string
+}
+
+func (s *FileStore) LoadConfig() ([]byte, error) {
+	return os.ReadFile(filepath.Join(s.dir, "config.json"))
+}
+
+func (s *FileStore) SaveConfig(b []byte) error {
+	p := filepath.Join(s.dir, "config.json")
+	if err := os.WriteFile(p+".tmp", b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(p+".tmp", p)
+}
+
+func (s *FileStore) Kind() string { return "files" }
