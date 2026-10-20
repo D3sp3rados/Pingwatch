@@ -185,6 +185,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/job", s.handleAgentJob)
 	mux.HandleFunc("/api/agent/unifi", s.handleAgentUniFi)
 	mux.HandleFunc("/api/agent/snmp", s.handleAgentSNMP)
+	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
 
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
@@ -936,6 +937,26 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
+	http.ServeFile(w, r, p)
+}
+
+// handleAgentBinary: Agent-Programm mit dem Standort-Token laden (für Home-Assistant-Add-on und Selbst-Update).
+func (s *Server) handleAgentBinary(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.m.siteByToken(bearer(r)); !ok {
+		http.Error(w, "Token ungültig", 401)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/api/agent/binary/")
+	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true}
+	p := filepath.Join(s.agentDir, name)
+	if !allowed[name] {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := os.Stat(p); err != nil {
+		http.Error(w, "Datei nicht im Image enthalten", 404)
+		return
+	}
 	http.ServeFile(w, r, p)
 }
 
