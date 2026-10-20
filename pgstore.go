@@ -92,6 +92,24 @@ func withSSLMode(dsn, mode string) string {
 	return strings.TrimSpace(dsn + " sslmode=" + mode)
 }
 
+// withConnectTimeout setzt ein Verbindungs-Timeout, damit ein gesperrter Port nicht minutenlang hängt.
+func withConnectTimeout(dsn string) string {
+	if dsn == "" || strings.Contains(dsn, "connect_timeout") {
+		return dsn
+	}
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return dsn
+		}
+		q := u.Query()
+		q.Set("connect_timeout", "10")
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	return dsn + " connect_timeout=10"
+}
+
 func hasSSLMode(dsn string) bool {
 	return strings.Contains(dsn, "sslmode=") || os.Getenv("PGSSLMODE") != ""
 }
@@ -119,16 +137,14 @@ func openPg(dsn string) (*sql.DB, error) {
 func NewPgStore(dsn string) (*PgStore, error) {
 	var db *sql.DB
 	var err error
-	for i := 0; i < 20; i++ {
+	dsn = withConnectTimeout(dsn)
+	for i := 0; ; i++ {
 		db, err = openPg(dsn)
 		if err == nil {
 			break
 		}
-		log.Printf("Datenbank nicht erreichbar (%v) – neuer Versuch in 5 s", err)
-		time.Sleep(5 * time.Second)
-	}
-	if err != nil {
-		return nil, err
+		log.Printf("Datenbank nicht erreichbar (%v) – neuer Versuch in 10 s", err)
+		time.Sleep(10 * time.Second)
 	}
 	db.SetMaxOpenConns(5)
 	db.SetMaxIdleConns(3)
