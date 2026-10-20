@@ -664,7 +664,7 @@ function route(){
   window.scrollTo(0,0);
 }
 async function refreshState(){
-  try{ S.state=await api('/api/state'); $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
+  try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
   renderSummary(); fillHostSelects();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();

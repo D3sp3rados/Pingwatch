@@ -296,7 +296,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	m := s.m
 	now := time.Now().UnixMilli()
 	h1, h24 := now-3600_000, now-24*3600_000
-	var hv []HostView
+	hv := []HostView{}
 	for _, h := range m.hostList() {
 		siteOn, _ := m.siteOnline(h.cfg.Site)
 		h.mu.Lock()
@@ -666,7 +666,8 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.m.mu.RLock()
 		defer s.m.mu.RUnlock()
-		writeJSON(w, s.m.cfg.Hosts)
+		out := append([]HostCfg{}, s.m.cfg.Hosts...)
+		writeJSON(w, out)
 	}
 }
 
@@ -690,7 +691,8 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.m.mu.RLock()
 		defer s.m.mu.RUnlock()
-		writeJSON(w, s.m.cfg.Sites)
+		out := append([]SiteCfg{}, s.m.cfg.Sites...)
+		writeJSON(w, out)
 	}
 }
 
