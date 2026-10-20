@@ -390,9 +390,7 @@ func arpTable() map[string]string {
 
 // ---------- UniFi (Network-Anwendung, Integration-API ab Network 9) ----------
 
-
 // unifiBase kann in Tests überschrieben werden.
 func unifiDevices(base, key, siteFilter string) ([]unifiDevice, error) {
 	return unifiFetch(base, key, siteFilter, false)
 }
-
