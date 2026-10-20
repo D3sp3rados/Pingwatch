@@ -14,6 +14,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -257,7 +258,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		time.Sleep(800 * time.Millisecond)
-		http.Redirect(w, r, "/login?f=1", http.StatusFound)
+		msg := ""
+		if e := err.Error(); !strings.Contains(e, "falsch") {
+			msg = "&m=" + url.QueryEscape(e) // gesperrt/abgelaufen – Grund anzeigen
+		}
+		http.Redirect(w, r, "/login?f=1"+msg, http.StatusFound)
 		return
 	}
 	b, _ := webFS.ReadFile("web/login.html")

@@ -34,6 +34,7 @@ type Org struct {
 	PaidUntil  int64      `json:"paidUntil,omitempty"`
 	Disabled   bool       `json:"disabled,omitempty"`
 	ReportSent string     `json:"reportSent,omitempty"`
+	Expires    int64      `json:"expires,omitempty"`    // Testzugang bis (ms), 0 = unbegrenzt
 	StatusPage StatusPage `json:"statusPage,omitempty"` // Monat (YYYY-MM) des zuletzt versandten Monatsberichts
 
 	StripeCustomer string `json:"stripeCustomer,omitempty"`
@@ -50,6 +51,8 @@ type User struct {
 	PassHash  string `json:"passHash"`
 	Created   int64  `json:"created"`
 	LastLogin int64  `json:"lastLogin,omitempty"`
+	Super     bool   `json:"super,omitempty"`   // Betreiber-Admin (nur Benutzer der Betreiber-Org)
+	Expires   int64  `json:"expires,omitempty"` // Zugang gültig bis (ms), 0 = unbegrenzt
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.
@@ -254,9 +257,11 @@ func (s *Server) parseToken(tok string) *Principal {
 	if u == nil || !hmac.Equal([]byte(sig), []byte(s.sign(payload+"|"+userRef(u)))) {
 		return nil
 	}
-	o := s.m.orgByID(u.Org)
-	if o == nil || o.Disabled {
+	if accessError(u, s.m.orgByID(u.Org)) != nil {
 		return nil
+	}
+	if u.isSuper() {
+		return &Principal{User: u, Super: true, Role: "owner"}
 	}
 	return &Principal{User: u, Org: u.Org, Role: u.Role}
 }
@@ -317,8 +322,8 @@ func (s *Server) login(email, pw string) (string, *User, error) {
 	if u == nil || !checkPassword(u.PassHash, pw) {
 		return "", nil, errors.New("E-Mail oder Passwort falsch")
 	}
-	if o := s.m.orgByID(u.Org); o == nil || o.Disabled {
-		return "", nil, errors.New("Zugang gesperrt – bitte beim Anbieter melden")
+	if err := accessError(u, s.m.orgByID(u.Org)); err != nil {
+		return "", nil, err
 	}
 	s.m.mu.Lock()
 	for i := range s.m.cfg.Users {
@@ -329,6 +334,22 @@ func (s *Server) login(email, pw string) (string, *User, error) {
 	s.m.saveConfigLocked()
 	s.m.mu.Unlock()
 	return s.makeToken(u.ID, userRef(u)), u, nil
+}
+
+func (u *User) isSuper() bool { return u.Super && u.Org == defaultOrgID }
+
+// accessError: Zugang gesperrt oder abgelaufen?
+func accessError(u *User, o *Org) error {
+	now := time.Now().UnixMilli()
+	switch {
+	case o == nil || o.Disabled:
+		return errors.New("Zugang gesperrt – bitte beim Anbieter melden")
+	case o.Expires > 0 && now > o.Expires:
+		return errors.New("Der Testzugang ist am " + time.UnixMilli(o.Expires).Format("02.01.2006") + " abgelaufen – bitte beim Anbieter melden")
+	case u != nil && u.Expires > 0 && now > u.Expires:
+		return errors.New("Ihr Zugang war bis " + time.UnixMilli(u.Expires).Format("02.01.2006") + " gültig")
+	}
+	return nil
 }
 
 // ---------- Zugriff auf Org-Daten ----------
