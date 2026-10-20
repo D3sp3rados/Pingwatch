@@ -216,6 +216,10 @@ func (d Device) wants(n notice) bool {
 		}
 	case "offline", "online":
 		return d.Offline
+	case "cert":
+		if !d.Outage {
+			return false
+		}
 	}
 	if len(d.Hosts) == 0 {
 		return true

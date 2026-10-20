@@ -312,6 +312,18 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
   </div>
 
+  <h2>Öffentliche Statusseite</h2>
+  <div class="panel empty" id="sp-na" style="display:none">Eine öffentliche Statusseite für Ihre Kunden gibt es im Paket <b>Pro</b>. <a href="#/billing">Paket ansehen →</a></div>
+  <div class="panel" id="sp-box"><div class="formrow" style="flex-wrap:wrap;align-items:flex-end">
+    <label class="check"><input type="checkbox" id="sp-on"> eingeschaltet</label>
+    <label class="field" style="max-width:240px">Adresse<input id="sp-slug" placeholder="z. B. firma-status" maxlength="40"><small id="sp-url"></small></label>
+    <label class="field" style="max-width:300px">Überschrift<input id="sp-title" maxlength="80"></label>
+    <button class="btn ed" id="sp-save">Speichern</button></div>
+    <div class="formrow" style="display:block;border-top:1px solid var(--line)"><b style="font-size:13px">Angezeigte Hosts</b> <span class="muted" style="font-size:12px">(nur Name und Status, keine IP-Adressen)</span>
+      <div id="sp-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px"></div>
+      <label class="field" style="margin-top:10px">Hinweis oben auf der Seite (optional)<input id="sp-note" maxlength="500" placeholder="z. B. Bei Störungen: 07753 …"></label></div>
+  </div>
+
   <h2>Wartungsfenster <button class="btn sm pri ed" id="add-maint">+ Wartung planen</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="mt-tbl"></table></div>
   <p class="muted" style="font-size:12.5px">Während einer Wartung gibt es keine Alarme, und Ausfälle zählen nicht in die Verfügbarkeit (Monatsbericht).</p>
@@ -360,7 +372,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
 <section id="v-admin">
   <div class="panel kv" id="a-kpi"></div>
-  <h2>Kunden <button class="btn sm pri" id="a-new">+ Kunde anlegen</button>
+  <h2>Kunden <button class="btn sm pri" id="a-new">+ Kunde anlegen</button> <a class="btn sm" href="/api/admin/orgs?format=csv">Abrechnung (CSV)</a>
     <input type="search" id="a-q" placeholder="Suchen …" style="margin-left:auto;width:200px;max-width:45%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="a-tbl"></table></div>
 </section>
@@ -383,6 +395,24 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <button class="btn danger" type="button" id="of-del" style="margin-right:auto">Löschen</button>
       <button class="btn" value="cancel">Abbrechen</button><button class="btn pri" value="ok">Speichern</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-import">
+  <form method="dialog" id="im-form">
+    <div class="dlg-h" id="im-title">Netzwerk scannen</div>
+    <div class="dlg-b" style="display:block">
+      <div id="im-scanf"><label class="field">Netz (leer = Netze des Agenten automatisch)<input name="cidr" placeholder="z. B. 192.168.1.0/24"></label></div>
+      <div id="im-unifif">
+        <label class="field">Adresse der UniFi-Konsole (vom Agent aus)<input name="url" placeholder="https://192.168.1.1"></label>
+        <label class="field">API-Schlüssel<input name="key" autocomplete="off"><small>UniFi Network → Einstellungen → Control Plane → Integrationen → API-Schlüssel erstellen. Der Schlüssel wird nicht gespeichert.</small></label>
+        <label class="field">UniFi-Site (leer = alle)<input name="usite" placeholder="Default"></label>
+      </div>
+      <div style="margin:10px 0"><button class="btn pri" type="button" id="im-go">Starten</button> <span class="muted" id="im-state" style="font-size:13px"></span></div>
+      <div id="im-res" style="max-height:45vh;overflow:auto"></div>
+    </div>
+    <div class="dlg-err" id="im-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Schließen</button><button class="btn pri" type="button" id="im-add" disabled>Ausgewählte anlegen</button></div>
   </form>
 </dialog>
 
@@ -453,10 +483,12 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div class="dlg-h" id="hf-title">Host hinzufügen</div>
     <div class="dlg-b">
       <label class="field">Name<input name="name" placeholder="z. B. Antenne Dogern" maxlength="60"></label>
-      <label class="field">IP-Adresse oder Hostname<input name="addr" required placeholder="192.168.1.1 oder 8.8.8.8"></label>
+      <label class="field"><span id="hf-addrl">IP-Adresse oder Hostname</span><input name="addr" required placeholder="192.168.1.1 oder 8.8.8.8"></label>
       <label class="field">Pingt von<select name="site" id="hf-site"></select><small id="hf-sitehint"></small></label>
       <label class="field">Hängt ab von<select name="parent" id="hf-parent"></select><small>Fällt dieser Host aus, gibt es für diesen keinen Alarm.</small></label>
-      <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option></select></label>
+      <label class="field">Methode<select name="method"><option value="icmp">ICMP (klassischer Ping)</option><option value="tcp">TCP-Verbindung</option><option value="http">Webseite (HTTP/HTTPS) · Pro</option><option value="dns">DNS-Auflösung · Pro</option></select></label>
+      <label class="field" id="hf-expf"><span id="hf-expl">Erwartet</span><input name="expect" maxlength="120"><small id="hf-exph"></small></label>
+      <label class="field" id="hf-dnsf">DNS-Server<input name="dnsServer" placeholder="leer = Standard, z. B. 192.168.1.1"></label>
       <label class="field" id="hf-portf">TCP-Port<input name="port" type="number" min="1" max="65535" value="443"></label>
       <label class="field">Intervall (Sekunden)<select name="interval"><option value="500">0,5</option><option value="1000" selected>1</option><option value="2000">2</option><option value="5000">5</option><option value="10000">10</option><option value="30000">30</option><option value="60000">60</option></select></label>
       <label class="field">Timeout (ms)<input name="timeoutMs" type="number" min="100" max="10000" value="1000"></label>
@@ -551,7 +583,7 @@ function renderOverview(){
     c.classList.toggle('down',h.status==='down');
     c.querySelector('.dot').style.background=`var(${col})`;
     c.querySelector('.card-t b').textContent=h.name;
-    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'');
+    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
     const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
     const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
@@ -758,14 +790,17 @@ function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return
 function renderSettings(){
   const st=S.state; if(!st) return;
   const hs=st.hosts;
-  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${h.method==='tcp'?'TCP '+h.port:'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:!h.paused})}); refreshState(); });
   const sites=st.sites.filter(s=>s.id!=='cloud');
   $('#sites').innerHTML=sites.length? sites.map(s=>`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
     <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)}</dd>`:''}</dl>
     <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a><a class="btn sm" href="/download/pingwatch-agent.exe">Windows-Agent</a><a class="btn sm" href="/download/pingwatch-agent-linux-arm64">Pi (ARM64)</a><a class="btn sm" href="/download/pingwatch-agent-linux-amd64">Linux x64</a></div>
+    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button></div>
     <div class="row ed" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
+  $$('#sites [data-scan]').forEach(b=>b.onclick=()=>openImport(b.dataset.scan,'scan'));
+  $$('#sites [data-unifi]').forEach(b=>b.onclick=()=>openImport(b.dataset.unifi,'unifi'));
   $$('#sites [data-ren]').forEach(b=>b.onclick=async()=>{ const n=prompt('Neuer Name:',siteName(b.dataset.ren)); if(!n) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.ren,name:n})}); refreshState(); });
   $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!confirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
   $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
@@ -779,16 +814,64 @@ function renderSettings(){
   $('#g-retrow').style.display=sup?'flex':'none';
   $('#g-pw').style.display=sup&&st.envPassword?'none':'flex';
   if(st.org) $('#team-sub').textContent=st.org.name;
-  loadUsers(); loadAlerts(); loadMaint();
+  loadUsers(); loadAlerts(); loadMaint(); loadStatusPage();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
   if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||''}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||''}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+
+/* Netzwerk-Scan & UniFi-Import */
+const idlg=$('#dlg-import'), imf=$('#im-form'); let IM={};
+function openImport(site,kind){ IM={site,kind,rows:[]}; $('#im-title').textContent=(kind==='scan'?'Netzwerk scannen':'UniFi-Geräte importieren')+' · '+siteName(site);
+  $('#im-scanf').style.display=kind==='scan'?'':'none'; $('#im-unifif').style.display=kind==='unifi'?'':'none';
+  $('#im-res').innerHTML=''; $('#im-state').textContent=''; $('#im-err').textContent=''; $('#im-add').disabled=true; $('#im-go').disabled=false; idlg.showModal(); }
+$('#im-go').onclick=async()=>{ const params=IM.kind==='scan'?{cidr:imf.cidr.value.trim()}:{url:imf.url.value.trim().replace(/\/$/,''),key:imf.key.value.trim(),site:imf.usite.value.trim()};
+  if(IM.kind==='unifi'&&!/^https:\/\//.test(params.url)) params.url='https://'+params.url;
+  $('#im-err').textContent=''; $('#im-res').innerHTML=''; $('#im-go').disabled=true;
+  try{ const r=await api('/api/jobs',{method:'POST',body:JSON.stringify({site:IM.site,kind:IM.kind,params})}); imf.key.value='';
+    const t0=Date.now(); let st;
+    while(Date.now()-t0<180000){ await new Promise(r=>setTimeout(r,2000)); if(!idlg.open) return; st=await api('/api/jobs?id='+r.id);
+      $('#im-state').textContent=st.status==='queued'?'warte auf den Agenten … ('+Math.round((Date.now()-t0)/1000)+' s)':st.status==='running'?(IM.kind==='scan'?'scanne … (bis ca. 1 Minute)':'frage Konsole ab …'):'';
+      if(st.status==='done'||st.status==='error') break; }
+    $('#im-go').disabled=false;
+    if(!st||st.status==='queued'||st.status==='running'){ $('#im-err').textContent='Keine Antwort vom Agenten. Ist er aktuell (neue Version herunterladen)?'; return; }
+    if(st.status==='error'){ $('#im-err').textContent=st.error; return; }
+    const known=new Set(S.state.hosts.map(h=>h.addr));
+    IM.rows=IM.kind==='scan'?(st.result.hits||[]).map(x=>({ip:x.ip,name:x.name?x.name.split('.')[0]:'',info:[x.mac,x.via!=='icmp'?'antwortet nur auf '+x.via:'',fmtMs(x.rtt)].filter(Boolean).join(' · ')}))
+      :(st.result||[]).map(x=>({ip:x.ip,name:x.name||x.model,info:[x.model,x.mac,x.state==='ONLINE'?'':x.state].filter(Boolean).join(' · ')}));
+    $('#im-state').textContent=`${IM.rows.length} Geräte gefunden`+(IM.kind==='scan'&&st.result.nets?' in '+st.result.nets.join(', '):'');
+    $('#im-res').innerHTML=IM.rows.length?'<table class="tbl"><tr><th><input type="checkbox" id="im-all"></th><th>IP</th><th>Name</th><th class="hide-m">Info</th></tr>'+IM.rows.map((x,i)=>`<tr><td>${known.has(x.ip)?'<span class="tag">vorhanden</span>':`<input type="checkbox" data-i="${i}">`}</td><td class="num">${esc(x.ip)}</td><td><input data-n="${i}" value="${esc(x.name||x.ip)}" style="width:100%;min-width:120px"></td><td class="hide-m muted" style="font-size:12px">${esc(x.info)}</td></tr>`).join('')+'</table>':'<div class="empty">Nichts gefunden.</div>';
+    const all=$('#im-all'); if(all) all.onchange=()=>{ $$('#im-res [data-i]').forEach(c=>c.checked=all.checked); syncImp(); };
+    $$('#im-res [data-i]').forEach(c=>c.onchange=syncImp); syncImp();
+  }catch(e){ $('#im-err').textContent=e.message; $('#im-go').disabled=false; } };
+function syncImp(){ const n=$$('#im-res [data-i]:checked').length; $('#im-add').disabled=!n; $('#im-add').textContent=n?`${n} als Hosts anlegen`:'Ausgewählte anlegen'; }
+$('#im-add').onclick=async()=>{ const sel=$$('#im-res [data-i]:checked').map(c=>+c.dataset.i); let ok=0;
+  $('#im-add').disabled=true;
+  for(const i of sel){ const x=IM.rows[i]; const name=($(`#im-res [data-n="${i}"]`).value||x.ip).trim();
+    try{ await api('/api/hosts',{method:'POST',body:JSON.stringify({name,addr:x.ip,site:IM.site,method:'icmp',intervalMs:Math.max(1000,(S.state.org&&S.state.org.minInterval)||1000),timeoutMs:1000,outageCount:3})}); ok++; }
+    catch(e){ $('#im-err').textContent=`${ok} angelegt – dann: ${e.message}`; break; } }
+  if(ok) toast(`${ok} Hosts angelegt`); refreshState(); if(!$('#im-err').textContent) idlg.close(); };
+
+/* Statusseite */
+let SP=null;
+async function loadStatusPage(){ if(SP) return renderStatusPage(); try{ SP=await api('/api/statuspage'); }catch(e){ return; } renderStatusPage(); }
+function renderStatusPage(){ const p=SP.page||{}; const box=$('#sp-box');
+  $('#sp-na').style.display=SP.allowed?'none':''; box.style.display=SP.allowed?'':'none'; if(!SP.allowed) return;
+  const sig=S.state.hosts.map(h=>h.id+h.name).join();
+  if(box.dataset.done){ if($('#sp-hosts').dataset.sig===sig) return; p.hosts=$$('#sp-hosts input:checked').map(i=>i.value); }
+  else { box.dataset.done='1'; $('#sp-on').checked=!!p.on; $('#sp-slug').value=p.slug||''; $('#sp-title').value=p.title||(S.state.org?S.state.org.name:''); $('#sp-note').value=p.note||''; }
+  $('#sp-hosts').dataset.sig=sig;
+  const sel=new Set(p.hosts||[]); $('#sp-hosts').innerHTML=S.state.hosts.map(h=>`<label class="check"><input type="checkbox" value="${h.id}"${sel.has(h.id)?' checked':''}> ${esc(h.name)}</label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
+  spURL(); }
+function spURL(){ const sl=$('#sp-slug').value.trim(); $('#sp-url').innerHTML=sl&&SP&&SP.page&&SP.page.on&&SP.page.slug===sl?`<a href="/status/${esc(sl)}" target="_blank">${location.origin}/status/${esc(sl)}</a>`:sl?location.origin+'/status/'+esc(sl):''; }
+$('#sp-slug').oninput=spURL;
+$('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-slug').value.trim().toLowerCase(),title:$('#sp-title').value.trim(),note:$('#sp-note').value.trim(),hosts:$$('#sp-hosts input:checked').map(i=>i.value)};
+  try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ alert(e.message); } };
 
 /* Traceroute */
 function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#dlg-trace').showModal(); }
@@ -972,7 +1055,7 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
 }
 $('#a-q').oninput=renderAdmin;
 async function switchOrg(id,go){ try{ await api('/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ alert(e.message); return; }
-  $('#ov').dataset.sig=''; $$('[data-sig]').forEach(e=>e.dataset.sig=''); $('#users-tbl').dataset.sig='';
+  $('#ov').dataset.sig=''; $$('[data-sig]').forEach(e=>e.dataset.sig=''); SP=null; $('#sp-box').dataset.done=''; AL=null; MT=[]; mtAt=0; $('#users-tbl').dataset.sig='';
   await refreshState(); await refreshOverview(); if(go&&location.hash!==go) location.hash=go; else route(); toast('Geöffnet: '+(S.state.org?S.state.org.name:id)); }
 const odlg=$('#dlg-org'), of=$('#org-form');
 function openOrg(id){ const o=id&&ORGS.find(x=>x.id===id);
@@ -1030,14 +1113,19 @@ function openHost(id){
   hf.dataset.id=h?h.id:'';
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
-  hf.parent.value=h&&h.parent||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
+  hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
   syncHostForm(); dlg.showModal();
 }
-function syncHostForm(){ $('#hf-portf').style.display=hf.method.value==='tcp'?'':'none'; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
+function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'?'':'none';
+  $('#hf-expf').style.display=mt==='http'||mt==='dns'?'':'none'; $('#hf-dnsf').style.display=mt==='dns'?'':'none';
+  $('#hf-addrl').textContent={http:'Adresse der Webseite',dns:'Name, der aufgelöst wird'}[mt]||'IP-Adresse oder Hostname';
+  hf.addr.placeholder={http:'https://www.firma.de',dns:'www.firma.de'}[mt]||'192.168.1.1 oder 8.8.8.8';
+  $('#hf-expl').textContent=mt==='dns'?'Erwartete IP-Adresse (optional)':'Erwartet (optional)';
+  $('#hf-exph').textContent=mt==='http'?'Statuscode (z. B. 200) oder Text, der auf der Seite stehen muss. Zertifikat wird geprüft, Warnung 14 Tage vor Ablauf.':''; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
   $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)'; }
 hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
-  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value};
+  const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim()};
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
 $('#add-host').onclick=()=>openHost();

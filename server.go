@@ -181,6 +181,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/config", s.handleAgentConfig)
 	mux.HandleFunc("/api/agent/push", s.handleAgentPush)
 	mux.HandleFunc("/api/agent/trace", s.handleAgentTrace)
+	mux.HandleFunc("/api/agent/job", s.handleAgentJob)
 
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
@@ -229,6 +230,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
+	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
+	mux.HandleFunc("/api/statuspage", protect(s.handleStatusConfig))
+	mux.HandleFunc("/status/", s.handlePublicStatus)
 	mux.HandleFunc("/api/trace", protect(s.handleTraceNow))
 	mux.HandleFunc("/api/sites", protect(s.handleSites))
 	mux.HandleFunc("/api/settings", protect(s.handleSettings))
@@ -279,6 +283,7 @@ type HostView struct {
 	Ongoing   []Event `json:"ongoing"`
 	LastOut   *Event  `json:"lastOutage"`
 	Maint     bool    `json:"maint,omitempty"`
+	CertExp   int64   `json:"certExp,omitempty"`
 }
 
 type SiteView struct {
@@ -332,7 +337,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
 		v := HostView{HostCfg: h.cfg, IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
-			Threshold: h.effThreshold(), Maint: inM}
+			Threshold: h.effThreshold(), Maint: inM, CertExp: certExpiry(h.cfg.ID)}
 		if h.baseN >= 30 {
 			v.Baseline = h.baseMed
 		}
@@ -738,6 +743,12 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		hc.Org = p.Org
+		if isCheckMethod(hc.Method) {
+			if o := s.m.orgByID(p.Org); o == nil || !planHas(o.Plan, "checks") {
+				http.Error(w, "Webseiten- und DNS-Prüfungen gibt es im Paket Pro", 402)
+				return
+			}
+		}
 		if err := s.m.validParent(p.Org, hc.ID, hc.Parent); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -940,7 +951,11 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
-	writeJSON(w, map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver})
+	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver}
+	if jb := takeJobs(site.ID); len(jb) > 0 {
+		out["jobs"] = jb
+	}
+	writeJSON(w, out)
 }
 
 type pushSample struct {
@@ -949,6 +964,7 @@ type pushSample struct {
 	R  int32  `json:"r"`
 	E  string `json:"e,omitempty"`
 	IP string `json:"ip,omitempty"`
+	C  int64  `json:"c,omitempty"` // Ablauf des TLS-Zertifikats (http-Prüfung)
 }
 
 func (s *Server) handleAgentPush(w http.ResponseWriter, r *http.Request) {
@@ -1000,6 +1016,9 @@ func (s *Server) handleAgentPush(w http.ResponseWriter, r *http.Request) {
 		if ps.R < -1 {
 			ps.R = -1
 		}
+		if ps.C > 0 {
+			certExp.Store(ps.H, ps.C)
+		}
 		s.m.Ingest(h, ps.T, ps.R, ps.IP, ps.E)
 		acc++
 	}
@@ -1009,6 +1028,9 @@ func (s *Server) handleAgentPush(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"accepted": acc, "version": ver}
 	if tr := takeTraces(site.ID); len(tr) > 0 {
 		out["traces"] = tr
+	}
+	if jb := takeJobs(site.ID); len(jb) > 0 {
+		out["jobs"] = jb
 	}
 	writeJSON(w, out)
 }

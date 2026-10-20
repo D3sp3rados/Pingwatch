@@ -94,6 +94,18 @@ Unter **Einstellungen → Alarme** legt jeder Kunde eigene Alarmwege an (ab Pake
 
 Hinweis rstcloud: ausgehende Verbindungen auf 25/465/587 sind dort gesperrt – den Mailserver über einen freigegebenen Port oder das interne Netz ansprechen.
 
+## Weitere Funktionen (Pro)
+
+- **Webseiten- und DNS-Prüfung:** Methode „Webseite“ (Statuscode/Text, TLS-Zertifikat mit Warnung 14 Tage vor Ablauf) bzw. „DNS-Auflösung“ (optional eigener DNS-Server und erwartete Adresse).
+- **Abhängigkeiten:** „Hängt ab von“ im Host – fällt z. B. der Router aus, gibt es für die Geräte dahinter keine Alarme.
+- **Wartungsfenster:** einmalig oder wöchentlich; keine Alarme, zählt nicht in die Verfügbarkeit.
+- **Traceroute:** startet bei jedem Ausfall automatisch (Cloud oder Agent), Ergebnis im Ereignis; von Hand im Host-Detail.
+- **Netzwerk-Scan & UniFi-Import:** in der Standort-Karte; der Agent durchsucht sein Netz bzw. fragt die UniFi-Konsole (Integration-API, API-Schlüssel) ab.
+- **Öffentliche Statusseite:** `https://<app>/status/<name>` mit 90-Tage-Verlauf und Vorfällen (ohne IP-Adressen).
+- **Abrechnung:** Reiter Kunden → „Abrechnung (CSV)“ für das eigene Rechnungsprogramm.
+
+Die neuen Funktionen am Standort brauchen den Agenten ab Version 1.1.0 – einfach die neue `pingwatch-agent.exe` über die alte kopieren.
+
 ## Daten
 
 **Mit Datenbank (PostgreSQL):** PingWatch legt die Tabellen beim Start selbst an (`pw_config`, `pw_samples`, `pw_minutes`, `pw_events`).

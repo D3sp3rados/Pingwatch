@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -57,7 +58,16 @@ func probe(h HostCfg, res *resolver) (int32, string, string) {
 	if timeout <= 0 {
 		timeout = time.Second
 	}
+	if h.Method == "http" && !simMode {
+		return httpCheck(h, timeout)
+	}
+	if h.Method == "dns" && !simMode {
+		return dnsCheck(h, timeout)
+	}
 	if simMode {
+		if h.Method == "http" && strings.HasPrefix(normalizeURL(h.Addr), "https://") {
+			certExp.Store(h.ID, time.Now().Add(10*24*time.Hour).UnixMilli())
+		}
 		r := simPing(h.Addr)
 		if r < 0 {
 			time.Sleep(timeout / 10)

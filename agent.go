@@ -210,12 +210,16 @@ func (a *Agent) fetchConfig() bool {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"site"`
-		Hosts   []HostCfg `json:"hosts"`
-		Version int64     `json:"version"`
+		Hosts   []HostCfg  `json:"hosts"`
+		Version int64      `json:"version"`
+		Jobs    []agentJob `json:"jobs"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
 		a.setServer(false, err.Error())
 		return false
+	}
+	for _, j := range cfg.Jobs {
+		go a.runJob(j)
 	}
 	a.setServer(true, "")
 	a.mu.Lock()
@@ -256,7 +260,7 @@ func (a *Agent) worker(ah *agentHost) {
 			return
 		default:
 		}
-		a.record(ah, pushSample{H: ah.cfg.ID, T: t, R: r, E: e, IP: ip})
+		a.record(ah, pushSample{H: ah.cfg.ID, T: t, R: r, E: e, IP: ip, C: certExpiry(ah.cfg.ID)})
 		select {
 		case <-ah.stop:
 			return
@@ -365,10 +369,14 @@ func (a *Agent) push(batch []pushSample) error {
 	var r struct {
 		Version int64      `json:"version"`
 		Traces  []traceReq `json:"traces"`
+		Jobs    []agentJob `json:"jobs"`
 	}
 	json.NewDecoder(resp.Body).Decode(&r)
 	for _, t := range r.Traces {
 		go a.trace(t)
+	}
+	for _, j := range r.Jobs {
+		go a.runJob(j)
 	}
 	a.mu.Lock()
 	changed := r.Version != 0 && r.Version != a.cfgVer

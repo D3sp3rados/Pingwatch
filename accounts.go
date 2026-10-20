@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -334,6 +335,24 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			out = append(out, v)
 		}
 		sort.Slice(out, func(i, j int) bool { return out[i].Created > out[j].Created })
+		if r.URL.Query().Get("format") == "csv" {
+			// Abrechnungsliste für das eigene Rechnungsprogramm
+			csvHeader(w, "pingwatch-abrechnung-"+time.Now().Format("2006-01")+".csv")
+			fmt.Fprintln(w, "Kunde;Inhaber;Rechnungs-E-Mail;Paket;Abrechnung;Standorte gebucht;Standorte genutzt;Hosts;Preis je Standort (EUR);Betrag netto (EUR);Status;Kunde seit")
+			for _, v := range out {
+				if v.ID == defaultOrgID {
+					continue
+				}
+				pl := planByID(v.Plan)
+				st := v.Status
+				if v.Disabled {
+					st = "gesperrt"
+				}
+				fmt.Fprintf(w, "%s;%s;%s;%s;%s;%d;%d;%d;%s;%s;%s;%s\n", csvCell(v.Name), csvCell(v.Owner), csvCell(v.Email), pl.Name, v.Billing,
+					v.siteLimit(), v.UsedSites, v.UsedHosts, euroDE(pl.PriceCents), euroDE(v.MRR), st, time.UnixMilli(v.Created).Format("02.01.2006"))
+			}
+			return
+		}
 		writeJSON(w, out)
 	case http.MethodPost:
 		var req struct {
@@ -557,4 +576,15 @@ func (m *Monitor) applyOrgRetention() {
 		m.evMu.Unlock()
 		m.store.DeleteEvents(removed)
 	}
+}
+
+func csvCell(s string) string {
+	if strings.ContainsAny(s, ";\"\n") {
+		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	}
+	return s
+}
+
+func euroDE(cents int) string {
+	return strings.Replace(fmt.Sprintf("%.2f", float64(cents)/100), ".", ",", 1)
 }

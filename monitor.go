@@ -30,6 +30,8 @@ type HostCfg struct {
 	Paused      bool   `json:"paused"`
 	Org         string `json:"org,omitempty"`
 	Parent      string `json:"parent,omitempty"` // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
+	Expect      string `json:"expect,omitempty"`    // http: Statuscode oder Text; dns: erwartete Adresse
+	DNSServer   string `json:"dnsServer,omitempty"` // dns: abzufragender Server (leer = System)
 }
 
 type SiteCfg struct {
@@ -75,11 +77,34 @@ func (h *HostCfg) normalize() {
 	if h.OutageCount < 1 {
 		h.OutageCount = 3
 	}
-	if h.Method != "tcp" {
+	switch h.Method {
+	case "tcp":
+		if h.Port <= 0 || h.Port > 65535 {
+			h.Port = 443
+		}
+	case "http":
+		h.Addr = normalizeURL(h.Addr)
+		h.Port = 0
+		if h.IntervalMs < 30000 {
+			h.IntervalMs = 30000
+		}
+		if h.TimeoutMs < 5000 {
+			h.TimeoutMs = 10000
+		}
+	case "dns":
+		h.Port = 0
+		if h.IntervalMs < 10000 {
+			h.IntervalMs = 10000
+		}
+		if h.TimeoutMs < 2000 {
+			h.TimeoutMs = 3000
+		}
+	default:
 		h.Method = "icmp"
 		h.Port = 0
-	} else if h.Port <= 0 || h.Port > 65535 {
-		h.Port = 443
+	}
+	if h.Method != "http" && h.Method != "dns" {
+		h.Expect, h.DNSServer = "", ""
 	}
 	if h.Site == "" {
 		h.Site = "cloud"
@@ -512,6 +537,7 @@ func (m *Monitor) housekeeping() {
 				m.store.Maintenance(ret)
 				m.applyOrgRetention()
 				m.cleanupMaints()
+				m.checkCerts()
 			}()
 			m.evMu.Lock()
 			c := now.AddDate(0, 0, -ret).UnixMilli()
