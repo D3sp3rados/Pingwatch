@@ -50,7 +50,9 @@ func fmtPct(v float64, dec int) string {
 	return strings.Replace(fmt.Sprintf("%.*f %%", dec, v*100), ".", ",", 1)
 }
 
-func fmtDE(v float64, dec int) string { return strings.Replace(fmt.Sprintf("%.*f", dec, v), ".", ",", 1) }
+func fmtDE(v float64, dec int) string {
+	return strings.Replace(fmt.Sprintf("%.*f", dec, v), ".", ",", 1)
+}
 
 // parseMonth: "2026-09" → erster Tag; leer = Vormonat.
 func parseMonth(s string) (time.Time, error) {
