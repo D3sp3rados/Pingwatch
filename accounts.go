@@ -31,6 +31,7 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/users/mail", protect(s.handleUserMail))
 	mux.HandleFunc("/api/admin/orgs", super(s.handleAdminOrgs))
 	mux.HandleFunc("/api/admin/switch", super(s.handleAdminSwitch))
+	mux.HandleFunc("/api/admin/events", super(s.handleAdminEvents))
 	mux.HandleFunc("/api/billing/checkout", protect(s.handleBillingCheckout))
 	mux.HandleFunc("/api/billing/change", protect(s.handleBillingChange))
 	mux.HandleFunc("/api/billing/portal", protect(s.handleBillingPortal))
@@ -683,4 +684,20 @@ func nameSuffix(n string) string {
 		return " " + n
 	}
 	return ""
+}
+
+// GET /api/admin/events – Ereignisse aller Kunden (nur Betreiber), mit Kundennamen.
+func (s *Server) handleAdminEvents(w http.ResponseWriter, r *http.Request) {
+	limit := int(qInt(r, "limit", 2000))
+	if limit < 1 || limit > 10000 {
+		limit = 2000
+	}
+	evs := s.m.queryEvents("", "", "", parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), limit)
+	names := map[string]string{}
+	s.m.mu.RLock()
+	for _, o := range s.m.cfg.Orgs {
+		names[o.ID] = o.Name
+	}
+	s.m.mu.RUnlock()
+	writeJSON(w, map[string]any{"events": evs, "orgs": names})
 }

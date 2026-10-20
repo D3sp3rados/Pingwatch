@@ -69,6 +69,9 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 /* Übersicht */
 .site-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-weight:600}
+.evg{margin-bottom:10px}.evg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;cursor:pointer;font-size:13.5px}
+.evg-h b{font-size:14px}.evg-h .chev{margin-left:auto;color:var(--mut);transition:transform .15s}.evg.open .evg-h .chev{transform:rotate(90deg)}
+.evg-b{display:none;border-top:1px solid var(--line)}.evg.open .evg-b{display:block}.evg-b .ev:first-child{border-top:0}
 .uf{margin-top:12px}.uf-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;cursor:pointer;font-size:13.5px}
 .uf-h b{font-size:14px}.uf-h .chev{margin-left:auto;color:var(--mut);transition:transform .15s}.uf.open .uf-h .chev{transform:rotate(90deg)}
 .uf-b{display:none;padding:0 14px 12px}.uf.open .uf-b{display:block}
@@ -270,6 +273,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <select id="f-range">
       <option value="1">Letzte 24 h</option><option value="7" selected>Letzte 7 Tage</option><option value="30">Letzte 30 Tage</option><option value="0">Alles</option>
     </select>
+    <div class="seg" id="ev-mode"><button data-m="list">Liste</button><button data-m="group">📁 nach Gruppe</button><button data-m="org" style="display:none">🏢 alle Kunden</button></div>
     <a class="btn sm" id="f-export" href="#">CSV-Export</a>
     <span class="muted" id="f-count" style="font-size:12.5px"></span>
   </div>
@@ -859,7 +863,38 @@ $('#d-back').onclick=()=>history.back();
 /* ---------- Ereignisse-Ansicht ---------- */
 function evQuery(){ const grp=$('#f-group').value; return evQuery0()+(grp?'&group='+encodeURIComponent(grp):''); }
 function evQuery0(){ const host=$('#f-host').value, types=$$('#f-types button.on').map(b=>b.dataset.t).join(','), days=+$('#f-range').value; let q=`host=${host}&types=${types}`; if(days) q+=`&from=${Date.now()-days*864e5}`; return q; }
-async function loadEvents(){ try{ const evs=await api('/api/events?limit=1000&'+evQuery()); renderEvents($('#ev-all'),evs,true,200); $('#f-count').textContent=evs.length+(evs.length>=1000?'+':'')+' Ereignisse'; $('#f-export').href='/api/export/events.csv?'+evQuery(); }catch(e){} }
+const EVG={open:{}}; try{ EVG.open=JSON.parse(localStorage.getItem('pw_evopen')||'{}'); }catch(e){}
+function evMode(){ const st=S.state||{}, me=st.me||{}; let m='list'; try{ m=localStorage.getItem('pw_evmode')||((st.groups||[]).length?'group':'list'); }catch(e){} if(m==='org'&&!me.super) m='list'; return m; }
+const LIVE_T=new Set(['outage','offline','device','port','wan']);
+async function loadEvents(){ const mode=evMode(), me=(S.state&&S.state.me)||{};
+  $$('#ev-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode)); $('#ev-mode [data-m=org]').style.display=me.super?'':'none';
+  if(mode!=='org') fillHostSelects(true);
+  $('#f-host').style.display=mode==='org'?'none':''; $('#f-group').style.display=mode==='org'||!((S.state&&S.state.groups)||[]).length?'none':'';
+  try{
+    if(mode==='org'){ const r=await api('/api/admin/events?limit=3000&'+evQuery0().replace(/^host=[^&]*&?/,'')); renderEvGroups(r.events,e=>e.org,k=>'🏢 '+(r.orgs[k]||k),true); $('#f-count').textContent=r.events.length+' Ereignisse'; $('#f-export').style.display='none'; return; }
+    $('#f-export').style.display='';
+    const evs=await api('/api/events?limit=1000&'+evQuery()); $('#f-count').textContent=evs.length+(evs.length>=1000?'+':'')+' Ereignisse'; $('#f-export').href='/api/export/events.csv?'+evQuery();
+    if(mode==='group'){ const st=S.state, gs=st.groups||[], hg={}; for(const h of st.hosts) hg[h.id]=gs.some(g=>g.id===h.group)?h.group:'-';
+      const key=e=>e.host&&hg[e.host]!==undefined?'g'+hg[e.host]:(e.type==='device'||e.type==='reboot'||e.type==='wan'||e.dev)?'u'+e.site:e.type==='offline'?'s':'g-';
+      const lbl=k=>k==='g-'?'Ohne Gruppe':k==='s'?'🛰 Standorte (Agenten)':k[0]==='u'?'📶 UniFi · '+siteName(k.slice(1)):'📁 '+((gs.find(g=>'g'+g.id===k)||{}).name||'?');
+      renderEvGroups(evs,key,lbl,false); }
+    else { const r=$('#ev-all'); r.classList.add('panel'); r.style.background=r.style.border=''; renderEvents(r,evs,true,200); }
+  }catch(e){} }
+function renderEvGroups(evs,keyOf,label,cross){ const root=$('#ev-all'); const by=new Map();
+  for(const e of evs){ const k=keyOf(e); if(!by.has(k)) by.set(k,[]); by.get(k).push(e); }
+  const now=Date.now(); const secs=[...by.entries()].map(([k,l])=>({k,l,live:l.filter(e=>!e.end&&LIVE_T.has(e.type)).length,last:Math.max(...l.map(e=>e.start))}));
+  secs.sort((a,b)=>(b.live>0)-(a.live>0)||b.last-a.last);
+  if(!secs.length){ root.innerHTML='<div class="empty">Keine Ereignisse im gewählten Zeitraum 👍</div>'; return; }
+  root.innerHTML=''; root.classList.remove('panel'); root.style.background='transparent'; root.style.border='0';
+  for(const x of secs){ const d=document.createElement('div'); const open=EVG.open[x.k]??x.live>0; d.className='panel evg'+(open?' open':'');
+    const cnt={}; for(const e of x.l) cnt[e.type]=(cnt[e.type]||0)+1;
+    d.innerHTML=`<div class="evg-h"><span class="dot" style="background:var(${x.live?'--bad':'--ok'})"></span><b>${esc(label(x.k))}</b><span class="muted">${x.l.length} Ereignis${x.l.length>1?'se':''}${x.live?` · <b style="color:var(--bad)">${x.live} läuft</b>`:''} · zuletzt ${fmtDT(x.last,false)}</span>
+      <span class="hide-m" style="display:flex;gap:4px">${Object.entries(cnt).map(([t,n])=>`<span class="badge b-${t}" style="margin:0">${n}× ${TYPES[t]||t}</span>`).join('')}</span><span class="chev">›</span></div><div class="evg-b"></div>`;
+    root.appendChild(d); const body=d.querySelector('.evg-b'); renderEvents(body,x.l,true,cross?50:30);
+    if(cross){ body.querySelectorAll('.ev[data-h]').forEach(r=>{ const e=x.l.find(v=>v.host===r.dataset.h&&String(v.start)===r.dataset.s); r.onclick=async()=>{ if(!e||!e.host) return; await switchOrg(e.org,'#/host/'+e.host); }; }); }
+    d.querySelector('.evg-h').onclick=()=>{ const o=!d.classList.contains('open'); d.classList.toggle('open',o); EVG.open[x.k]=o; try{ localStorage.setItem('pw_evopen',JSON.stringify(EVG.open)); }catch(e){} };
+  } }
+$$('#ev-mode button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_evmode',b.dataset.m); }catch(e){} const r=$('#ev-all'); r.classList.add('panel'); r.style.background=r.style.border=''; loadEvents(); });
 $('#f-types').onclick=e=>{ if(!e.target.dataset.t) return; e.target.classList.toggle('on'); loadEvents(); };
 $('#f-host').onchange=loadEvents; $('#f-range').onchange=loadEvents; $('#f-group').onchange=()=>{ fillHostSelects(true); loadEvents(); };
 

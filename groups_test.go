@@ -81,3 +81,20 @@ func TestGroupReportAndEvents(t *testing.T) {
 		t.Fatal("Versand:", code, body, to)
 	}
 }
+
+func TestAdminEventsSuperOnly(t *testing.T) {
+	_, ts := newTestServer(t)
+	admin := newClient(t, ts)
+	admin.login("admin", "admin-pass-123")
+	_, body := admin.do("POST", "/api/admin/orgs", map[string]any{"name": "K", "plan": "basis", "ownerEmail": "k@k.de"})
+	var r struct{ TempPassword string }
+	mustJSON(t, body, &r)
+	if code, body := admin.do("GET", "/api/admin/events", nil); code != 200 || !strings.Contains(body, `"orgs"`) {
+		t.Fatal(code, body)
+	}
+	k := newClient(t, ts)
+	k.login("k@k.de", r.TempPassword)
+	if code, _ := k.do("GET", "/api/admin/events", nil); code == 200 {
+		t.Fatal("Kunde darf nicht alle Ereignisse sehen")
+	}
+}
