@@ -59,6 +59,26 @@ var pgSchema = []string{
 // Unterstützt DATABASE_URL, DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME und die
 // Standard-Variablen PGHOST, PGUSER usw.
 func databaseDSN() (string, bool) {
+	dsn, ok := databaseDSNRaw()
+	// PW_DB_HOST: eigene Überschreibung (die rstcloud setzt DB_HOST beim Deploy selbst)
+	if h := strings.TrimSpace(os.Getenv("PW_DB_HOST")); h != "" && ok && dsn != "" {
+		if pu, err := url.Parse(dsn); err == nil && pu.Host != "" {
+			port := pu.Port()
+			if i := strings.LastIndex(h, ":"); i > 0 {
+				h, port = h[:i], h[i+1:]
+			}
+			if port != "" {
+				pu.Host = h + ":" + port
+			} else {
+				pu.Host = h
+			}
+			return pu.String(), true
+		}
+	}
+	return dsn, ok
+}
+
+func databaseDSNRaw() (string, bool) {
 	if u := strings.TrimSpace(os.Getenv("DATABASE_URL")); u != "" {
 		// DB_HOST/DB_PORT gewinnen, falls gesetzt (z. B. öffentliche statt interne Adresse)
 		if h := strings.TrimSpace(os.Getenv("DB_HOST")); h != "" {
@@ -162,6 +182,9 @@ func NewPgStore(dsn string) (*PgStore, error) {
 		if os.Getenv("DB_HOST") != "" {
 			src = "DATABASE_URL, Host aus DB_HOST"
 		}
+	}
+	if os.Getenv("PW_DB_HOST") != "" {
+		src = "PW_DB_HOST"
 	}
 	if pu, err := url.Parse(dsn); err == nil && pu.Host != "" {
 		log.Printf("Datenbank: %s (Quelle %s)", pu.Host, src)
