@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -188,6 +189,15 @@ func NewPgStore(dsn string) (*PgStore, error) {
 	}
 	if pu, err := url.Parse(dsn); err == nil && pu.Host != "" {
 		log.Printf("Datenbank: %s (Quelle %s)", pu.Host, src)
+	}
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		var ips []string
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok && !ipn.IP.IsLoopback() && ipn.IP.To4() != nil {
+				ips = append(ips, ipn.String())
+			}
+		}
+		log.Printf("Eigene Adresse(n) des Containers: %s", strings.Join(ips, ", "))
 	}
 	for i := 0; ; i++ {
 		db, err = openPg(dsn)
