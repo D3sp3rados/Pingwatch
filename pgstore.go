@@ -60,6 +60,21 @@ var pgSchema = []string{
 // Standard-Variablen PGHOST, PGUSER usw.
 func databaseDSN() (string, bool) {
 	if u := strings.TrimSpace(os.Getenv("DATABASE_URL")); u != "" {
+		// DB_HOST/DB_PORT gewinnen, falls gesetzt (z. B. öffentliche statt interne Adresse)
+		if h := strings.TrimSpace(os.Getenv("DB_HOST")); h != "" {
+			if pu, err := url.Parse(u); err == nil && pu.Host != "" {
+				port := pu.Port()
+				if p := strings.TrimSpace(os.Getenv("DB_PORT")); p != "" {
+					port = p
+				}
+				if port != "" {
+					pu.Host = h + ":" + port
+				} else {
+					pu.Host = h
+				}
+				return pu.String(), true
+			}
+		}
 		return u, true
 	}
 	if h := os.Getenv("DB_HOST"); h != "" {
@@ -141,6 +156,16 @@ func NewPgStore(dsn string) (*PgStore, error) {
 	var db *sql.DB
 	var err error
 	dsn = withConnectTimeout(dsn)
+	src := "DB_HOST"
+	if os.Getenv("DATABASE_URL") != "" {
+		src = "DATABASE_URL"
+		if os.Getenv("DB_HOST") != "" {
+			src = "DATABASE_URL, Host aus DB_HOST"
+		}
+	}
+	if pu, err := url.Parse(dsn); err == nil && pu.Host != "" {
+		log.Printf("Datenbank: %s (Quelle %s)", pu.Host, src)
+	}
 	for i := 0; ; i++ {
 		db, err = openPg(dsn)
 		if err == nil {
