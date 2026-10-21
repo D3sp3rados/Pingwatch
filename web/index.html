@@ -378,13 +378,26 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
     <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
   </div>
-  <h2>iPhone-App &amp; Push <button class="btn sm" id="push-test">Testnachricht senden</button></h2>
-  <div class="panel" style="overflow-x:auto"><table class="tbl" id="dev-tbl"></table></div>
+  <h2>Benachrichtigungen aufs Handy <button class="btn sm" id="push-test">Testnachricht senden</button></h2>
+  <div class="panel" id="wp-box" style="padding:14px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:14px">🔔 Dieses Gerät</b><span class="muted" id="wp-state" style="font-size:13px"></span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0" id="wp-prefs">
+      <label class="check"><input type="checkbox" id="wp-outage" checked> Ausfall &amp; wieder erreichbar</label>
+      <label class="check"><input type="checkbox" id="wp-offline" checked> Standort / UniFi offline</label>
+      <label class="check"><input type="checkbox" id="wp-loss"> Paketverlust</label>
+      <label class="check"><input type="checkbox" id="wp-spike"> Latenzspitzen</label>
+      <label class="check" id="wp-allf" style="display:none"><input type="checkbox" id="wp-all"> Meldungen aller Kunden (Betreiber)</label>
+    </div>
+    <button class="btn pri" id="wp-on">Benachrichtigungen auf diesem Gerät aktivieren</button> <button class="btn" id="wp-off" style="display:none">Auf diesem Gerät abschalten</button>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0" id="wp-help">Funktioniert auf Android (Chrome, Firefox, Edge), am PC/Mac und auf dem iPhone, wenn PingWatch als Web-App auf dem Home-Bildschirm liegt (ab iOS 16.4).</p>
+  </div>
+  <div class="panel" style="overflow-x:auto;margin-top:10px"><table class="tbl" id="dev-tbl"></table></div>
   <p class="muted" style="font-size:12.5px" id="push-info"></p>
 
   <div class="panel help" style="margin-top:12px">
-    <b style="color:var(--fg)">Auf dem iPhone als Web-App</b><br>
-    Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. PingWatch startet dann wie eine App im Vollbild.
+    <b style="color:var(--fg)">Als App auf den Home-Bildschirm</b><br>
+    <b>Android:</b> Seite in Chrome öffnen → Menü ⋮ → <b>Zum Startbildschirm hinzufügen</b> (bzw. „App installieren“).<br>
+    <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWatch vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWatch-App aus TestFlight nutzen.
   </div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
 </section>
@@ -955,10 +968,10 @@ function renderSettings(){
   $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!confirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
   $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
   const devs=st.devices||[]; const yes=b=>b?'✔':'–';
-  $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger ed" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein iPhone verbunden. In der PingWatch-App anmelden und Benachrichtigungen erlauben.</td></tr>';
+  $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b> <span class="tag">${d.kind==='web'?'Browser':'iPhone-App'}</span></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger ed" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein Gerät. Oben „Benachrichtigungen auf diesem Gerät aktivieren“ oder in der iPhone-App anmelden.</td></tr>';
   $$('#dev-tbl [data-deldev]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gerät entfernen? Es bekommt dann keine Benachrichtigungen mehr.')) return; await api('/api/app/device?id='+encodeURIComponent(b.dataset.deldev),{method:'DELETE'}); refreshState(); });
-  $('#push-info').innerHTML=st.push?'Push über Apple ist eingerichtet.':'<b style="color:var(--warn)">Push noch nicht eingerichtet</b> – in der rstcloud APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID und APNS_TOPIC setzen.';
-  $('#push-test').style.display=st.push&&devs.length?'':'none';
+  $('#push-info').innerHTML=st.push?'Push für die iPhone-App ist eingerichtet.':(st.me&&st.me.super?'<b style="color:var(--warn)">Push für die iPhone-App noch nicht eingerichtet</b> – in der rstcloud APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID und APNS_TOPIC setzen. Browser-Benachrichtigungen funktionieren trotzdem.':'');
+  $('#push-test').style.display=devs.length?'':'none'; wpRender();
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
   const sup=st.me&&st.me.super;
   $('#g-retrow').style.display=sup?'flex':'none';
@@ -1101,6 +1114,28 @@ function spURL(){ const sl=$('#sp-slug').value.trim(); $('#sp-url').innerHTML=sl
 $('#sp-slug').oninput=spURL;
 $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-slug').value.trim().toLowerCase(),title:$('#sp-title').value.trim(),note:$('#sp-note').value.trim(),hosts:$$('#sp-hosts input:checked').map(i=>i.value)};
   try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ alert(e.message); } };
+
+/* Web-Push */
+const WP={sub:null,checked:false};
+const wpSupported=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+function wpDeviceName(){ const u=navigator.userAgent; const os=/Android/.test(u)?'Android':/iPhone|iPad/.test(u)?'iPhone':/Windows/.test(u)?'Windows':/Mac/.test(u)?'Mac':'Linux';
+  const br=/Edg\//.test(u)?'Edge':/Firefox\//.test(u)?'Firefox':/Chrome\//.test(u)?'Chrome':/Safari\//.test(u)?'Safari':'Browser'; return (navigator.standalone||matchMedia('(display-mode: standalone)').matches?'Web-App':br)+' auf '+os; }
+async function wpCheck(){ if(WP.checked||!wpSupported()) return; WP.checked=true; try{ const reg=await navigator.serviceWorker.register('/sw.js'); WP.sub=await reg.pushManager.getSubscription(); }catch(e){} wpRender(); }
+function wpRender(){ if(!$('#wp-box')) return; const me=(S.state&&S.state.me)||{}; $('#wp-allf').style.display=me.super?'':'none';
+  if(!wpSupported()){ const ios=/iPhone|iPad/.test(navigator.userAgent); $('#wp-state').textContent=ios?'Auf dem iPhone geht das nur, wenn PingWatch vom Home-Bildschirm gestartet wird (Teilen → Zum Home-Bildschirm).':'Dieser Browser unterstützt keine Push-Benachrichtigungen.'; $('#wp-on').style.display='none'; $('#wp-prefs').style.display='none'; return; }
+  wpCheck();
+  if(Notification.permission==='denied'){ $('#wp-state').innerHTML='<span style="color:var(--bad)">Benachrichtigungen für diese Seite sind im Browser blockiert</span> – in den Website-Einstellungen erlauben.'; $('#wp-on').style.display='none'; return; }
+  const on=!!WP.sub; $('#wp-state').innerHTML=on?'<b style="color:var(--ok)">✓ aktiv</b> – '+esc(wpDeviceName()):'aus'; $('#wp-on').textContent=on?'Einstellungen speichern':'Benachrichtigungen auf diesem Gerät aktivieren'; $('#wp-on').style.display=''; $('#wp-off').style.display=on?'':'none'; }
+$('#wp-on').onclick=async()=>{ try{
+    const perm=await Notification.requestPermission(); if(perm!=='granted'){ wpRender(); return; }
+    const reg=await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){ const {key}=await api('/api/webpush'); const raw=atob(key.replace(/-/g,'+').replace(/_/g,'/')); const arr=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:arr}); }
+    await api('/api/webpush',{method:'POST',body:JSON.stringify({subscription:sub.toJSON(),name:wpDeviceName(),outage:$('#wp-outage').checked,offline:$('#wp-offline').checked,loss:$('#wp-loss').checked,spike:$('#wp-spike').checked,allOrgs:$('#wp-all').checked})});
+    WP.sub=sub; toast('Benachrichtigungen aktiv – Testnachricht über den Button oben'); refreshState(); wpRender();
+  }catch(e){ alert('Aktivieren fehlgeschlagen: '+e.message); } };
+$('#wp-off').onclick=async()=>{ try{ if(WP.sub){ await api('/api/webpush?endpoint='+encodeURIComponent(WP.sub.endpoint),{method:'DELETE'}); await WP.sub.unsubscribe(); } WP.sub=null; toast('Auf diesem Gerät abgeschaltet'); refreshState(); wpRender(); }catch(e){ alert(e.message); } };
 
 /* Traceroute */
 function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#tr-copy').style.display=''; $('#dlg-trace').showModal(); }

@@ -35,6 +35,11 @@ type Device struct {
 	Hosts    []string `json:"hosts"`   // leer = alle
 	Added    int64    `json:"added"`
 	LastSent int64    `json:"lastSent"`
+	// Web-Push (Browser/Android): Kind = "web"
+	Kind     string `json:"kind,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+	P256dh   string `json:"p256dh,omitempty"`
+	Auth     string `json:"auth,omitempty"`
 }
 
 type notice struct {
@@ -240,6 +245,11 @@ func (d Device) wants(n notice) bool {
 
 // ---- Anbindung an den Monitor ----
 
+var pushThrottle = struct {
+	sync.Mutex
+	m map[string]time.Time
+}{m: map[string]time.Time{}}
+
 func (m *Monitor) notify(n notice) {
 	if m.notices == nil {
 		return
@@ -253,9 +263,6 @@ func (m *Monitor) notify(n notice) {
 func (m *Monitor) pushLoop() {
 	for n := range m.notices {
 		m.dispatchAlerts(n)
-		if m.pusher == nil {
-			continue
-		}
 		m.mu.RLock()
 		devs := append([]Device(nil), m.cfg.Devices...)
 		m.mu.RUnlock()
@@ -267,20 +274,29 @@ func (m *Monitor) pushLoop() {
 			if !d.wants(n) {
 				continue
 			}
+			if d.Kind != "web" && m.pusher == nil {
+				continue
+			}
 			// Paketverlust und Spitzen höchstens alle 10 Minuten pro Host und Gerät
 			if n.kind == "loss" || n.kind == "spike" {
 				k := d.Token + "|" + n.hostID + "|" + n.kind
-				m.pusher.mu.Lock()
-				last := m.pusher.throttle[k]
+				pushThrottle.Lock()
+				last := pushThrottle.m[k]
 				if time.Since(last) < 10*time.Minute {
-					m.pusher.mu.Unlock()
+					pushThrottle.Unlock()
 					continue
 				}
-				m.pusher.throttle[k] = time.Now()
-				m.pusher.mu.Unlock()
+				pushThrottle.m[k] = time.Now()
+				pushThrottle.Unlock()
 			}
-			if err := m.pusher.send(d, n); err != nil {
-				if errors.Is(err, errBadToken) {
+			var err error
+			if d.Kind == "web" {
+				err = m.sendWebPush(d, n)
+			} else {
+				err = m.pusher.send(d, n)
+			}
+			if err != nil {
+				if errors.Is(err, errBadToken) || errors.Is(err, errGone) {
 					bad = append(bad, d.Token)
 				}
 				log.Printf("Push an %s: %v", d.Name, err)

@@ -18,6 +18,7 @@ var readOnlyOK = map[string]bool{
 	"/api/events/ack":     true, // auch „Nur lesen“ darf quittieren
 	"/api/app/device":     true,
 	"/api/app/pushtest":   true,
+	"/api/webpush":        true,
 	"/api/billing/portal": false,
 }
 

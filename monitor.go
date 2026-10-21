@@ -56,6 +56,7 @@ type Config struct {
 	Channels      []Channel `json:"channels"`
 	Maints        []Maint   `json:"maints"`
 	Groups        []Group   `json:"groups"`
+	VapidKey      string    `json:"vapidKey,omitempty"` // Web-Push-Schlüssel (privat)
 	Secret        string    `json:"secret"`
 	Version       int64     `json:"version"`
 }

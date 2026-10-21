@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -173,6 +174,12 @@ func (s *Server) routes() http.Handler {
 	for _, p := range []string{"/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-512.png", "/favicon.ico"} {
 		mux.Handle(p, static)
 	}
+	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		b, _ := webFS.ReadFile("web/sw.js")
+		w.Write(b)
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +257,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/app/login", s.handleAppLogin)
 	mux.HandleFunc("/api/app/device", protect(s.handleDevice))
 	mux.HandleFunc("/api/app/pushtest", protect(s.handlePushTest))
+	mux.HandleFunc("/api/webpush", protect(s.handleWebPush))
 	mux.HandleFunc("/api/export/events.csv", protect(s.exportEvents))
 	mux.HandleFunc("/api/export/samples.csv", protect(s.exportSamples))
 	mux.HandleFunc("/api/export/stats.csv", protect(s.exportStats))
@@ -432,7 +440,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		devs = append(devs, map[string]any{"id": d.Token[:min(12, len(d.Token))], "name": d.Name, "added": d.Added,
-			"outage": d.Outage, "loss": d.Loss, "spike": d.Spike, "offline": d.Offline, "hosts": len(d.Hosts), "allOrgs": d.AllOrgs})
+			"outage": d.Outage, "loss": d.Loss, "spike": d.Spike, "offline": d.Offline, "hosts": len(d.Hosts), "allOrgs": d.AllOrgs, "kind": d.Kind})
 	}
 	m.mu.RUnlock()
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
@@ -1338,10 +1346,6 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST", 405)
 		return
 	}
-	if s.m.pusher == nil {
-		http.Error(w, "Push nicht eingerichtet (APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID fehlen)", 400)
-		return
-	}
 	org := principal(r).Org
 	s.m.mu.RLock()
 	var devs []Device
@@ -1353,7 +1357,17 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 	s.m.mu.RUnlock()
 	ok, errs := 0, []string{}
 	for _, d := range devs {
-		if err := s.m.pusher.send(d, notice{"test", "", "PingWatch", "Testbenachrichtigung – Push funktioniert ✅", ""}); err != nil {
+		n := notice{"test", "", "PingWatch", "Testbenachrichtigung – Push funktioniert ✅", ""}
+		var err error
+		switch {
+		case d.Kind == "web":
+			err = s.m.sendWebPush(d, n)
+		case s.m.pusher == nil:
+			err = errors.New("Apple-Push nicht eingerichtet (APNS_KEY fehlt)")
+		default:
+			err = s.m.pusher.send(d, n)
+		}
+		if err != nil {
 			errs = append(errs, d.Name+": "+err.Error())
 		} else {
 			ok++
