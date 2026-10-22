@@ -274,6 +274,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/stats", protect(s.handleStats))
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
+	mux.HandleFunc("/api/import", protect(s.handleImport))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))

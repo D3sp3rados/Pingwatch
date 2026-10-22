@@ -36,16 +36,31 @@ type Channel struct {
 	Loss     bool     `json:"loss"`
 	Spike    bool     `json:"spike"`
 	Offline  bool     `json:"offline"`
-	Report   bool     `json:"report"` // Monatsbericht (nur E-Mail)
-	Hosts    []string `json:"hosts"`  // leer = alle
+	Report   bool     `json:"report"`           // Monatsbericht (nur E-Mail)
+	Hosts    []string `json:"hosts"`            // leer = alle
+	Groups   []string `json:"groups,omitempty"` // Kunden (Gruppen) – zusätzlich zu Hosts; leer = alle
 	Disabled bool     `json:"disabled,omitempty"`
 	Escalate int      `json:"escalate,omitempty"` // Minuten: nur Ausfälle, die so lange offen und nicht quittiert sind
 	Created  int64    `json:"created"`
 }
 
-func (c Channel) wants(n notice) bool {
+func (c Channel) wants(n notice) bool { return c.wantsIn(n, "") }
+
+// wantsIn prüft zusätzlich die Kunden-Auswahl (group = Gruppe des Hosts der Meldung).
+func (c Channel) wantsIn(n notice, group string) bool {
 	if c.Disabled {
 		return false
+	}
+	if len(c.Groups) > 0 && n.hostID != "" {
+		for _, g := range c.Groups {
+			if g == group && group != "" {
+				d := Device{Outage: c.Outage, Loss: c.Loss, Spike: c.Spike, Offline: c.Offline}
+				return d.wants(n)
+			}
+		}
+		if len(c.Hosts) == 0 {
+			return false // Host gehört zu keinem gewählten Kunden
+		}
 	}
 	d := Device{Outage: c.Outage, Loss: c.Loss, Spike: c.Spike, Offline: c.Offline, Hosts: c.Hosts}
 	return d.wants(n)
@@ -94,8 +109,9 @@ func (m *Monitor) dispatchAlerts(n notice) {
 	}
 	m.mu.RLock()
 	var chans []Channel
+	group := m.hostGroupLocked(n.hostID)
 	for _, c := range m.cfg.Channels {
-		if c.Org == n.org && c.wants(n) {
+		if c.Org == n.org && c.wantsIn(n, group) {
 			chans = append(chans, c)
 		}
 	}

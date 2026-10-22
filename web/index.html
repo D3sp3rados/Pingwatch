@@ -304,7 +304,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button></h2>
+  <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
 
   <h2>Gruppen <button class="btn sm pri ed" id="add-group">+ Gruppe</button></h2>
@@ -515,6 +515,27 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-limport">
+  <form method="dialog" id="li-form">
+    <div class="dlg-h">Hosts aus Liste importieren</div>
+    <div class="dlg-b" style="display:block">
+      <p class="muted" style="font-size:13px;margin:0 0 8px">Aus Excel, Livewatch &amp; Co.: Tabelle mit Überschriften kopieren und hier einfügen (oder CSV-Datei wählen). Erkannte Spalten: <b>Name, Adresse</b> (IP/Host/URL), <b>Art</b> (Ping, HTTP/CONT, TCP/SCKT), <b>Port, Suchtext, Kunde, Alarmweg, Status</b> („pausiert“).</p>
+      <textarea id="li-text" rows="7" style="width:100%;font:12.5px ui-monospace,monospace" placeholder="Name;Adresse;Art;Port;Suchtext;Kunde;Alarmweg
+Antenne MKT;185.51.186.213;PING;;;Oli Pfeiffer;Techniker
+rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0">
+        <input type="file" id="li-file" accept=".csv,.txt,text/csv,text/plain">
+        <label class="field" style="margin:0;min-width:200px">Prüfen von<select id="li-site"></select></label>
+        <button class="btn" type="button" id="li-check">Vorschau</button>
+      </div>
+      <small class="muted">Kunden werden automatisch als Gruppe angelegt. Alarmwege müssen vorher unter Einstellungen → Alarme mit gleichem Namen angelegt sein – sie melden dann für die importierten Hosts.</small>
+      <div id="li-res" style="max-height:40vh;overflow:auto;margin-top:8px"></div>
+    </div>
+    <div class="dlg-err" id="li-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Schließen</button><button class="btn pri" type="button" id="li-go" disabled>Importieren</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-ulive">
   <form method="dialog" id="ul-form">
     <div class="dlg-h" id="ul-title">UniFi-Livestatus</div>
@@ -580,6 +601,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
           <label class="check"><input type="checkbox" name="spike"> Latenzspitzen</label>
           <label class="check" id="af-repf"><input type="checkbox" name="report"> Monatsbericht (PDF, am 1.)</label>
         </div><small class="muted">Paketverlust und Spitzen höchstens alle 10 Minuten je Host.</small></div>
+      <div class="full" id="af-groupsf"><b style="font-size:13px">Kunden</b> <span class="muted" style="font-size:12px">(nur Meldungen dieser Kunden; keiner ausgewählt = alle)</span>
+        <div id="af-groups" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
       <div class="full"><b style="font-size:13px">Hosts</b> <span class="muted" style="font-size:12px">(keiner ausgewählt = alle)</span>
         <div id="af-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:140px;overflow:auto"></div></div>
       <label class="field full">Wann senden<select name="escalate"><option value="0">Sofort</option><option value="5">Eskalation: nach 5 Minuten</option><option value="10">Eskalation: nach 10 Minuten</option><option value="15">Eskalation: nach 15 Minuten</option><option value="30">Eskalation: nach 30 Minuten</option><option value="60">Eskalation: nach 60 Minuten</option></select><small>Eskalation: nur Ausfälle, die dann noch bestehen und von niemandem quittiert wurden (z. B. an Chef oder Bereitschaft).</small></label>
@@ -1138,6 +1161,32 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').cat
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; const b=$('#install-app'); if(b) b.style.display=''; });
 window.addEventListener('appinstalled',()=>{ installEvt=null; const b=$('#install-app'); if(b) b.style.display='none'; toast('PingWatch ist installiert'); });
 
+/* Liste importieren */
+const lidlg=$('#dlg-limport'); let LI={rows:[]};
+const LICOLS={name:/^(name|titel|bezeichnung|server|host ?name)$/i,addr:/^(adresse|addr|address|host|ip|ip-adresse|url|ziel|domain)$/i,type:/^(art|typ|type|checktyp|prüfung|pruefung|methode|method)$/i,
+  port:/^port$/i,expect:/^(suchtext|expect|match|inhalt|text)$/i,group:/^(kunde|gruppe|group|customer|ordner)$/i,channel:/^(alarmweg|benachrichtigung|benachrichtigungsset|set|channel|empfänger)$/i,status:/^status$/i};
+function liParse(txt){ const lines=txt.replace(/\r/g,'').split('\n').filter(l=>l.trim()&&!/^#/.test(l)); if(lines.length<2) return [];
+  const sep=lines[0].includes('\t')?'\t':lines[0].includes(';')?';':lines[0].includes('|')?'|':',';
+  const split=l=>l.split(sep).map(x=>x.trim().replace(/^"(.*)"$/,'$1'));
+  const head=split(lines[0]); const map={}; head.forEach((h,i)=>{ for(const [k,re] of Object.entries(LICOLS)) if(map[k]===undefined&&re.test(h.trim())) map[k]=i; });
+  if(map.addr===undefined) throw new Error('Spalte „Adresse“ (IP/Host/URL) nicht gefunden. Erste Zeile muss Überschriften enthalten.');
+  return lines.slice(1).map(l=>{ const c=split(l); const g=k=>map[k]===undefined?'':(c[map[k]]||''); return {name:g('name'),addr:g('addr'),type:g('type'),port:g('port'),expect:g('expect'),group:g('group'),channel:g('channel'),paused:/paus/i.test(g('status'))}; }).filter(r=>r.addr||r.name); }
+async function liRun(dry){ $('#li-err').textContent='';
+  try{ LI.rows=liParse($('#li-text').value); }catch(e){ $('#li-err').textContent=e.message; return; }
+  if(!LI.rows.length){ $('#li-err').textContent='Keine Zeilen erkannt.'; return; }
+  try{ const r=await api('/api/import',{method:'POST',body:JSON.stringify({rows:LI.rows,site:$('#li-site').value,dryRun:dry})});
+    const col={neu:'ok',vorhanden:'',fehler:'bad'}, mt={'':'Ping',http:'Webseite',tcp:'TCP',dns:'DNS'};
+    $('#li-res').innerHTML=`<p style="font-size:13px"><b>${r.new}</b> ${dry?'werden neu angelegt':'neu angelegt'} · ${r.rows.filter(x=>x.status==='vorhanden').length} vorhanden · ${r.rows.filter(x=>x.status==='fehler').length} Fehler</p><table class="tbl">`+
+      r.rows.map(x=>`<tr><td><span class="tag ${col[x.status]}">${x.status}</span></td><td><b>${esc(x.name)}</b><br><span class="muted num" style="font-size:12px">${esc(mt[x.method]||x.method)} · ${esc(x.addr)}</span></td><td class="muted" style="font-size:12px">${esc(x.message||'')}</td></tr>`).join('')+'</table>';
+    $('#li-go').disabled=!dry||!r.new; if(!dry){ toast(r.new+' Hosts importiert'); refreshState(); }
+  }catch(e){ $('#li-err').textContent=e.message; } }
+$('#list-import').onclick=()=>{ const st=S.state; $('#li-site').innerHTML='<option value="cloud">Cloud (vom Server)</option>'+(st.sites||[]).map(x=>`<option value="${x.id}">Agent: ${esc(x.name)}</option>`).join('');
+  $('#li-res').innerHTML=''; $('#li-err').textContent=''; $('#li-go').disabled=true; lidlg.showModal(); };
+$('#li-file').onchange=async()=>{ const f=$('#li-file').files[0]; if(!f) return; let t=await f.text(); if(t.includes('\ufffd')){ const b=await f.arrayBuffer(); t=new TextDecoder('windows-1252').decode(b); } $('#li-text').value=t; };
+$('#li-check').onclick=()=>liRun(true);
+$('#li-go').onclick=()=>liRun(false);
+$('#li-text').oninput=()=>{ $('#li-go').disabled=true; };
+
 /* Meine Benachrichtigungen */
 const MN={v:null};
 async function mnLoad(){ try{ MN.v=await api('/api/me/notify'); }catch(e){ MN.v=null; } mnRender(); }
@@ -1225,10 +1274,11 @@ async function loadAlerts(force){ if(!force&&AL&&Date.now()-alAt<15000) return r
 function renderAlerts(){ if(!AL) return; const cs=AL.channels||[];
   const ev=c=>c.escalate?`<span class="tag warn">Eskalation nach ${c.escalate} min</span>`:[c.outage&&'Ausfall',c.offline&&'Standort',c.loss&&'Verlust',c.spike&&'Spitzen',c.report&&'Bericht'].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join(' ');
   const stat=c=>c.disabled?'<span class="tag">pausiert</span>':c.lastErr&&c.errAt>(c.lastOK||0)?`<span class="tag bad" title="${esc(c.lastErr)}">Fehler</span> <span class="muted" style="font-size:12px">${esc(c.lastErr.slice(0,60))}</span>`:c.lastOK?`<span class="tag ok">zuletzt ${fmtDT(c.lastOK,false)}</span>`:'<span class="muted">–</span>';
+  const gname=id=>((S.state&&S.state.groups)||[]).find(g=>g.id===id); const kund=c=>(c.groups||[]).map(id=>gname(id)).filter(Boolean).map(g=>`<span class="tag">👥 ${esc(g.name)}</span>`).join(' ');
   const tgt=c=>c.type==='email'?esc(c.target):c.type==='telegram'?'Chat '+esc(c.target):esc(c.target.replace(/^https:\/\/([^/]+).*/,'$1'));
   const sig=JSON.stringify(AL); if($('#al-tbl').dataset.sig===sig) return; $('#al-tbl').dataset.sig=sig;
   $('#al-tbl').innerHTML=!AL.allowed&&!cs.length?`<tr><td class="empty">Alarme per E-Mail, Teams, Telegram und Webhook gibt es ab dem Paket <b>Basis</b>. <a href="#/billing">Paket ansehen →</a></td></tr>`:
-    cs.length?'<tr><th>Art</th><th>Ziel</th><th class="hide-m">Meldungen</th><th>Status</th><th></th></tr>'+cs.map(c=>`<tr><td><b>${esc(c.name)}</b><br><span class="muted" style="font-size:12px">${ATYPE[c.type]}</span></td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${tgt(c)}</td><td class="hide-m">${ev(c)}</td><td>${stat(c)}</td>
+    cs.length?'<tr><th>Art</th><th>Ziel</th><th class="hide-m">Meldungen</th><th>Status</th><th></th></tr>'+cs.map(c=>`<tr><td><b>${esc(c.name)}</b><br><span class="muted" style="font-size:12px">${ATYPE[c.type]}</span></td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${tgt(c)}</td><td class="hide-m">${ev(c)} ${kund(c)}</td><td>${stat(c)}</td>
     <td class="act"><button class="btn sm ed" data-atest="${c.id}">Test</button> <button class="btn sm ed" data-aed="${c.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein Alarmweg. Mit „+ Alarmweg“ E-Mail, Teams, Telegram oder Webhook einrichten.</td></tr>';
   $$('#al-tbl [data-aed]').forEach(b=>b.onclick=()=>openAlert(b.dataset.aed));
   $$('#al-tbl [data-atest]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:b.dataset.atest})}); toast('Testnachricht gesendet'); }catch(e){ alert('Fehler: '+e.message); } b.disabled=false; loadAlerts(true); });
@@ -1256,6 +1306,9 @@ function openAlert(id){ const c=id&&AL.channels.find(x=>x.id===id);
   for(const k of ['outage','offline','loss','spike','report','disabled']) af[k].checked=c?!!c[k]:(k==='outage'||k==='offline');
   const sel=new Set(c&&c.hosts||[]);
   $('#af-hosts').innerHTML=S.state.hosts.map(h=>`<label class="check"><input type="checkbox" value="${h.id}"${sel.has(h.id)?' checked':''}> ${esc(h.name)}</label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
+  const gsel=new Set(c&&c.groups||[]), gs=S.state.groups||[];
+  $('#af-groupsf').style.display=gs.length?'':'none';
+  $('#af-groups').innerHTML=gs.map(g=>`<label class="check"><input type="checkbox" value="${g.id}"${gsel.has(g.id)?' checked':''}> ${esc(g.name)}</label>`).join('');
   $('#af-del').style.display=c?'':'none'; syncAlertForm(); adlg.showModal(); }
 af.type.onchange=syncAlertForm;
 $('#add-alert').onclick=()=>openAlert();
@@ -1269,7 +1322,7 @@ $('#af-tgfind').onclick=async()=>{ $('#af-tgres').textContent='suche …';
 af.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:af.dataset.id,type:af.type.value,name:af.name.value.trim(),target:af.target.value.trim(),secret:af.secret.value.trim(),
     outage:af.outage.checked,offline:af.offline.checked,loss:af.loss.checked,spike:af.spike.checked,report:af.report.checked&&af.type.value==='email',disabled:af.disabled.checked,escalate:+af.escalate.value,
-    hosts:$$('#af-hosts input:checked').map(i=>i.value)};
+    hosts:$$('#af-hosts input:checked').map(i=>i.value), groups:$$('#af-groups input:checked').map(i=>i.value)};
   try{ const r=await api('/api/alerts',{method:'POST',body:JSON.stringify(body)}); adlg.close(); await loadAlerts(true);
     if(!body.id&&confirm('Gespeichert. Jetzt eine Testnachricht senden?')){ try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:r.id})}); toast('Testnachricht gesendet'); }catch(err){ alert('Test fehlgeschlagen: '+err.message); } loadAlerts(true); }
   }catch(err){ $('#af-err').textContent=err.message; } });

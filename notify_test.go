@@ -45,3 +45,18 @@ func TestNotifyPrefs(t *testing.T) {
 		t.Fatal("Stummschaltung nicht aufgehoben", body)
 	}
 }
+
+func TestChannelGroups(t *testing.T) {
+	c := Channel{Outage: true, Groups: []string{"oli"}}
+	n := notice{kind: "outage", hostID: "h1"}
+	if !c.wantsIn(n, "oli") || c.wantsIn(n, "andere") || c.wantsIn(n, "") {
+		t.Fatal("Kundenfilter falsch")
+	}
+	c.Hosts = []string{"h1"}
+	if !c.wantsIn(n, "andere") {
+		t.Fatal("einzeln gewählter Host muss trotzdem melden")
+	}
+	if !(Channel{Outage: true}).wantsIn(n, "x") {
+		t.Fatal("ohne Filter = alle")
+	}
+}
