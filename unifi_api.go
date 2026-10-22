@@ -54,6 +54,8 @@ type unifiDevice struct {
 	Rx       float64    `json:"rx,omitempty"`
 	Ping     *unifiPing `json:"ping,omitempty"`
 	WAN      []unifiWAN `json:"wan,omitempty"`
+	LANs     []unifiLAN `json:"lans,omitempty"`  // Gateway: Netze mit Gateway-Adresse
+	WANIP    string     `json:"wanIP,omitempty"` // Gateway: WAN-Adresse, falls WAN-Details fehlen
 }
 
 type unifiAPI struct {
@@ -241,6 +243,11 @@ func (u *unifiAPI) fetch(siteFilter string, all bool) ([]unifiDevice, error) {
 				legacy = "default"
 			}
 			u.wans(legacy, devs)
+			for i := range devs {
+				if isGateway(devs[i]) {
+					u.gatewayExtras(st.ID, st.InternalReference, &devs[i])
+				}
+			}
 		}
 		out = append(out, devs...)
 	}

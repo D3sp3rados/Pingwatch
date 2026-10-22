@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Netze (VLANs) einer UniFi-Konsole für den Netzwerk-Scan: erst über die Integration-API,
@@ -37,15 +40,9 @@ func (u *unifiAPI) networks(siteFilter string) ([]string, error) {
 			continue
 		}
 		matched = true
-		got := u.intNetworks(st.ID)
-		if len(got) == 0 {
-			legacy := st.InternalReference
-			if legacy == "" {
-				legacy = "default"
-			}
-			got = u.legacyNetworks(legacy)
+		for _, l := range u.lans(st.ID, st.InternalReference) {
+			cidrs = append(cidrs, l.IP)
 		}
-		cidrs = append(cidrs, got...)
 	}
 	if siteFilter != "" && !matched {
 		return nil, fmt.Errorf("UniFi-Site „%s“ auf der Konsole nicht gefunden", siteFilter)
@@ -57,36 +54,75 @@ func (u *unifiAPI) networks(siteFilter string) ([]string, error) {
 	return out, nil
 }
 
+// unifiLAN: ein Netz (VLAN) der Konsole mit Gateway-Adresse, z. B. „Gäste“ · 192.168.20.1/24 · VLAN 20.
+type unifiLAN struct {
+	Name string `json:"name"`
+	IP   string `json:"ip"`
+	VLAN int    `json:"vlan,omitempty"`
+}
+
+func lanFromMap(n map[string]any) (unifiLAN, bool) {
+	name, _ := n["name"].(string)
+	l := unifiLAN{Name: name}
+	for _, k := range []string{"vlanId", "vlan"} {
+		if l.VLAN > 0 {
+			break
+		}
+		switch v := n[k].(type) {
+		case float64:
+			l.VLAN = int(v)
+		case string:
+			l.VLAN, _ = strconv.Atoi(v)
+		}
+	}
+	if s, _ := n["ip_subnet"].(string); s != "" {
+		l.IP = s
+	} else if c := findCIDRs(n); len(c) > 0 {
+		l.IP = c[0]
+	}
+	return l, l.IP != ""
+}
+
 // intNetworks: Integration-API (UniFi Network ab 9.x/10.x). Das Format ist nicht überall gleich,
 // daher werden Adresse und Präfix in der Antwort gesucht.
-func (u *unifiAPI) intNetworks(siteID string) []string {
+func (u *unifiAPI) intNetworks(siteID string) []unifiLAN {
 	var list struct {
 		Data []map[string]any `json:"data"`
 	}
 	if u.get(fmt.Sprintf("%s/sites/%s/networks?limit=200", unifiIntAPI, siteID), &list) != nil {
 		return nil
 	}
-	var out []string
+	var out []unifiLAN
 	for _, n := range list.Data {
 		if b, ok := n["enabled"].(bool); ok && !b {
 			continue
 		}
-		found := findCIDRs(n)
-		if len(found) == 0 {
+		l, ok := lanFromMap(n)
+		if !ok {
 			if id, _ := n["id"].(string); id != "" {
 				var det map[string]any
 				if u.get(fmt.Sprintf("%s/sites/%s/networks/%s", unifiIntAPI, siteID, id), &det) == nil {
-					found = findCIDRs(det)
+					if d, ok2 := lanFromMap(det); ok2 {
+						if d.Name == "" {
+							d.Name = l.Name
+						}
+						if d.VLAN == 0 {
+							d.VLAN = l.VLAN
+						}
+						l, ok = d, true
+					}
 				}
 			}
 		}
-		out = append(out, found...)
+		if ok {
+			out = append(out, l)
+		}
 	}
 	return out
 }
 
 // legacyNetworks: klassische Schnittstelle, ip_subnet = „192.168.10.1/24“.
-func (u *unifiAPI) legacyNetworks(site string) []string {
+func (u *unifiAPI) legacyNetworks(site string) []unifiLAN {
 	code, b, err := u.raw("/proxy/network/api/s/" + site + "/rest/networkconf")
 	if err != nil || code != 200 {
 		return nil
@@ -97,7 +133,7 @@ func (u *unifiAPI) legacyNetworks(site string) []string {
 	if json.Unmarshal(b, &res) != nil {
 		return nil
 	}
-	var out []string
+	var out []unifiLAN
 	for _, n := range res.Data {
 		if p, _ := n["purpose"].(string); p == "wan" || p == "vpn-client" || p == "remote-user-vpn" {
 			continue
@@ -105,11 +141,33 @@ func (u *unifiAPI) legacyNetworks(site string) []string {
 		if e, ok := n["enabled"].(bool); ok && !e {
 			continue
 		}
-		if s, _ := n["ip_subnet"].(string); s != "" {
-			out = append(out, s)
+		if l, ok := lanFromMap(n); ok {
+			out = append(out, l)
 		}
 	}
 	return out
+}
+
+// lans: Netze einer Site (Integration-API, sonst klassisch), sortiert nach VLAN.
+func (u *unifiAPI) lans(siteID, legacy string) []unifiLAN {
+	got := u.intNetworks(siteID)
+	if len(got) == 0 {
+		if legacy == "" {
+			legacy = "default"
+		}
+		got = u.legacyNetworks(legacy)
+	}
+	sort.SliceStable(got, func(i, j int) bool {
+		vi, vj := got[i].VLAN, got[j].VLAN
+		if vi == 0 {
+			vi = 1
+		}
+		if vj == 0 {
+			vj = 1
+		}
+		return vi < vj
+	})
+	return got
 }
 
 // findCIDRs sucht in einer JSON-Struktur nach „a.b.c.d/nn“ oder Adresse + prefixLength.
@@ -254,4 +312,81 @@ func (m *Monitor) unifiScanNames(site SiteCfg) map[string]string {
 	}
 	unifiLiveState.Unlock()
 	return names
+}
+
+// gwExtra: LAN-Netze und WAN-Adresse des Gateways – ändern sich selten, daher 10 Minuten zwischengespeichert.
+var gwExtraCache = struct {
+	sync.Mutex
+	m map[string]gwExtra
+}{m: map[string]gwExtra{}}
+
+type gwExtra struct {
+	at    time.Time
+	lans  []unifiLAN
+	wanIP string
+}
+
+func (u *unifiAPI) gatewayExtras(siteID, legacy string, d *unifiDevice) {
+	key := u.base + "|" + siteID + "|" + d.ID
+	gwExtraCache.Lock()
+	x, ok := gwExtraCache.m[key]
+	gwExtraCache.Unlock()
+	if !ok || time.Since(x.at) > 10*time.Minute {
+		x = gwExtra{at: time.Now(), lans: u.lans(siteID, legacy)}
+		if d.ID != "" {
+			var det map[string]any
+			if u.get(fmt.Sprintf("%s/sites/%s/devices/%s", unifiIntAPI, siteID, d.ID), &det) == nil {
+				x.wanIP = findWANIP(det)
+			}
+		}
+		gwExtraCache.Lock()
+		gwExtraCache.m[key] = x
+		gwExtraCache.Unlock()
+	}
+	d.LANs = x.lans
+	if len(d.WAN) == 0 {
+		d.WANIP = x.wanIP
+	}
+}
+
+// findWANIP sucht in den Gerätedetails eine IPv4-Adresse unter einem Schlüssel mit „wan“.
+func findWANIP(v any) string {
+	var hit string
+	var walk func(any, bool)
+	walk = func(v any, inWAN bool) {
+		if hit != "" {
+			return
+		}
+		switch x := v.(type) {
+		case map[string]any:
+			w := inWAN
+			if n, _ := x["name"].(string); strings.Contains(strings.ToLower(n), "wan") {
+				w = true
+			}
+			if t, _ := x["type"].(string); strings.Contains(strings.ToLower(t), "wan") {
+				w = true
+			}
+			for k, val := range x {
+				lk := strings.ToLower(k)
+				kw := w || strings.Contains(lk, "wan")
+				if s, ok := val.(string); ok && kw && strings.Contains(lk, "ip") {
+					ip := s
+					if i := strings.Index(ip, "/"); i > 0 {
+						ip = ip[:i]
+					}
+					if p := net.ParseIP(ip); p != nil && p.To4() != nil && !p.IsUnspecified() {
+						hit = ip
+						return
+					}
+				}
+				walk(val, kw)
+			}
+		case []any:
+			for _, e := range x {
+				walk(e, inWAN)
+			}
+		}
+	}
+	walk(v, false)
+	return hit
 }

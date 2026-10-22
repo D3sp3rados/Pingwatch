@@ -480,26 +480,28 @@ type unifiSummary struct {
 }
 
 type unifiView struct {
-	Name    string    `json:"name"`
-	Model   string    `json:"model"`
-	MAC     string    `json:"mac"`
-	IP      string    `json:"ip"`
-	State   string    `json:"state"`
-	Since   int64     `json:"since"`
-	Cat     string    `json:"cat"`
-	FW      string    `json:"fw,omitempty"`
-	Uptime  int64     `json:"uptime,omitempty"`
-	CPU     float64   `json:"cpu,omitempty"`
-	Mem     float64   `json:"mem,omitempty"`
-	Tx      float64   `json:"tx,omitempty"`
-	Rx      float64   `json:"rx,omitempty"`
-	PingAvg float64   `json:"pingAvg"` // 1 h, ms (-1 = keine Daten)
-	PingMax float64   `json:"pingMax"`
-	Loss    float64   `json:"loss"`  // 1 h, %
-	Avail   float64   `json:"avail"` // 24 h, % (-1 = keine Daten)
-	Boots   []int64   `json:"boots"` // Neustarts 24 h
-	Bar     []int8    `json:"bar"`   // 48 × 30 min: 0 keine Daten, 1 ok, 2 Auffälligkeit, 3 offline
-	WAN     []wanView `json:"wan,omitempty"`
+	Name    string     `json:"name"`
+	Model   string     `json:"model"`
+	MAC     string     `json:"mac"`
+	IP      string     `json:"ip"`
+	State   string     `json:"state"`
+	Since   int64      `json:"since"`
+	Cat     string     `json:"cat"`
+	FW      string     `json:"fw,omitempty"`
+	Uptime  int64      `json:"uptime,omitempty"`
+	CPU     float64    `json:"cpu,omitempty"`
+	Mem     float64    `json:"mem,omitempty"`
+	Tx      float64    `json:"tx,omitempty"`
+	Rx      float64    `json:"rx,omitempty"`
+	PingAvg float64    `json:"pingAvg"` // 1 h, ms (-1 = keine Daten)
+	PingMax float64    `json:"pingMax"`
+	Loss    float64    `json:"loss"`  // 1 h, %
+	Avail   float64    `json:"avail"` // 24 h, % (-1 = keine Daten)
+	Boots   []int64    `json:"boots"` // Neustarts 24 h
+	Bar     []int8     `json:"bar"`   // 48 × 30 min: 0 keine Daten, 1 ok, 2 Auffälligkeit, 3 offline
+	WAN     []wanView  `json:"wan,omitempty"`
+	LANs    []unifiLAN `json:"lans,omitempty"`
+	WANIP   string     `json:"wanIP,omitempty"`
 }
 
 type wanView struct {
@@ -530,7 +532,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	for key, d := range st.Devices {
 		dv := unifiView{Name: devLabel(d.unifiDevice), Model: d.Model, MAC: d.MAC, IP: d.IP, State: d.State, Since: d.Since,
 			Cat: unifiCategory(d.unifiDevice), FW: d.Firmware, Uptime: d.Uptime, CPU: d.CPU, Mem: d.Mem, Tx: d.Tx, Rx: d.Rx,
-			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots)}
+			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots), LANs: d.LANs, WANIP: d.WANIP}
 		if d.Uptime > 0 && d.At > 0 {
 			dv.Uptime = d.Uptime + (now-d.At)/1000
 		}

@@ -36,3 +36,24 @@ func TestScanNetworkMulti(t *testing.T) {
 		t.Fatal(r.Hits)
 	}
 }
+
+func TestLANsAndWANIP(t *testing.T) {
+	l, ok := lanFromMap(map[string]any{"name": "Gäste", "vlan": "20", "ip_subnet": "192.168.20.1/24"})
+	if !ok || l.VLAN != 20 || l.IP != "192.168.20.1/24" {
+		t.Fatal(l)
+	}
+	l, ok = lanFromMap(map[string]any{"name": "IoT", "vlanId": float64(30), "ipv4Configuration": map[string]any{"hostIpAddress": "10.30.0.1", "prefixLength": float64(24)}})
+	if !ok || l.VLAN != 30 || l.IP != "10.30.0.1/24" {
+		t.Fatal(l)
+	}
+	det := map[string]any{"interfaces": map[string]any{"ports": []any{map[string]any{"name": "WAN", "ipAddress": "192.168.178.20"}}}, "ipAddress": "192.168.3.254"}
+	if ip := findWANIP(det); ip != "192.168.178.20" {
+		t.Fatal(ip)
+	}
+	if ip := findWANIP(map[string]any{"wan1": map[string]any{"ip": "85.1.2.3"}}); ip != "85.1.2.3" {
+		t.Fatal(ip)
+	}
+	if ip := findWANIP(map[string]any{"ipAddress": "192.168.3.254"}); ip != "" {
+		t.Fatal("LAN-IP als WAN erkannt:", ip)
+	}
+}

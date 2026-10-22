@@ -1556,6 +1556,8 @@ function showUDev(s,d){ if(!d) return; const rows=[['Status',d.state==='ONLINE'?
   ['Laufzeit',fmtUp(d.uptime)],['CPU / RAM',d.cpu||d.mem?`${Math.round(d.cpu)} % / ${Math.round(d.mem)} %`:'–'],['Datenverkehr Uplink (aktuell)',d.tx||d.rx?`↑ ${fmtBit(d.tx)} · ↓ ${fmtBit(d.rx)}`:'–'],
   ['Ping (1 h)',d.pingAvg>=0?`Ø ${d.pingAvg.toFixed(1)} ms · max ${d.pingMax.toFixed(1)} ms · ${d.loss.toFixed(0)} % Verlust`:'–'],['Verfügbar (24 h)',d.avail>=0?d.avail.toFixed(2)+' %':'–'],
   ['Neustarts (24 h)',d.boots.length?d.boots.map(b=>fmtTime(b,false)).join(', '):'keine']];
+  if((d.lans||[]).length) rows.splice(4,0,['LAN-Netze',d.lans.map(l=>`<div class="num">${esc(l.ip)} <span class="muted">· ${esc(l.name||'Netz')}${l.vlan?' · VLAN '+l.vlan:''}</span></div>`).join('')]);
+  if(d.wanIP&&!(d.wan||[]).length) rows.splice(4,0,['WAN-IP',d.wanIP]);
   for(const w of d.wan||[]) rows.push([w.name+(w.active?' (aktiv)':''),`${w.up?'verbunden':'<b style="color:var(--bad)">getrennt</b>'}${w.ip?' · '+esc(w.ip):''}${w.latency?' · '+w.latency.toFixed(1)+' ms':''}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}${w.avail?' · '+w.avail.toFixed(2)+' % verfügbar':''}`]);
   showTrace(d.name+' · '+s.name,''); $('#tr-text').innerHTML='<table class="tbl" style="font-size:13px;font-family:-apple-system,system-ui,Segoe UI,sans-serif;white-space:normal">'+rows.map(([k,v])=>`<tr><td class="muted" style="white-space:nowrap">${k}</td><td>${typeof v==='string'&&!v.includes('<')?esc(v):v}</td></tr>`).join('')+'</table>'; $('#tr-copy').style.display='none'; }
 
