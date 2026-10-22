@@ -585,7 +585,7 @@ func (m *Monitor) housekeeping() {
 			}
 			var startNote *Event
 			if st.lastSeen > 0 && nowMs-st.lastSeen > 45_000 && st.offEv == nil {
-				inM := m.inMaint(s.Org, "", now)
+				inM := m.inMaintSite(s.Org, s.ID, now)
 				m.evMu.Lock()
 				m.nextEv++
 				e := &Event{ID: m.nextEv, Site: s.ID, HostName: s.Name, Org: s.Org, Type: "offline", Start: st.lastSeen, Last: st.lastSeen,

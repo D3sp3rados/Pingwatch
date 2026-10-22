@@ -434,6 +434,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
 <section id="v-events">
   <div class="filters">
+    <select id="f-cust" style="display:none"></select>
     <select id="f-group" style="display:none"><option value="">Alle Gruppen</option></select>
     <select id="f-host"><option value="">Alle Hosts</option></select>
     <div class="seg" id="f-types">
@@ -451,6 +452,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
 <section id="v-stats">
   <div class="filters">
+    <select id="s-cust" style="display:none"></select>
     <select id="s-host"></select>
     <select id="s-days"><option value="7">7 Tage</option><option value="14" selected>14 Tage</option><option value="30">30 Tage</option><option value="60">60 Tage</option></select>
     <div class="seg" id="s-metric">
@@ -920,6 +922,8 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       <div class="full mf-weekly" id="mf-days" style="display:flex;flex-wrap:wrap;gap:4px 14px"></div>
       <label class="field mf-weekly">Von<input type="time" name="from" value="22:00"></label>
       <label class="field mf-weekly">Bis<input type="time" name="to" value="02:00"><small>Bis vor Von = über Mitternacht</small></label>
+      <div class="full" id="mf-custw"><b style="font-size:13px">Kunden</b> <span class="muted" style="font-size:12px">(ganzer Kunde: alle Hosts, Rechner und UniFi seiner Standorte)</span>
+        <div id="mf-custs" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:110px;overflow:auto"></div></div>
       <div class="full"><b style="font-size:13px">Hosts</b> <span class="muted" style="font-size:12px">(keiner ausgewählt = alle inkl. Standorte)</span>
         <div id="mf-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:140px;overflow:auto"></div></div>
     </div>
@@ -1147,8 +1151,10 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   // Überschrift der Auswahl
   const selS=OVF.s&&st0.sites.find(x=>x.id===OVF.s), selC=OVF.c&&OVF.c!=='-'&&cs.find(c=>c.id===OVF.c);
   const lbl=selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
-  const ch=lbl?`📍 ${lbl} <button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
-  if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s=''; ovfSave(); ovRerender(); }; }
+  const muteable=selS||selC, canEd=!st0.me||st0.me.role!=='viewer';
+  const ch=lbl?`📍 ${lbl} ${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
+  if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s=''; ovfSave(); ovRerender(); };
+    const mb=$('#crumb-mute'); if(mb) mb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openMute('site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openMute('customer',OVF.c,co?co.name:''); } }; }
   $('#tr-mob').innerHTML=`<span>☰ ${lbl?lbl.replace(/<[^>]+>/g,''):'Alle Kunden & Standorte'}</span><span>${nb?`<b style="color:var(--bad)">${nb} gestört</b>`:''} ▾</span>`; }
 (()=>{ const el=$('#ov-tree');
   el.addEventListener('click',e=>{ if(e.target.closest('#tr-mob')){ el.classList.toggle('open'); return; }
@@ -1499,7 +1505,7 @@ $('#d-date').onchange=e=>{ if(!e.target.value) return; const d=new Date(e.target
 $('#d-back').onclick=()=>history.back();
 
 /* ---------- Ereignisse-Ansicht ---------- */
-function evQuery(){ const grp=$('#f-group').value; return evQuery0()+(grp?'&group='+encodeURIComponent(grp):''); }
+function evQuery(){ const grp=$('#f-group').value, cu=$('#f-cust').value; return evQuery0()+(grp?'&group='+encodeURIComponent(grp):'')+(cu?'&cust='+encodeURIComponent(cu):''); }
 function evQuery0(){ const host=$('#f-host').value, types=$$('#f-types button.on').map(b=>b.dataset.t).join(','), days=+$('#f-range').value; let q=`host=${host}&types=${types}`; if(days) q+=`&from=${Date.now()-days*864e5}`; return q; }
 const EVG={open:{}}; try{ EVG.open=JSON.parse(localStorage.getItem('pw_evopen')||'{}'); }catch(e){}
 function evMode(){ const st=S.state||{}, me=st.me||{}; let m='list'; try{ m=localStorage.getItem('pw_evmode')||((st.groups||[]).length?'group':'list'); }catch(e){} if(m==='org'&&!me.super) m='list'; return m; }
@@ -1534,7 +1540,7 @@ function renderEvGroups(evs,keyOf,label,cross){ const root=$('#ev-all'); const b
   } }
 $$('#ev-mode button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_evmode',b.dataset.m); }catch(e){} const r=$('#ev-all'); r.classList.add('panel'); r.style.background=r.style.border=''; loadEvents(); });
 $('#f-types').onclick=e=>{ if(!e.target.dataset.t) return; e.target.classList.toggle('on'); loadEvents(); };
-$('#f-host').onchange=loadEvents; $('#f-range').onchange=loadEvents; $('#f-group').onchange=()=>{ fillHostSelects(true); loadEvents(); };
+$('#f-host').onchange=loadEvents; $('#f-cust').onchange=()=>{ fillHostSelects(true); loadEvents(); }; $('#f-range').onchange=loadEvents; $('#f-group').onchange=()=>{ fillHostSelects(true); loadEvents(); };
 
 /* ---------- Statistik ---------- */
 let SM='loss', SD=null;
@@ -1569,6 +1575,7 @@ function renderHeatmap(){
 }
 $('#s-metric').onclick=e=>{ const m=e.target.dataset.m; if(!m) return; SM=m; $$('#s-metric button').forEach(b=>b.classList.toggle('on',b.dataset.m===m)); renderHeatmap(); };
 $('#s-host').onchange=()=>{ location.hash='#/stats/'+$('#s-host').value; };
+$('#s-cust').onchange=()=>{ fillHostSelects(); const v=$('#s-host').value; if(v) location.hash='#/stats/'+v; else loadStats(); };
 $('#s-days').onchange=loadStats;
 
 /* ---------- Einstellungen ---------- */
@@ -1864,7 +1871,7 @@ async function installApp(){ if(!installEvt) return; installEvt.prompt(); await 
 /* Meldungen pausieren / Prüfung pausieren */
 const mudlg=$('#dlg-mute'); const MU={scope:'all',id:'',mode:'mute'};
 function openMute(scope,id,label){ MU.scope=scope; MU.id=id||''; MU.mode='mute';
-  $('#mu-title').textContent=scope==='all'?'Alle Meldungen pausieren':scope==='group'?'Kunde: '+label:scope==='machine'?'Rechner: '+label:'Host: '+label; $('#mu-err').textContent='';
+  $('#mu-title').textContent=scope==='all'?'Alle Meldungen pausieren':scope==='group'?'Gruppe: '+label:scope==='customer'?'Kunde: '+label:scope==='site'?'Standort: '+label:scope==='machine'?'Rechner: '+label:'Host: '+label; $('#mu-err').textContent='';
   $('#mu-mode [data-m=pause]').style.display=scope==='machine'?'none':''; muSync(); mudlg.showModal(); }
 function muSync(){ $$('#mu-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===MU.mode));
   $('#mu-help').textContent=MU.mode==='mute'?'Es wird weiter geprüft und aufgezeichnet, aber es gehen keine Meldungen raus (Push, E-Mail, Teams …).':'Es wird gar nicht mehr geprüft (z. B. Gerät abgebaut). Läuft zum gewählten Zeitpunkt automatisch wieder an.'; }
@@ -1981,7 +1988,7 @@ $('#d-trace').onclick=async()=>{ const h=S.state.hosts.find(x=>x.id===S.hostId);
 /* Wartungsfenster */
 let MT=[], mtAt=0;
 async function loadMaint(force){ if(!force&&Date.now()-mtAt<15000) return; mtAt=Date.now(); try{ MT=await api('/api/maint'); }catch(e){ return; } renderMaint(); }
-function renderMaint(){ const hn=id=>(S.state.hosts.find(h=>h.id===id)||{}).name||'?';
+function renderMaint(){ const hn=id=>id.startsWith('s:')?'📍 '+siteName(id.slice(2)):id.startsWith('m:')?'💻 '+(((S.state.machines||[]).find(m=>m.id===id.slice(2))||{}).name||'?'):(S.state.hosts.find(h=>h.id===id)||{}).name||'?';
   const when=w=>w.weekdays&&w.weekdays.length?`${[1,2,3,4,5,6,0].filter(d=>w.weekdays.includes(d)).map(d=>WD[d]).join(', ')} · ${w.from}–${w.to} Uhr`:`${fmtDT(w.start,false)} – ${fmtDT(w.end,false)}`;
   $('#mt-tbl').innerHTML=MT.length?'<tr><th>Bezeichnung</th><th>Wann</th><th class="hide-m">Hosts</th><th>Status</th><th></th></tr>'+MT.map(w=>`<tr><td><b>${esc(w.name)}</b></td><td>${when(w)}</td><td class="hide-m">${w.hosts&&w.hosts.length?w.hosts.map(hn).map(esc).join(', '):'alle'}</td>
     <td>${w.active?'<span class="tag warn">läuft</span>':w.past?'<span class="tag">vorbei</span>':'<span class="tag ok">geplant</span>'}</td><td class="act"><button class="btn sm ed" data-med="${w.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="empty">Keine Wartung geplant.</td></tr>';
@@ -1995,10 +2002,16 @@ function openMaint(id){ const w=id&&MT.find(x=>x.id===id); $('#mf-title').textCo
   mf.from.value=wk?w.from:'22:00'; mf.to.value=wk?w.to:'02:00';
   $('#mf-days').innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="check"><input type="checkbox" value="${d}"${wk&&w.weekdays.includes(d)?' checked':''}> ${WD[d]}</label>`).join('');
   const sel=new Set(w&&w.hosts||[]); $('#mf-hosts').innerHTML=S.state.hosts.map(h=>`<label class="check"><input type="checkbox" value="${h.id}"${sel.has(h.id)?' checked':''}> ${esc(h.name)}</label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
+  const cs=S.state.customers||[], cSites=c=>S.state.sites.filter(x=>x.customer===c.id).map(x=>x.id);
+  $('#mf-custw').style.display=cs.length?'':'none';
+  $('#mf-custs').innerHTML=cs.map(c=>{ const ss=cSites(c); return `<label class="check"><input type="checkbox" value="${c.id}"${ss.length&&ss.every(x=>sel.has('s:'+x))?' checked':''}> ${esc(c.name)}</label>`; }).join('');
+  $$('#mf-custs input').forEach(i=>i.onchange=()=>{ const c=cs.find(x=>x.id===i.value); const ss=new Set(cSites(c)); $$('#mf-hosts input').forEach(h=>{ const ho=S.state.hosts.find(x=>x.id===h.value); if(ho&&ss.has(ho.site)) h.checked=i.checked; }); });
   $('#mf-del').style.display=w?'':'none'; syncMaint(); mdlg.showModal(); }
 mf.kind.onchange=syncMaint; $('#add-maint').onclick=()=>openMaint();
 mf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const wk=mf.kind.value==='weekly'; const body={id:mf.dataset.id,name:mf.name.value.trim(),hosts:$$('#mf-hosts input:checked').map(i=>i.value)};
+  for(const ci of $$('#mf-custs input:checked')){ for(const so of S.state.sites.filter(x=>x.customer===ci.value)){ body.hosts.push('s:'+so.id); for(const mc of S.state.machines||[]) if(mc.site===so.id) body.hosts.push('m:'+mc.id); } }
+  body.hosts=[...new Set(body.hosts)];
   if(wk){ body.weekdays=$$('#mf-days input:checked').map(i=>+i.value); body.from=mf.from.value; body.to=mf.to.value; if(!body.weekdays.length){ $('#mf-err').textContent='Bitte mindestens einen Wochentag wählen.'; return; } }
   else { body.start=new Date(mf.start.value).getTime(); body.end=new Date(mf.end.value).getTime(); }
   try{ await api('/api/maint',{method:'POST',body:JSON.stringify(body)}); mdlg.close(); toast('Gespeichert'); loadMaint(true); refreshState(); }catch(err){ $('#mf-err').textContent=err.message; } });
@@ -2367,18 +2380,23 @@ $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!await uiConfirm
 $('#add-host').onclick=()=>openHost();
 
 /* ---------- Routing & Polling ---------- */
+function custSiteSet(st,v){ if(!v) return null; const cs=st.customers||[]; return new Set(st.sites.filter(s=>v==='-'?(!s.customer||!cs.some(c=>c.id===s.customer)):s.customer===v).map(s=>s.id)); }
 function fillHostSelects(force){ const st=S.state; if(!st) return; const gs=st.groups||[];
+  { const cs=st.customers||[], csig=JSON.stringify(cs.map(c=>c.id+c.name)); for(const id of ['#f-cust','#s-cust']){ const el=$(id); if(el.dataset.sig!==csig){ const v=el.value; el.innerHTML='<option value="">Alle Kunden</option>'+cs.map(c=>`<option value="${c.id}">${esc(c.name)}${c.number?' ('+esc(c.number)+')':''}</option>`).join('')+'<option value="-">Ohne Kunde</option>'; el.value=v; if(el.value!==v) el.value=''; el.dataset.sig=csig; el.style.display=cs.length?'':'none'; } } }
+  const fcs=custSiteSet(st,$('#f-cust').value), scs=custSiteSet(st,$('#s-cust').value);
   const gsig=JSON.stringify(gs.map(g=>g.id+g.name)); const fg=$('#f-group');
   if(fg.dataset.sig!==gsig){ const v=fg.value; fg.innerHTML='<option value="">Alle Gruppen</option>'+gs.map(g=>`<option value="${g.id}">📁 ${esc(g.name)}</option>`).join('')+'<option value="-">Ohne Gruppe</option>'; fg.value=v; fg.dataset.sig=gsig; fg.style.display=gs.length?'':'none'; }
   const rg=$('#rp-group'); if(rg.dataset.sig!==gsig){ const v=rg.value; rg.innerHTML='<option value="">Alle Hosts</option>'+gs.map(g=>`<option value="${g.id}">📁 ${esc(g.name)}</option>`).join(''); rg.value=v; rg.dataset.sig=gsig; rg.parentElement.style.display=gs.length?'':'none'; }
   if(force){ $('#f-host').dataset.sig=''; }
-  const fgv=fg.value; const inG=h=>!fgv||(fgv==='-'?!gs.some(g=>g.id===h.group):h.group===fgv);
+  const fgv=fg.value; const inG=h=>(!fgv||(fgv==='-'?!gs.some(g=>g.id===h.group):h.group===fgv))&&(!fcs||fcs.has(h.site));
   const opts=st.hosts.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('');
   const gopts=gs.length?gs.map(g=>{ const hs=st.hosts.filter(h=>h.group===g.id); return hs.length?`<optgroup label="📁 ${esc(g.name)}">`+hs.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')+'</optgroup>':''; }).join('')+(()=>{ const r=st.hosts.filter(h=>!gs.some(g=>g.id===h.group)); return r.length?'<optgroup label="Ohne Gruppe">'+r.map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join('')+'</optgroup>':''; })():opts;
   const sig1=st.hosts.map(h=>h.id+h.name+(h.group||'')).join()+gsig;
-  const fh=$('#f-host'); const v=fh.value; if(fh.dataset.sig!==sig1+fgv){ fh.innerHTML='<option value="">Alle Hosts</option>'+st.hosts.filter(inG).map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join(''); fh.value=v; if(fh.value!==v) fh.value=''; fh.dataset.sig=sig1+fgv; }
+  const fkey=sig1+fgv+$('#f-cust').value; const fh=$('#f-host'); const v=fh.value; if(fh.dataset.sig!==fkey){ fh.innerHTML='<option value="">Alle Hosts</option>'+st.hosts.filter(inG).map(h=>`<option value="${h.id}">${esc(h.name)}</option>`).join(''); fh.value=v; if(fh.value!==v) fh.value=''; fh.dataset.sig=fkey; }
   const rh=$('#r-host'); if(rh.dataset.sig!==sig1){ const v3=rh.value; rh.innerHTML='<option value="">Alle Hosts</option>'+opts; rh.value=v3; rh.dataset.sig=sig1; }
-  const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=gopts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
+  const skey=sig1+$('#s-cust').value; const sh=$('#s-host'); if(sh.dataset.sig!==skey){ const v2=sh.value;
+    if(scs){ const hs=st.hosts.filter(h=>scs.has(h.site)); sh.innerHTML=hs.length?hs.map(h=>`<option value="${h.id}">${esc(h.name)} · ${esc(siteName(h.site))}</option>`).join(''):'<option value="">(keine Hosts)</option>'; } else sh.innerHTML=gopts;
+    if(v2) sh.value=v2; if(!sh.value&&sh.options.length) sh.selectedIndex=0; sh.dataset.sig=skey; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
   let v=parts[0]||'overview'; if(!['overview','host','machine','events','stats','settings','install','billing','admin','requests'].includes(v)) v='overview';

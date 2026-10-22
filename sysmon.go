@@ -412,7 +412,7 @@ func (m *Monitor) newMachineEvent(mc MachineCfg, name string, at int64, maint bo
 }
 
 func (m *Monitor) machineInMaint(mc MachineCfg, t time.Time) bool {
-	return m.inMaint(mc.Org, "", t) || m.inMaint(mc.Org, "m:"+mc.ID, t)
+	return m.inMaintSite(mc.Org, mc.Site, t) || m.inMaint(mc.Org, "m:"+mc.ID, t)
 }
 
 func gb(b uint64) string {

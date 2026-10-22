@@ -94,6 +94,11 @@ func (m *Monitor) inMaint(org, hostID string, t time.Time) bool {
 	return false
 }
 
+// inMaintSite: ganzer Standort in Wartung (Konto-weit oder Stummschaltung für Standort/Kunde)?
+func (m *Monitor) inMaintSite(org, siteID string, t time.Time) bool {
+	return m.inMaint(org, "", t) || (siteID != "" && m.inMaint(org, "s:"+siteID, t))
+}
+
 // parentDown liefert den Namen des ausgefallenen übergeordneten Hosts (Abhängigkeit), sonst "".
 func (m *Monitor) parentDown(h *Host) string {
 	h.mu.Lock()
@@ -147,6 +152,9 @@ func (m *Monitor) validParent(org, id, parent string) error {
 func (m *Monitor) eventStarted(e *Event, h *Host) {
 	start := time.UnixMilli(e.Start)
 	maint := m.inMaint(e.Org, e.HostID, start) || m.inMaint(e.Org, e.HostID, time.Now())
+	if e.HostID == "" && e.Site != "" {
+		maint = maint || m.inMaintSite(e.Org, e.Site, start) || m.inMaintSite(e.Org, e.Site, time.Now())
+	}
 	m.evMu.Lock()
 	e.Maint = maint
 	if e.Type != "outage" {

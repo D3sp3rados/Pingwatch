@@ -127,3 +127,41 @@ func (s *Server) handleCustomers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Methode", 405)
 	}
 }
+
+// customerSiteSet: Standorte eines Kunden ("-" = Standorte ohne Kunde).
+func (m *Monitor) customerSiteSet(org, cust string) map[string]bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	known := map[string]bool{}
+	for _, c := range m.cfg.Customers {
+		if c.Org == org {
+			known[c.ID] = true
+		}
+	}
+	out := map[string]bool{}
+	for _, sc := range m.cfg.Sites {
+		if sc.Org != org {
+			continue
+		}
+		if (cust == "-" && !known[sc.Customer]) || (cust != "-" && sc.Customer == cust) {
+			out[sc.ID] = true
+		}
+	}
+	if cust == "-" {
+		out["cloud"] = true
+	}
+	return out
+}
+
+func filterEventsBySites(evs []Event, sites map[string]bool, limit int) []Event {
+	out := []Event{}
+	for _, e := range evs {
+		if sites[e.Site] {
+			out = append(out, e)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out
+}

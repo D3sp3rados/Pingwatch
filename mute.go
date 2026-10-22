@@ -46,7 +46,7 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principal(r)
 	var req struct {
-		Scope string `json:"scope"` // all, group, host
+		Scope string `json:"scope"` // all, group, customer, site, machine, host
 		ID    string `json:"id"`
 		Mode  string `json:"mode"`  // mute (nur Meldungen aus) oder pause (Prüfung anhalten)
 		Until int64  `json:"until"` // ms; -1 = dauerhaft
@@ -89,6 +89,42 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 				if mc.Org == p.Org && mc.Group == req.ID {
 					hosts = append(hosts, "m:"+mc.ID)
 				}
+			}
+		}
+	case "customer", "site":
+		// Kunde bzw. Standort: alle Hosts und Rechner dort, dazu der Standort selbst (UniFi, Agent offline)
+		sites := map[string]bool{}
+		for _, sc := range m.cfg.Sites {
+			if sc.Org != p.Org {
+				continue
+			}
+			if (req.Scope == "site" && sc.ID == req.ID) || (req.Scope == "customer" && sc.Customer == req.ID && req.ID != "") {
+				sites[sc.ID] = true
+				if req.Scope == "site" {
+					label = sc.Name
+				}
+			}
+		}
+		if req.Scope == "customer" {
+			for _, c := range m.cfg.Customers {
+				if c.Org == p.Org && c.ID == req.ID {
+					label = c.Name
+				}
+			}
+		}
+		for _, h := range m.cfg.Hosts {
+			if h.Org == p.Org && sites[h.Site] {
+				hosts = append(hosts, h.ID)
+			}
+		}
+		if req.Mode == "mute" {
+			for _, mc := range m.cfg.Machines {
+				if mc.Org == p.Org && sites[mc.Site] {
+					hosts = append(hosts, "m:"+mc.ID)
+				}
+			}
+			for id := range sites {
+				hosts = append(hosts, "s:"+id)
 			}
 		}
 	case "machine":

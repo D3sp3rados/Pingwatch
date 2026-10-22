@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestCustomers(t *testing.T) {
@@ -44,6 +45,30 @@ func TestCustomers(t *testing.T) {
 	}
 	if len(st.Customers) != 1 || !ok {
 		t.Fatalf("state: %s", body[:min(400, len(body))])
+	}
+	// Stummschalten für den Kunden: Hosts und Standort sind in Wartung
+	_, hb := c.do("POST", "/api/hosts", map[string]any{"name": "Router", "addr": "192.168.1.1", "site": sc.ID})
+	var hc HostCfg
+	json.Unmarshal([]byte(hb), &hc)
+	if code, body := c.do("POST", "/api/mute", map[string]any{"scope": "customer", "id": cu.ID, "mode": "mute", "until": -1}); code != 200 {
+		t.Fatal("mute", code, body)
+	}
+	now := time.Now()
+	if !s.m.inMaint("default", hc.ID, now) || !s.m.inMaintSite("default", sc.ID, now) || s.m.inMaint("default", "", now) {
+		t.Fatal("Wartung für Kunde greift nicht (oder für alles)")
+	}
+	// Ereignisse nach Kunde
+	s.m.evMu.Lock()
+	s.m.nextEv++
+	s.m.events = append(s.m.events, &Event{ID: s.m.nextEv, HostID: hc.ID, Site: sc.ID, Org: "default", Type: "outage", Start: now.UnixMilli() - 1000})
+	s.m.nextEv++
+	s.m.events = append(s.m.events, &Event{ID: s.m.nextEv, HostID: "x", Site: "anders", Org: "default", Type: "outage", Start: now.UnixMilli() - 1000})
+	s.m.evMu.Unlock()
+	_, body = c.do("GET", "/api/events?types=outage&cust="+cu.ID, nil)
+	var evs []Event
+	json.Unmarshal([]byte(body), &evs)
+	if len(evs) != 1 || evs[0].Site != sc.ID {
+		t.Fatalf("Ereignisse nach Kunde: %s", body)
 	}
 	// Kunde löschen → Standort bleibt, ohne Kunde
 	if code, _ := c.do("DELETE", "/api/customers?id="+cu.ID, nil); code != 200 {

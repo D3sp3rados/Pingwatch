@@ -109,7 +109,7 @@ func devLabel(d unifiDevice) string {
 func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) {
 	now := time.Now()
 	nowMs := now.UnixMilli()
-	inMaint := m.inMaint(site.Org, "", now)
+	inMaint := m.inMaintSite(site.Org, site.ID, now)
 	unifiLiveState.Lock()
 	st := unifiLiveState.bySite[site.ID]
 	if st == nil {
