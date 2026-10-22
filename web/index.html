@@ -12,17 +12,23 @@
 <meta name="apple-mobile-web-app-title" content="PingWacht">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b1120">
+<script>try{const t=localStorage.getItem("pw_theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}</script>
 <style>
 :root{
   --bg:#f3f5f9;--panel:#ffffff;--panel2:#f8fafc;--fg:#0f172a;--mut:#64748b;--line:#e2e8f0;--line2:#cbd5e1;
   --acc:#059669;--acc-a:rgba(5,150,105,.16);--ok:#16a34a;--warn:#d97706;--loss:#ea580c;--bad:#dc2626;--off:#94a3b8;
   --nodata:#e5e9f0;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.04);
 }
-@media (prefers-color-scheme:dark){:root{
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0b1120;--panel:#111a2e;--panel2:#0e1627;--fg:#e2e8f0;--mut:#8b9ab4;--line:#1e2a44;--line2:#2a3a5c;
   --acc:#34d399;--acc-a:rgba(52,211,153,.16);--ok:#22c55e;--warn:#f59e0b;--loss:#fb923c;--bad:#ef4444;--off:#64748b;
   --nodata:#1a2540;--shadow:none;
 }}
+:root[data-theme="dark"]{
+  --bg:#0b1120;--panel:#111a2e;--panel2:#0e1627;--fg:#e2e8f0;--mut:#8b9ab4;--line:#1e2a44;--line2:#2a3a5c;
+  --acc:#34d399;--acc-a:rgba(52,211,153,.16);--ok:#22c55e;--warn:#f59e0b;--loss:#fb923c;--bad:#ef4444;--off:#64748b;
+  --nodata:#1a2540;--shadow:none;
+}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg)}
 body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
@@ -73,6 +79,17 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 /* Übersicht */
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.drop-on{outline:2px dashed var(--acc);outline-offset:4px;border-radius:12px}
+.card.dragging{opacity:.5}
+.msel{position:relative;margin-top:6px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:6px}
+.msel-chips{display:flex;flex-wrap:wrap;gap:4px}
+.msel-chips span{display:inline-flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--acc) 15%,transparent);border-radius:999px;padding:2px 4px 2px 10px;font-size:13px}
+.msel-chips button{border:0;background:none;color:var(--mut);cursor:pointer;font-size:14px;padding:0 4px}
+.msel input{width:100%;border:0;background:transparent;color:var(--fg);font:inherit;font-size:13.5px;padding:6px 4px;outline:none}
+.msel-dd{display:none;margin-top:4px;max-height:200px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:5}
+.msel-dd.on{display:block}
+.msel-dd div{padding:7px 10px;cursor:pointer;font-size:13.5px}
+.msel-dd div:hover,.msel-dd div.hl{background:var(--bg)}
 .site-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-weight:600}
 .ov-wrap.has-tree{display:grid;grid-template-columns:270px minmax(0,1fr);gap:18px;align-items:start}
 #ov-tree{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px}
@@ -286,7 +303,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   .dlg-b{grid-template-columns:1fr}
   .hide-m{display:none}
 }
-.pw-banner{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.pw-banner a{color:#991b1b;font-weight:700;margin-left:6px}@media (prefers-color-scheme:dark){.pw-banner{background:#3b0d0d;color:#fecaca;border-color:#7f1d1d}.pw-banner a{color:#fecaca}}
+.pw-banner{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.pw-banner a{color:#991b1b;font-weight:700;margin-left:6px}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pw-banner{background:#3b0d0d;color:#fecaca;border-color:#7f1d1d}:root:not([data-theme="light"]) .pw-banner a{color:#fecaca}}:root[data-theme="dark"] .pw-banner{background:#3b0d0d;color:#fecaca;border-color:#7f1d1d}:root[data-theme="dark"] .pw-banner a{color:#fecaca}
 
 /* Rechner-Überwachung */
 .mcard .meters{display:grid;gap:6px;margin:12px 0 4px}
@@ -327,6 +344,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="summary" id="summary"></div>
   <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
   <button class="btn sm ed" id="mute-btn" title="Meldungen pausieren">🔔 Meldungen</button>
+  <button class="btn sm" id="theme-btn" type="button" title="Darstellung: automatisch / hell / dunkel"></button>
   <a class="btn sm" id="logout-btn" href="/logout" title="Abmelden"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="lo-t"> Abmelden</span></a>
   <nav class="tabs" id="tabs">
     <a href="#/" data-v="overview">Übersicht</a>
@@ -352,6 +370,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="dot" id="d-dot"></span>
     <h1 id="d-name"></h1>
     <span class="muted" id="d-sub"></span>
+    <select class="ed" id="d-group" title="Gruppe" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></select>
     <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
     <span class="pill num" id="d-now"></span>
   </div>
@@ -760,8 +779,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Name<input name="name" maxlength="120" required placeholder="z. B. Kindergärten"></label>
       <label class="field">Kundennummer (optional)<input name="number" maxlength="40" placeholder="z. B. 11848"></label>
       <label class="field">Notiz (optional)<input name="note" maxlength="200" placeholder="Ansprechpartner, Telefon …"></label>
-      <div style="margin-top:10px"><b style="font-size:13px">Standorte dieses Kunden</b> <input type="search" id="cu-q" placeholder="filtern …" style="float:right;font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--fg)">
-        <div id="cu-sites" style="margin-top:8px;max-height:40vh;overflow:auto;display:grid;gap:4px"></div></div>
+      <div style="margin-top:10px"><b style="font-size:13px">Standorte dieses Kunden</b>
+        <div class="msel"><div id="cu-chips" class="msel-chips"></div><input type="search" id="cu-q" placeholder="Standort suchen und hinzufügen …" autocomplete="off"><div id="cu-dd" class="msel-dd"></div></div></div>
     </div>
     <div class="dlg-err" id="cu-err"></div>
     <div class="dlg-f"><button class="btn danger" type="button" id="cu-del" style="margin-right:auto">Löschen</button><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
@@ -836,6 +855,21 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
     <div class="dlg-err" id="ms-err"></div>
     <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-ucadd">
+  <form method="dialog" id="ua-form">
+    <div class="dlg-h">UniFi-Cloud-Standort hinzufügen</div>
+    <div class="dlg-b" style="display:block">
+      <label class="field">UniFi-Konsole<select name="console"><option value="">lädt …</option></select></label>
+      <label class="field" id="ua-sitew" style="display:none">UniFi-Site<select name="usite"></select></label>
+      <label class="field">Name in PingWacht<input name="name" maxlength="80" placeholder="z. B. Kundenname"></label>
+      <label class="field" id="ua-custw" style="display:none">Kunde (optional)<select name="cust"></select></label>
+      <div class="muted" style="font-size:12.5px" id="ua-hint"></div>
+    </div>
+    <div class="dlg-err" id="ua-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok" id="ua-ok">Hinzufügen</button></div>
   </form>
 </dialog>
 
@@ -1323,7 +1357,7 @@ function renderOverview(){
         c.onclick=()=>{ location.hash='#/machine/'+mc.id; }; g.appendChild(c); cards['m:'+mc.id]=c; }
     }
   }
-  ovFold(root,secs,view);
+  ovFold(root,secs,view); enableOvDrag(root,secs);
   for(const sec of secs){ if(sec.div){ const d=root.querySelector(`.ov-site[data-div="${sec.div.id}"]`), s=sec.div; if(d) d.innerHTML=`<span class="dot" style="background:var(${s.online?'--ok':'--bad'})"></span>📍 ${esc(s.name)} <span class="muted" style="font-size:13px;font-weight:400">${s.id==='cloud'?'pingt aus dem Rechenzentrum':s.online?'verbunden':'nicht verbunden'}</span>`; }
     const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
     const mm=sec.machines||[], mInfo=mm.length?` · 💻 ${mm.filter(x=>x.status==='ok').length}/${mm.length} Rechner OK`:'';
@@ -1512,6 +1546,8 @@ function renderDetailHead(){
   $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
   const site=S.state.sites.find(s=>s.id===h.site);
   $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
+  { const gs=S.state.groups||[], sel=$('#d-group'); const sig=gs.map(g=>g.id+g.name).join()+'|'+(h.group||'');
+    if(sel.dataset.sig!==sig&&document.activeElement!==sel){ sel.innerHTML='<option value="">📁 ohne Gruppe</option>'+gs.map(g=>`<option value="${g.id}">📁 ${esc(g.name)}</option>`).join('')+'<option value="+">+ neue Gruppe …</option>'; sel.value=h.group||''; sel.dataset.sig=sig; } }
   $('#d-now').innerHTML=`<span class="dot" style="background:var(${col})"></span>${h.status==='down'||h.lastR<0?lbl:fmtMs(h.lastR)} ${h.threshold?'<span class="muted">· Spitze ab '+fmtMs(h.threshold)+'</span>':''}`;
   const [from,to]=dRange(); $('#d-rangetxt').textContent=fmtDT(from,false)+' – '+(D.preset?'jetzt':fmtDT(to,false));
 }
@@ -1741,6 +1777,25 @@ function renderSettings(){
   if(!sup){ $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
+$('#d-group').onchange=async()=>{ const sel=$('#d-group'), h=S.state.hosts.find(x=>x.id===S.hostId); if(!h) return; let g=sel.value;
+  try{ if(g==='+'){ const n=await uiPrompt('Name der neuen Gruppe:'); if(!n){ sel.value=h.group||''; return; } const ng=await api('/api/groups',{method:'POST',body:JSON.stringify({name:n})}); g=ng.id; }
+    await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),group:g})}); toast('Gruppe gespeichert'); sel.dataset.sig=''; await refreshState(); }catch(e){ uiAlert(e.message); sel.value=h.group||''; } };
+/* Übersicht: Kacheln per Ziehen in eine Gruppe verschieben (auf die Gruppen-Überschrift oder ein Gerät der Gruppe) */
+async function moveToGroup(key,gid){ const st=S.state; try{
+    if(key.startsWith('m:')){ await api('/api/machine',{method:'POST',body:JSON.stringify({id:key.slice(2),group:gid})}); }
+    else { const h=st.hosts.find(x=>x.id===key); if(!h||(h.group||'')===gid) return; await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),group:gid})}); }
+    toast(gid?'In Gruppe „'+(((st.groups||[]).find(g=>g.id===gid)||{}).name||'')+'“ verschoben':'Aus der Gruppe genommen'); $('#ov').dataset.sig=''; await refreshState(); }catch(e){ uiAlert(e.message); } }
+function enableOvDrag(root,secs){ const me=(S.state&&S.state.me)||{}; if(me.role==='viewer'||ovMode()!=='group') return;
+  const gidOf=sec=>sec.kind==='group'?(sec.group.id||''):null;
+  for(const sec of secs){ const gid=gidOf(sec); if(gid===null) continue;
+    const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`), g=root.querySelector(`.grid[data-sec="${sec.key}"]`);
+    for(const el of [h,g]){ if(!el) continue; el.dataset.dropg=gid;
+      el.ondragover=e=>{ if(e.dataTransfer.types.includes('text/pw-item')){ e.preventDefault(); el.classList.add('drop-on'); } };
+      el.ondragleave=()=>el.classList.remove('drop-on');
+      el.ondrop=e=>{ e.preventDefault(); el.classList.remove('drop-on'); const k=e.dataTransfer.getData('text/pw-item'); if(k) moveToGroup(k,gid); }; } }
+  for(const [k,c] of Object.entries(cards)){ if(c.dataset.dragset) continue; c.dataset.dragset='1'; c.draggable=true;
+    c.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/pw-item',k); e.dataTransfer.effectAllowed='move'; c.classList.add('dragging'); });
+    c.addEventListener('dragend',()=>c.classList.remove('dragging')); } }
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0}; }
 /* UniFi-Cloud-Key des Kunden */
 const UC={keySet:false,loaded:false};
@@ -1752,8 +1807,29 @@ $('#uc-save').onclick=async()=>{ const k=$('#uc-key').value.trim(); if(!k){ uiAl
   catch(e){ uiAlert('Key nicht gespeichert: '+e.message); } };
 $('#uc-del').onclick=async()=>{ if(!await uiConfirm('UniFi-Cloud-Key entfernen? Standorte, die ihn nutzen, werden dann nicht mehr abgefragt.')) return;
   try{ await api('/api/unifi/cloud',{method:'POST',body:JSON.stringify({remove:true})}); UC.keySet=false; ucRender(); toast('Key entfernt'); }catch(e){ uiAlert(e.message); } };
-$('#uc-addsite').onclick=async()=>{ const n=await uiPrompt('Name des UniFi-Cloud-Standorts (z. B. Kundenname):'); if(!n) return;
-  try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi'})}); await refreshState(); openULive(sc.id); }catch(e){ uiAlert(e.message); } };
+const uaf=$('#ua-form'); let UA={named:false};
+$('#uc-addsite').onclick=async()=>{ if(!UC.keySet){ uiAlert('Bitte zuerst oben den UniFi-Cloud-Key eintragen.'); return; }
+  UA={named:false}; uaf.name.value=''; $('#ua-err').textContent=''; $('#ua-sitew').style.display='none'; $('#ua-ok').disabled=true; $('#ua-hint').textContent='';
+  const cs=S.state.customers||[]; $('#ua-custw').style.display=cs.length?'':'none'; uaf.cust.innerHTML='<option value="">– ohne Kunde –</option>'+cs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  uaf.console.innerHTML='<option value="">lädt …</option>'; $('#dlg-ucadd').showModal();
+  try{ const l=await api('/api/unifi/consoles',{method:'POST',body:'{}'}); const used=new Set(S.state.sites.filter(x=>x.unifi&&x.unifi.console).map(x=>x.unifi.console+'|'+(x.unifi.site||'')));
+    uaf.console.innerHTML='<option value="">– Konsole wählen –</option>'+l.map(c=>`<option value="${esc(c.id)}"${c.online?'':' disabled'}>${esc(c.name)}${c.model?' · '+esc(c.model):''}${c.online?'':' (offline)'}</option>`).join('');
+    UA.used=used; if(l.filter(c=>c.online).length===1){ uaf.console.value=l.find(c=>c.online).id; uaConsole(); } }catch(e){ $('#ua-err').textContent=e.message; } };
+async function uaConsole(){ const id=uaf.console.value; $('#ua-sitew').style.display='none'; uaf.usite.innerHTML=''; $('#ua-ok').disabled=!id; if(!id) return;
+  const cname=(uaf.console.options[uaf.console.selectedIndex].textContent||'').split(' · ')[0]; if(!UA.named) uaf.name.value=cname;
+  $('#ua-hint').textContent='Lade Sites …';
+  try{ const l=await api('/api/unifi/sites',{method:'POST',body:JSON.stringify({console:id})}); $('#ua-hint').textContent='';
+    if(l.length>1){ $('#ua-sitew').style.display=''; uaf.usite.innerHTML='<option value="">– Site wählen –</option>'+l.map(n=>`<option value="${esc(n)}"${UA.used&&UA.used.has(id+'|'+n)?' disabled':''}>${esc(n)}${UA.used&&UA.used.has(id+'|'+n)?' (schon angelegt)':''}</option>`).join(''); $('#ua-ok').disabled=true; }
+    else uaf.usite.innerHTML=l.length?`<option value="${esc(l[0])}" selected>${esc(l[0])}</option>`:''; }catch(e){ $('#ua-hint').textContent=''; $('#ua-err').textContent=e.message; } }
+uaf.console.onchange=uaConsole;
+uaf.usite.onchange=()=>{ $('#ua-ok').disabled=!uaf.usite.value; if(uaf.usite.value&&!UA.named) uaf.name.value=uaf.usite.value; };
+uaf.name.oninput=()=>{ UA.named=true; };
+uaf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#ua-err').textContent='';
+  const n=uaf.name.value.trim(), con=uaf.console.value, cname=(uaf.console.options[uaf.console.selectedIndex].textContent||'').split(' · ')[0];
+  if(!n||!con){ $('#ua-err').textContent='Bitte Konsole und Name angeben.'; return; }
+  try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi',setCustomer:uaf.cust.value||undefined})});
+    await api('/api/unifi',{method:'POST',body:JSON.stringify({site:sc.id,on:true,mode:'cloud',console:con,consoleName:cname,usite:uaf.usite.value||''})});
+    $('#dlg-ucadd').close(); toast('UniFi-Standort „'+n+'“ angelegt – erste Werte gleich'); refreshState(); }catch(err){ $('#ua-err').textContent=err.message; } });
 $('#add-site').onclick=async()=>{ const n=await uiPrompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ const nw=$('#g-new').value;
@@ -2421,13 +2497,22 @@ let CU={id:''};
 function openCust(id,preSite){ const st=S.state; const c=(st.customers||[]).find(x=>x.id===id)||{}; CU={id:id||''}; const f=$('#cu-form');
   f.name.value=c.name||''; f.number.value=c.number||''; f.note.value=c.note||''; $('#cu-title').textContent=id?'Kunde bearbeiten':'Kunde anlegen'; $('#cu-err').textContent=''; $('#cu-del').style.display=id?'':'none'; $('#cu-q').value='';
   const sites=st.sites.filter(s=>s.id!=='cloud'), cn=cid=>((st.customers||[]).find(x=>x.id===cid)||{}).name;
-  $('#cu-sites').innerHTML=sites.length?sites.map(s=>`<label class="check" data-n="${esc((s.name+' '+(s.number||'')).toLowerCase())}"><input type="checkbox" value="${s.id}"${(id&&s.customer===id)||s.id===preSite?' checked':''}> <span>${esc(s.name)}${s.number?` <span class="muted">${esc(s.number)}</span>`:''}${s.customer&&s.customer!==id&&cn(s.customer)?` <span class="muted">· jetzt bei ${esc(cn(s.customer))}</span>`:''}</span></label>`).join(''):'<div class="muted">Noch keine Standorte.</div>';
+  CU.sel=new Set(sites.filter(x=>(id&&x.customer===id)||x.id===preSite).map(x=>x.id)); CU.sites=sites; CU.cn=cn; $('#cu-q').value=''; cuRender();
   $('#dlg-cust').showModal(); }
 $('#add-cust').onclick=()=>openCust('');
-$('#cu-q').oninput=()=>{ const q=$('#cu-q').value.toLowerCase().trim(); $$('#cu-sites [data-n]').forEach(l=>l.style.display=!q||l.dataset.n.includes(q)?'':'none'); };
+function cuRender(){ const sites=CU.sites||[], q=$('#cu-q').value.toLowerCase().trim();
+  $('#cu-chips').innerHTML=sites.filter(x=>CU.sel.has(x.id)).map(x=>`<span>${esc(x.name)}<button type="button" data-cux="${x.id}" title="entfernen">×</button></span>`).join('');
+  $$('#cu-chips [data-cux]').forEach(b=>b.onclick=()=>{ CU.sel.delete(b.dataset.cux); cuRender(); });
+  const list=sites.filter(x=>!CU.sel.has(x.id)&&(!q||(x.name+' '+(x.number||'')).toLowerCase().includes(q))).slice(0,50);
+  const dd=$('#cu-dd'); dd.innerHTML=list.length?list.map(x=>`<div data-cua="${x.id}">${esc(x.name)}${x.number?` <span class="muted">${esc(x.number)}</span>`:''}${x.customer&&x.customer!==CU.id&&CU.cn(x.customer)?` <span class="muted">· jetzt bei ${esc(CU.cn(x.customer))}</span>`:''}</div>`).join(''):`<div class="muted" style="cursor:default">${sites.length?'Keine weiteren Standorte':'Noch keine Standorte'}</div>`;
+  dd.querySelectorAll('[data-cua]').forEach(d=>d.onmousedown=e=>{ e.preventDefault(); CU.sel.add(d.dataset.cua); $('#cu-q').value=''; cuRender(); $('#cu-q').focus(); }); }
+$('#cu-q').oninput=()=>{ cuRender(); $('#cu-dd').classList.add('on'); };
+$('#cu-q').onfocus=()=>{ cuRender(); $('#cu-dd').classList.add('on'); };
+$('#cu-q').onblur=()=>setTimeout(()=>$('#cu-dd').classList.remove('on'),150);
+$('#cu-q').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); const f=$('#cu-dd [data-cua]'); if(f){ CU.sel.add(f.dataset.cua); $('#cu-q').value=''; cuRender(); } } else if(e.key==='Escape'){ $('#cu-dd').classList.remove('on'); e.stopPropagation(); } };
 $('#cu-form').addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); const f=$('#cu-form'); $('#cu-err').textContent='';
   try{ const c=await api('/api/customers',{method:'POST',body:JSON.stringify({id:CU.id,name:f.name.value,number:f.number.value,note:f.note.value})});
-    const st=S.state; for(const cb of $$('#cu-sites input[type=checkbox]')){ const s=st.sites.find(x=>x.id===cb.value); if(!s) continue; const cur=s.customer||''; const want=cb.checked?c.id:(cur===c.id?'':cur); if(want!==cur) await api('/api/sites',{method:'POST',body:JSON.stringify({id:s.id,setCustomer:want})}); }
+    for(const s of CU.sites||[]){ const cur=s.customer||''; const want=CU.sel.has(s.id)?c.id:(cur===c.id?'':cur); if(want!==cur) await api('/api/sites',{method:'POST',body:JSON.stringify({id:s.id,setCustomer:want})}); }
     $('#dlg-cust').close(); toast('Kunde gespeichert'); refreshState(); }catch(err){ $('#cu-err').textContent=err.message; } });
 $('#cu-del').onclick=async()=>{ if(!await uiConfirm('Kunden löschen? Die Standorte bleiben erhalten, nur ohne Zuordnung.')) return; try{ await api('/api/customers?id='+CU.id,{method:'DELETE'}); $('#dlg-cust').close(); toast('Kunde gelöscht'); refreshState(); }catch(e){ uiAlert(e.message); } };
 /* Standort: Kunde und Kundennummer */
@@ -2536,6 +2621,13 @@ setInterval(()=>{ if(document.hidden) return; tick++;
 },3000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ refreshState(); refreshOverview(); if(S.view==='host') loadDetail(); } });
 let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='machine') drawMachineChart(); },150); });
+function themeNow(){ try{ return localStorage.getItem('pw_theme')||'auto'; }catch(e){ return 'auto'; } }
+function applyTheme(t){ if(t==='light'||t==='dark') document.documentElement.dataset.theme=t; else delete document.documentElement.dataset.theme;
+  const b=$('#theme-btn'); if(b){ b.textContent=t==='light'?'☀️':t==='dark'?'🌙':'🌓'; b.title='Darstellung: '+(t==='light'?'hell':t==='dark'?'dunkel':'automatisch (wie das System)')+' – klicken zum Wechseln'; }
+  const mt=document.querySelector('meta[name=theme-color]'); if(mt) mt.content=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||mt.content;
+  if(S.view==='overview'){ $('#ov').dataset.sig=''; renderOverview(); } if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); if(S.view==='machine') renderMachine(); }
+$('#theme-btn').onclick=()=>{ const n={auto:'light',light:'dark',dark:'auto'}[themeNow()]; try{ localStorage.setItem('pw_theme',n); }catch(e){} applyTheme(n); toast('Darstellung: '+(n==='light'?'hell':n==='dark'?'dunkel':'automatisch')); };
+applyTheme(themeNow());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); });
 
 
