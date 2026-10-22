@@ -8,7 +8,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -162,6 +164,7 @@ func (c *sysCollector) collect(services []string) *sysReport {
 // sysLoop: misst den Rechner, solange die Rechner-Überwachung am Standort eingeschaltet ist.
 func (a *Agent) sysLoop() {
 	col := newSysCollector()
+	healer := newSelfHealer(restartService)
 	machine := a.machine
 	if machine == "" {
 		machine = sysMachineID(a.dataDir)
@@ -171,9 +174,22 @@ func (a *Agent) sysLoop() {
 	for {
 		a.mu.Lock()
 		on, svcs, sysOnly := a.sysOn, append([]string(nil), a.sysSvcs...), a.sysOnly
+		healOn, restart := a.sysHeal, append([]string(nil), a.sysRestart...)
 		a.mu.Unlock()
 		if on {
 			rep := col.collect(svcs)
+			rep.NoHeal = a.file.NoSelfHeal
+			if healOn {
+				rep.Heal = healer.step(rep.Svcs, restart, svcs, time.Now())
+			} else {
+				healer.reset()
+			}
+			a.mu.Lock()
+			due := time.Since(a.invAt) >= 24*time.Hour
+			a.mu.Unlock()
+			if due {
+				go a.sendInventory(machine)
+			}
 			pend = append(pend, sysSample{T: time.Now().UnixMilli(), R: rep})
 			if len(pend) > 1440 {
 				pend = pend[len(pend)-1440:]
@@ -552,4 +568,346 @@ func runCmdStderr(timeout time.Duration, name string, args ...string) ([]byte, e
 	cmd.Stderr = &out
 	err := cmd.Run()
 	return out.Bytes(), err
+}
+
+// ---------- Selbstheilung: gestoppte Dienste neu starten (eng begrenzt) ----------
+
+// selfHealer startet nur Dienste, die (1) im Dashboard ausdrücklich zum Neustart markiert sind,
+// (2) zugleich überwacht werden und (3) einen unverdächtigen Namen haben. Höchstens 3 Versuche
+// mit mindestens 1 Minute Abstand; danach wird aufgegeben, bis der Dienst wieder läuft.
+type selfHealer struct {
+	restart func(name string) error
+	st      map[string]*healState
+	verify  func(name string) string // Zustand nach dem Versuch (für Tests austauschbar)
+	wait    time.Duration
+}
+
+type healState struct {
+	tries  int
+	last   time.Time
+	gaveUp bool
+}
+
+const healMaxTries = 3
+
+func newSelfHealer(restart func(string) error) *selfHealer {
+	return &selfHealer{restart: restart, st: map[string]*healState{}, verify: serviceState, wait: 5 * time.Second}
+}
+
+func (h *selfHealer) reset() { h.st = map[string]*healState{} }
+
+func (h *selfHealer) step(svcs []sysSvc, restart, monitored []string, now time.Time) []sysHeal {
+	allowed := map[string]bool{}
+	mon := map[string]bool{}
+	for _, s := range monitored {
+		mon[strings.ToLower(s)] = true
+	}
+	for _, s := range restart {
+		if validServiceName(s) && mon[strings.ToLower(s)] {
+			allowed[strings.ToLower(s)] = true
+		}
+	}
+	var out []sysHeal
+	for i, s := range svcs {
+		k := strings.ToLower(s.Name)
+		if !allowed[k] || !validServiceName(s.Name) {
+			continue
+		}
+		st := h.st[k]
+		if s.State == "running" {
+			delete(h.st, k) // läuft wieder → Zähler zurücksetzen
+			continue
+		}
+		if s.State != "stopped" {
+			continue // „missing“/„unknown“: nichts tun
+		}
+		if st == nil {
+			st = &healState{}
+			h.st[k] = st
+		}
+		if st.gaveUp || st.tries >= healMaxTries || (!st.last.IsZero() && now.Sub(st.last) < time.Minute) {
+			continue
+		}
+		st.tries++
+		st.last = now
+		ev := sysHeal{Svc: s.Name, T: now.UnixMilli(), Try: st.tries}
+		err := h.restart(s.Name)
+		if err == nil && h.verify != nil {
+			if h.wait > 0 {
+				time.Sleep(h.wait)
+			}
+			if v := h.verify(s.Name); v != "running" {
+				err = fmt.Errorf("Dienst läuft nach dem Start nicht (Zustand: %s)", v)
+			}
+		}
+		if err != nil {
+			ev.Err = err.Error()
+			if st.tries >= healMaxTries {
+				st.gaveUp, ev.GaveUp = true, true
+			}
+			log.Printf("Selbstheilung: Neustart von %s fehlgeschlagen (Versuch %d): %v", s.Name, st.tries, err)
+		} else {
+			ev.OK = true
+			svcs[i].State = "running"
+			log.Printf("Selbstheilung: Dienst %s neu gestartet (Versuch %d)", s.Name, st.tries)
+			delete(h.st, k)
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
+// ---------- Inventur ----------
+
+// sendInventory liest das Inventar (nur lesend) und schickt es an den Server.
+func (a *Agent) sendInventory(machine string) error {
+	a.invMu.Lock()
+	if a.invBusy {
+		a.invMu.Unlock()
+		return fmt.Errorf("Inventur läuft bereits")
+	}
+	a.invBusy = true
+	a.invMu.Unlock()
+	defer func() {
+		a.invMu.Lock()
+		a.invBusy = false
+		a.invMu.Unlock()
+	}()
+	inv := collectInventory()
+	inv.At = time.Now().UnixMilli()
+	b, _ := json.Marshal(map[string]any{"machine": machine, "inv": inv})
+	resp, err := a.req("POST", "/api/agent/inventory", bytes.NewReader(b), false)
+	ok := err == nil && resp.StatusCode == http.StatusOK
+	if resp != nil {
+		resp.Body.Close()
+	}
+	a.mu.Lock()
+	if ok {
+		a.invAt = time.Now()
+	} else {
+		a.invAt = time.Now().Add(-23 * time.Hour) // in einer Stunde erneut versuchen
+	}
+	a.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("Server: %s", resp.Status)
+	}
+	log.Printf("Inventur übertragen (%d Programme)", len(inv.SW))
+	return nil
+}
+
+// netInventory: Netzwerkadapter (plattformunabhängig).
+func netInventory() []invNIC {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var out []invNIC
+	for _, it := range ifs {
+		if it.Flags&net.FlagLoopback != 0 || len(it.HardwareAddr) == 0 {
+			continue
+		}
+		n := invNIC{Name: it.Name, MAC: strings.ToUpper(it.HardwareAddr.String())}
+		if addrs, err := it.Addrs(); err == nil {
+			for _, a := range addrs {
+				if ipn, ok := a.(*net.IPNet); ok && !ipn.IP.IsLinkLocalUnicast() {
+					n.IPs = append(n.IPs, ipn.IP.String())
+				}
+			}
+		}
+		if len(n.IPs) == 0 && it.Flags&net.FlagUp == 0 {
+			continue // inaktive Adapter ohne Adresse weglassen
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// parseDpkg: „Paket<TAB>Version<TAB>Maintainer“ je Zeile.
+func parseDpkg(b []byte) []invSW {
+	var out []invSW
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
+		if len(f) < 2 || f[0] == "" {
+			continue
+		}
+		s := invSW{Name: f[0], Version: f[1]}
+		if len(f) > 2 {
+			s.Vendor = f[2]
+			if i := strings.Index(s.Vendor, " <"); i > 0 {
+				s.Vendor = s.Vendor[:i]
+			}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// parseRpm: „Name<TAB>Version<TAB>Hersteller<TAB>Installationszeit (Unix)“.
+func parseRpm(b []byte) []invSW {
+	var out []invSW
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Split(strings.TrimSpace(line), "\t")
+		if len(f) < 2 || f[0] == "" {
+			continue
+		}
+		s := invSW{Name: f[0], Version: f[1]}
+		if len(f) > 2 && f[2] != "(none)" {
+			s.Vendor = f[2]
+		}
+		if len(f) > 3 {
+			if sec, err := strconv.ParseInt(f[3], 10, 64); err == nil && sec > 0 {
+				s.Installed = time.Unix(sec, 0).Format("2006-01-02")
+			}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// parseWinInventory wertet das JSON des PowerShell-Skripts (Windows) aus.
+func parseWinInventory(b []byte) (*sysInventory, error) {
+	b = bytes.TrimSpace(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")))
+	var raw struct {
+		HW struct {
+			Vendor, Model, Serial, BIOS, CPU string
+			Cores, Threads                   int
+			RAM                              uint64
+			Disks                            json.RawMessage
+		} `json:"hw"`
+		OS struct {
+			Name, Version, Build string
+			Installed, Boot      int64
+			Domain               string
+			PartOfDomain         bool `json:"partOfDomain"`
+			User                 string
+			Lic                  int `json:"lic"`
+		} `json:"os"`
+		SW json.RawMessage `json:"sw"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil, err
+	}
+	inv := &sysInventory{}
+	inv.HW = invHW{Vendor: raw.HW.Vendor, Model: raw.HW.Model, Serial: raw.HW.Serial, BIOS: raw.HW.BIOS, CPU: raw.HW.CPU,
+		Cores: raw.HW.Cores, Threads: raw.HW.Threads, RAM: raw.HW.RAM}
+	type d struct {
+		M string `json:"m"`
+		S uint64 `json:"s"`
+	}
+	var disks []d
+	jsonList(raw.HW.Disks, &disks)
+	for _, x := range disks {
+		inv.HW.Disks = append(inv.HW.Disks, invDisk{Model: x.M, Size: x.S})
+	}
+	inv.OS = invOS{Name: raw.OS.Name, Version: raw.OS.Version, Build: raw.OS.Build, Installed: raw.OS.Installed, Boot: raw.OS.Boot,
+		Domain: raw.OS.Domain, InDomain: raw.OS.PartOfDomain, User: raw.OS.User, Activation: winLicense(raw.OS.Lic)}
+	type sw struct{ N, V, P, D string }
+	var list []sw
+	jsonList(raw.SW, &list)
+	for _, s := range list {
+		inst := ""
+		if len(s.D) == 8 { // YYYYMMDD aus der Registry
+			inst = s.D[:4] + "-" + s.D[4:6] + "-" + s.D[6:]
+		}
+		inv.SW = append(inv.SW, invSW{Name: s.N, Version: s.V, Vendor: s.P, Installed: inst})
+	}
+	return inv, nil
+}
+
+// jsonList: PowerShell liefert bei einem Element ein Objekt statt einer Liste.
+func jsonList[T any](raw json.RawMessage, out *[]T) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return
+	}
+	if raw[0] == '[' {
+		json.Unmarshal(raw, out)
+		return
+	}
+	var one T
+	if json.Unmarshal(raw, &one) == nil {
+		*out = append(*out, one)
+	}
+}
+
+func winLicense(s int) string {
+	switch s {
+	case 0:
+		return "nicht aktiviert"
+	case 1:
+		return "aktiviert"
+	case 2, 3, 6:
+		return "Kulanzzeit"
+	case 4:
+		return "nicht echt (Kulanzzeit)"
+	case 5:
+		return "Benachrichtigung (nicht aktiviert)"
+	}
+	return ""
+}
+
+// parseMacProfiler: system_profiler SPHardwareDataType SPApplicationsDataType -json
+func parseMacProfiler(b []byte) *sysInventory {
+	var raw struct {
+		HW []map[string]any `json:"SPHardwareDataType"`
+		SW []map[string]any `json:"SPApplicationsDataType"`
+	}
+	inv := &sysInventory{}
+	if json.Unmarshal(b, &raw) != nil {
+		return inv
+	}
+	str := func(m map[string]any, k string) string {
+		if v, ok := m[k].(string); ok {
+			return v
+		}
+		return ""
+	}
+	if len(raw.HW) > 0 {
+		h := raw.HW[0]
+		inv.HW.Vendor = "Apple"
+		inv.HW.Model = strings.TrimSpace(str(h, "machine_name") + " (" + str(h, "machine_model") + ")")
+		inv.HW.Serial = str(h, "serial_number")
+		inv.HW.BIOS = str(h, "boot_rom_version")
+		inv.HW.CPU = str(h, "chip_type")
+		if inv.HW.CPU == "" {
+			inv.HW.CPU = str(h, "cpu_type")
+		}
+		if p := str(h, "number_processors"); p != "" { // „proc 8:4:4“
+			f := strings.FieldsFunc(p, func(r rune) bool { return r == ' ' || r == ':' })
+			if len(f) >= 2 {
+				inv.HW.Cores, _ = strconv.Atoi(f[1])
+			}
+		}
+		if mem := strings.Fields(str(h, "physical_memory")); len(mem) == 2 {
+			if n, err := strconv.ParseFloat(mem[0], 64); err == nil {
+				mul := float64(1 << 30)
+				if mem[1] == "TB" {
+					mul = 1 << 40
+				}
+				inv.HW.RAM = uint64(n * mul)
+			}
+		}
+	}
+	for _, a := range raw.SW {
+		s := invSW{Name: str(a, "_name"), Version: str(a, "version"), Vendor: str(a, "obtained_from")}
+		if t := str(a, "lastModified"); len(t) >= 10 {
+			s.Installed = t[:10]
+		}
+		if s.Name != "" {
+			inv.SW = append(inv.SW, s)
+		}
+	}
+	return inv
+}
+
+// runCmdCombined wie runCmd, liefert stdout und stderr zusammen.
+func runCmdCombined(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	hideWindow(cmd)
+	return cmd.CombinedOutput()
 }

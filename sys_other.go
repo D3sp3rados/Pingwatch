@@ -11,3 +11,14 @@ func eventCounts() (int, int, bool)         { return -1, -1, false }
 func rebootPending() int                    { return -1 }
 func antivirus() *sysAV                     { return nil }
 func pendingUpdates() (int, bool)           { return -1, false }
+
+func restartService(string) error { return errNotSupported }
+func collectInventory() *sysInventory {
+	return &sysInventory{HW: invHW{NICs: netInventory()}}
+}
+
+var errNotSupported = errorString("auf diesem System nicht unterstützt")
+
+type errorString string
+
+func (e errorString) Error() string { return string(e) }

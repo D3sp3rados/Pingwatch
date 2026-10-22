@@ -234,6 +234,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/snmp", s.handleAgentSNMP)
 	mux.HandleFunc("/api/agent/fritz", s.handleAgentFritz)
 	mux.HandleFunc("/api/agent/sys", s.handleAgentSys)
+	mux.HandleFunc("/api/agent/inventory", s.handleAgentInventory)
 	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
 
 	// geschützt
@@ -293,6 +294,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
 	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
 	mux.HandleFunc("/api/machine", protect(s.handleMachine))
+	mux.HandleFunc("/api/machine/inventory", protect(s.handleMachineInventory))
+	mux.HandleFunc("/api/export/inventory.csv", protect(s.exportInventory))
 	mux.HandleFunc("/api/snmp/watch", protect(s.handleSNMPWatch))
 	mux.HandleFunc("/api/statuspage", protect(s.handleStatusConfig))
 	mux.HandleFunc("/status/", s.handlePublicStatus)
@@ -1075,16 +1078,24 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	if site.Sys != nil && site.Sys.On {
 		sc := site.Sys.eff()
 		sysOut = map[string]any{"on": true, "services": sc.Services}
+		if sc.SelfHeal && len(sc.Restart) > 0 {
+			sysOut["selfHeal"] = true
+			sysOut["restart"] = sc.Restart
+		}
 	}
 	if sysOnly {
 		// „Nur Rechner“-Agent: keine Hosts, keine Aufträge, Standort bleibt Sache des Standort-Agenten
+		out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": []HostCfg{},
+			"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut}
 		if mid := r.Header.Get("X-Machine"); mid != "" {
 			if mc, ok := s.m.machineByID(machineKey(site.ID, mid)); ok {
 				s.m.machineSeen(mc)
+				if jb := takeJobs("m:" + mc.ID); len(jb) > 0 {
+					out["jobs"] = jb
+				}
 			}
 		}
-		writeJSON(w, map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": []HostCfg{},
-			"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut})
+		writeJSON(w, out)
 		return
 	}
 	s.m.siteSeen(site.ID, clientIP(r), r.Header.Get("X-Agent-Version"))

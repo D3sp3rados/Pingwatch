@@ -91,8 +91,31 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.Kind != "scan" && req.Kind != "unifi" && req.Kind != "unifiprobe" && req.Kind != "update" {
+	if req.Kind != "scan" && req.Kind != "unifi" && req.Kind != "unifiprobe" && req.Kind != "update" && req.Kind != "inventory" {
 		http.Error(w, "Auftrag unbekannt", 400)
+		return
+	}
+	if req.Kind == "inventory" {
+		// Inventur eines Rechners: an den Agenten dieses Rechners (Standort-Agent oder „nur Rechner“)
+		mc, ok := s.m.machineByID(req.Params["machine"])
+		if !ok || mc.Org != p.Org {
+			http.Error(w, "Rechner unbekannt", 404)
+			return
+		}
+		if !s.m.machineOnline(mc) {
+			http.Error(w, "Der Rechner meldet sich gerade nicht", 409)
+			return
+		}
+		j := agentJob{ID: randHex(8), Kind: "inventory", Params: map[string]string{"machine": mc.ID}}
+		q := mc.Site
+		if mc.SysOnly {
+			q = "m:" + mc.ID
+		}
+		jobs.Lock()
+		jobs.byID[j.ID] = &jobState{agentJob: j, Org: p.Org, Site: mc.Site, Status: "queued", Created: time.Now().UnixMilli()}
+		jobs.queue[q] = append(jobs.queue[q], j)
+		jobs.Unlock()
+		writeJSON(w, map[string]string{"id": j.ID})
 		return
 	}
 	site := s.siteFor(r, req.Site)
@@ -189,6 +212,14 @@ func (a *Agent) runJob(j agentJob) {
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
 		res, err = unifiProbe(j.Params["url"], j.Params["key"], strings.Split(j.Params["paths"], ","))
+	case "inventory":
+		if m := j.Params["machine"]; m != "" && !strings.HasSuffix(m, ":"+a.machine) {
+			err = errors.New("Auftrag gilt für einen anderen Rechner")
+			break
+		}
+		if err = a.sendInventory(a.machine); err == nil {
+			res = map[string]string{"message": "Inventur übertragen"}
+		}
 	case "update":
 		a.mu.Lock()
 		latest := a.latest

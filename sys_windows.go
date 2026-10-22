@@ -3,6 +3,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"syscall"
 	"time"
@@ -236,4 +238,81 @@ func atoiSafe(s string) (int, bool) {
 		n = -n
 	}
 	return n, true
+}
+
+var (
+	pStartServiceW = advapi32.NewProc("StartServiceW")
+)
+
+// restartService startet einen gestoppten Windows-Dienst (nur freigegebene Dienste, siehe selfHealer).
+// Benötigt Administratorrechte des Agenten.
+func restartService(name string) error {
+	if !validServiceName(name) {
+		return errors.New("ungültiger Dienstname")
+	}
+	scm, _, err := pOpenSCManagerW.Call(0, 0, 0x0001)
+	if scm == 0 {
+		return fmt.Errorf("Dienststeuerung nicht erreichbar: %v", err)
+	}
+	defer pCloseServiceHandle.Call(scm)
+	const access = 0x0010 | 0x0004 // SERVICE_START | SERVICE_QUERY_STATUS
+	h, _, err := pOpenServiceW.Call(scm, uintptr(unsafe.Pointer(u16(name))), access)
+	if h == 0 {
+		if e, ok := err.(syscall.Errno); ok && e == 1060 {
+			buf := make([]uint16, 257)
+			size := uint32(len(buf))
+			if r, _, _ := pGetServiceKeyNameW.Call(scm, uintptr(unsafe.Pointer(u16(name))), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size))); r != 0 {
+				h, _, err = pOpenServiceW.Call(scm, uintptr(unsafe.Pointer(&buf[0])), access)
+			}
+		}
+		if h == 0 {
+			if e, ok := err.(syscall.Errno); ok && e == 5 {
+				return errors.New("Zugriff verweigert – der Agent braucht Administratorrechte, um Dienste zu starten")
+			}
+			return fmt.Errorf("Dienst nicht zu öffnen: %v", err)
+		}
+	}
+	defer pCloseServiceHandle.Call(h)
+	if r, _, err := pStartServiceW.Call(h, 0, 0); r == 0 {
+		if e, ok := err.(syscall.Errno); ok && e == 1056 { // läuft bereits
+			return nil
+		}
+		if e, ok := err.(syscall.Errno); ok && e == 5 {
+			return errors.New("Zugriff verweigert – der Agent braucht Administratorrechte, um Dienste zu starten")
+		}
+		return fmt.Errorf("Start fehlgeschlagen: %v", err)
+	}
+	return nil
+}
+
+// Inventur über CIM/Registry – nur lesend, keine Produktschlüssel.
+const psInventory = `$ErrorActionPreference='SilentlyContinue'
+$cs=Get-CimInstance Win32_ComputerSystem; $bios=Get-CimInstance Win32_BIOS; $os=Get-CimInstance Win32_OperatingSystem
+$cpu=@(Get-CimInstance Win32_Processor)
+$ep=[datetime]'1970-01-01'
+function ms($d){ if($d){ [int64](($d.ToUniversalTime()-$ep).TotalMilliseconds) } else { 0 } }
+$disks=@(Get-CimInstance Win32_DiskDrive | ForEach-Object { @{m=[string]$_.Model; s=[uint64]$_.Size} })
+$sw=@()
+foreach($p in 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*','HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'){
+  $sw+=@(Get-ItemProperty $p | Where-Object { $_.DisplayName -and -not $_.SystemComponent -and -not $_.ParentKeyName } | ForEach-Object { @{n=[string]$_.DisplayName; v=[string]$_.DisplayVersion; p=[string]$_.Publisher; d=[string]$_.InstallDate} })
+}
+$lic=Get-CimInstance SoftwareLicensingProduct -Filter "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL" -Property LicenseStatus | Select-Object -First 1
+$o=@{hw=@{vendor=[string]$cs.Manufacturer; model=[string]$cs.Model; serial=[string]$bios.SerialNumber; bios=[string]$bios.SMBIOSBIOSVersion; cpu=[string]$cpu[0].Name.Trim(); cores=[int]($cpu | Measure-Object NumberOfCores -Sum).Sum; threads=[int]($cpu | Measure-Object NumberOfLogicalProcessors -Sum).Sum; ram=[uint64]$cs.TotalPhysicalMemory; disks=$disks};
+ os=@{name=[string]$os.Caption; version=[string]$os.Version; build=[string]$os.BuildNumber; installed=(ms $os.InstallDate); boot=(ms $os.LastBootUpTime); domain=[string]$cs.Domain; partOfDomain=[bool]$cs.PartOfDomain; user=[string]$cs.UserName; lic=$(if($lic){[int]$lic.LicenseStatus}else{-1})};
+ sw=$sw}
+$o | ConvertTo-Json -Depth 5 -Compress`
+
+func collectInventory() *sysInventory {
+	b, err := runPS(4*time.Minute, psInventory)
+	inv, perr := parseWinInventory(b)
+	if perr != nil || inv == nil {
+		inv = &sysInventory{}
+		if err != nil {
+			inv.Err = "Inventur über PowerShell fehlgeschlagen: " + err.Error()
+		} else if perr != nil {
+			inv.Err = "Inventur nicht lesbar: " + perr.Error()
+		}
+	}
+	inv.HW.NICs = netInventory()
+	return inv
 }

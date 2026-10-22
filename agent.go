@@ -24,6 +24,8 @@ type AgentFile struct {
 	Site   string `json:"site,omitempty"`
 	// "sysonly": nur diesen Rechner überwachen (keine Hosts), z. B. auf weiteren Servern/PCs
 	Mode string `json:"mode,omitempty"`
+	// true: dieser Agent startet niemals Dienste neu, auch wenn es im Dashboard erlaubt ist
+	NoSelfHeal bool `json:"noSelfHeal,omitempty"`
 }
 
 type agentHost struct {
@@ -64,6 +66,12 @@ type Agent struct {
 	sysSvcs []string
 	sysErr  string
 	machine string
+	// Selbstheilung (nur wenn am Standort erlaubt und nicht in agent.json abgeschaltet)
+	sysHeal    bool
+	sysRestart []string
+	invMu      sync.Mutex
+	invBusy    bool
+	invAt      time.Time
 }
 
 const maxBuffer = 2_000_000
@@ -268,6 +276,8 @@ func (a *Agent) fetchConfig() bool {
 		Sys     *struct {
 			On       bool     `json:"on"`
 			Services []string `json:"services"`
+			SelfHeal bool     `json:"selfHeal"`
+			Restart  []string `json:"restart"`
 		} `json:"sys"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
@@ -295,9 +305,10 @@ func (a *Agent) fetchConfig() bool {
 	if a.sysOnly {
 		a.siteName += " (nur Rechner)"
 	}
-	a.sysOn, a.sysSvcs = cfg.Sys != nil && cfg.Sys.On, nil
+	a.sysOn, a.sysSvcs, a.sysHeal, a.sysRestart = cfg.Sys != nil && cfg.Sys.On, nil, false, nil
 	if cfg.Sys != nil {
 		a.sysSvcs = cfg.Sys.Services
+		a.sysHeal, a.sysRestart = cfg.Sys.SelfHeal && !a.file.NoSelfHeal, cfg.Sys.Restart
 	}
 	a.unifi = cfg.UniFi
 	if a.sysOnly {

@@ -31,6 +31,25 @@ type SysCfg struct {
 	EvCrit     int      `json:"evCrit,omitempty"`     // ab … kritischen Ereignissen je Stunde (Standard 1)
 	AVSigDays  int      `json:"avSigDays,omitempty"`  // Virensignaturen älter als … Tage (Standard 3)
 	RebootDays int      `json:"rebootDays,omitempty"` // Neustart ausstehend seit … Tagen (Standard 7)
+	// Selbstheilung: gestoppte Dienste automatisch neu starten – nur wenn hier erlaubt UND der
+	// Dienst ausdrücklich in Restart steht (Teilmenge von Services). Standard: aus.
+	SelfHeal bool     `json:"selfHeal,omitempty"`
+	Restart  []string `json:"restart,omitempty"`
+}
+
+// validServiceName: nur harmlose Zeichen in Dienstnamen (für den automatischen Neustart).
+func validServiceName(s string) bool {
+	if s == "" || len(s) > 120 || strings.TrimSpace(s) != s {
+		return false
+	}
+	for _, c := range s {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '.', c == '-', c == '@', c == ' ':
+		default:
+			return false
+		}
+	}
+	return !strings.HasPrefix(s, "-")
 }
 
 func (c *SysCfg) norm() {
@@ -69,6 +88,22 @@ func (c *SysCfg) norm() {
 		}
 	}
 	c.Services = svc
+	// Neustart nur für überwachte Dienste mit gültigem Namen
+	in := map[string]string{}
+	for _, s := range svc {
+		in[strings.ToLower(s)] = s
+	}
+	var rs []string
+	done := map[string]bool{}
+	for _, s := range c.Restart {
+		name, ok := in[strings.ToLower(strings.TrimSpace(s))]
+		if !ok || !validServiceName(name) || done[strings.ToLower(name)] {
+			continue
+		}
+		done[strings.ToLower(name)] = true
+		rs = append(rs, name)
+	}
+	c.Restart = rs
 }
 
 func (c *SysCfg) eff() SysCfg {
@@ -137,6 +172,18 @@ type sysReport struct {
 	AV       *sysAV    `json:"av,omitempty"`
 	Reboot   int       `json:"reboot"` // Neustart ausstehend: 1 ja, 0 nein, -1 unbekannt
 	Ver      string    `json:"ver,omitempty"`
+	Heal     []sysHeal `json:"heal,omitempty"`   // Selbstheilung: Neustart-Versuche seit der letzten Meldung
+	NoHeal   bool      `json:"noHeal,omitempty"` // Selbstheilung im Agenten abgeschaltet (agent.json)
+}
+
+// sysHeal: ein automatischer Neustart-Versuch des Agenten.
+type sysHeal struct {
+	Svc    string `json:"svc"`
+	T      int64  `json:"t"`
+	Try    int    `json:"try"`
+	OK     bool   `json:"ok"`
+	Err    string `json:"err,omitempty"`
+	GaveUp bool   `json:"gaveUp,omitempty"` // letzter Versuch fehlgeschlagen – Agent gibt auf
 }
 
 func (r *sysReport) memPct() float64 {
@@ -415,7 +462,17 @@ func sysChecks(r *sysReport, c SysCfg, name string) []sysCheck {
 			body: fmt.Sprintf("RAM seit über %d min über %d %% belegt (%s von %s).", c.HighMin, c.MemPct, gb(r.MemUsed), gb(r.MemTotal)),
 			ok:   "🟢 Arbeitsspeicher wieder normal: " + name, push: true, label: "Arbeitsspeicher voll"})
 	}
+	heal := map[string]bool{}
+	if c.SelfHeal && !r.NoHeal {
+		for _, s := range c.Restart {
+			heal[strings.ToLower(s)] = true
+		}
+	}
 	for _, s := range r.Svcs {
+		hold := int64(2 * 60000)
+		if heal[strings.ToLower(s.Name)] {
+			hold = 5 * 60000 // erst den automatischen Neustart abwarten
+		}
 		switch s.State {
 		case "running":
 			out = append(out, sysCheck{key: "svc:" + strings.ToLower(s.Name), clear: true})
@@ -424,7 +481,7 @@ func sysChecks(r *sysReport, c SysCfg, name string) []sysCheck {
 			if s.State == "missing" {
 				why = "ist auf dem Rechner nicht vorhanden"
 			}
-			out = append(out, sysCheck{key: "svc:" + strings.ToLower(s.Name), bad: true, hold: 2 * 60000,
+			out = append(out, sysCheck{key: "svc:" + strings.ToLower(s.Name), bad: true, hold: hold,
 				title: "🔴 Dienst gestoppt: " + s.Name + " (" + name + ")",
 				body:  "Der Dienst „" + s.Name + "“ " + why + ".",
 				ok:    "🟢 Dienst läuft wieder: " + s.Name + " (" + name + ")", push: true, label: "Dienst " + s.Name + " gestoppt"})
@@ -519,6 +576,31 @@ func (m *Monitor) ingestSys(mc MachineCfg, c SysCfg, samples []sysSample) {
 					m.closeSiteEvent(cd.ev, s.T)
 				}
 				delete(sm.conds, k)
+			}
+		}
+		// Selbstheilung: Neustart-Versuche des Agenten
+		for _, h := range r.Heal {
+			svc := h.Svc
+			switch {
+			case h.OK:
+				m.closeSiteEvent(m.newMachineEvent(mc, fmt.Sprintf("Dienst %s gestoppt – automatisch neu gestartet (Versuch %d)", svc, h.Try)+" · "+name, h.T, maint), h.T)
+			case h.GaveUp:
+				e := m.newMachineEvent(mc, fmt.Sprintf("Dienst %s: automatischer Neustart fehlgeschlagen", svc)+" · "+name, h.T, maint)
+				m.closeSiteEvent(e, h.T)
+				if !maint {
+					why := ""
+					if h.Err != "" {
+						why = " Fehler: " + h.Err
+					}
+					notes = append(notes, notice{"syswarn", "m:" + mc.ID, "🔴 Neustart fehlgeschlagen: " + svc + " (" + name + ")",
+						m.sysInfo(mc, fmt.Sprintf("Der Dienst „%s“ ist gestoppt, %d automatische Neustarts sind fehlgeschlagen.%s Bitte selbst prüfen.", svc, h.Try, why)), mc.Org})
+				}
+			default:
+				e := m.newMachineEvent(mc, fmt.Sprintf("Dienst %s: Neustart-Versuch %d fehlgeschlagen", svc, h.Try)+" · "+name, h.T, maint)
+				m.evMu.Lock()
+				e.Notified = false
+				m.evMu.Unlock()
+				m.closeSiteEvent(e, h.T)
 			}
 		}
 		// Neustart ausstehend
@@ -871,6 +953,7 @@ func (m *Monitor) removeMachines(match func(MachineCfg) bool) {
 	}
 	m.mu.Unlock()
 	for _, id := range gone {
+		m.dropInv(id)
 		sm := getSysMachine(id)
 		sm.mu.Lock()
 		evs := []*Event{sm.offEv}
@@ -897,4 +980,12 @@ func (m *Monitor) machineGroupLocked(id string) string {
 		}
 	}
 	return ""
+}
+
+// machineOnline: Rechner hat sich in den letzten 3 Minuten gemeldet.
+func (m *Monitor) machineOnline(mc MachineCfg) bool {
+	sm := getSysMachine(mc.ID)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	return sm.seen > 0 && time.Now().UnixMilli()-sm.seen < 3*60000
 }

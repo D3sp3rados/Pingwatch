@@ -488,3 +488,35 @@ func (s *FileStore) DeleteSamples(hosts []string, from, to int64) {
 
 // DeleteEvents: bei Dateien schreibt RewriteEvents die bereinigte Liste.
 func (s *FileStore) DeleteEvents(ids []int64) {}
+
+// blobStore: größere Datensätze je Schlüssel (Inventar der Rechner).
+type blobStore interface {
+	SaveBlob(key string, b []byte) error
+	LoadBlob(key string) ([]byte, error)
+	DeleteBlob(key string)
+}
+
+func blobPath(dir, key string) string {
+	safe := make([]rune, 0, len(key))
+	for _, c := range key {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			safe = append(safe, c)
+		} else {
+			safe = append(safe, '_')
+		}
+	}
+	return filepath.Join(dir, "blobs", string(safe)+".json")
+}
+
+func (s *FileStore) SaveBlob(key string, b []byte) error {
+	p := blobPath(s.dir, key)
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	if err := os.WriteFile(p+".tmp", b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(p+".tmp", p)
+}
+
+func (s *FileStore) LoadBlob(key string) ([]byte, error) { return os.ReadFile(blobPath(s.dir, key)) }
+
+func (s *FileStore) DeleteBlob(key string) { os.Remove(blobPath(s.dir, key)) }

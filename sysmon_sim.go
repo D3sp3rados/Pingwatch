@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"math/rand"
+	"strconv"
 	"time"
 )
 
@@ -55,6 +56,16 @@ func (m *Monitor) simMachines() {
 				}
 				m.machineSeen(mc)
 				m.ingestSys(mc, s.Sys.eff(), []sysSample{{T: now.UnixMilli(), R: r}})
+				if m.invAt(mc.ID) == 0 {
+					sw := []invSW{{Name: "Google Chrome", Version: "130.0.6723.70", Vendor: "Google LLC", Installed: "2026-10-01"}, {Name: "7-Zip 23.01 (x64)", Version: "23.01", Vendor: "Igor Pavlov"},
+						{Name: "Microsoft Office Professional Plus 2021", Version: "16.0.14332.20763", Vendor: "Microsoft Corporation", Installed: "2025-03-14"}, {Name: "DATEV Arbeitsplatz", Version: "16.4", Vendor: "DATEV eG"}}
+					if x.os[0] == 'D' {
+						sw = []invSW{{Name: "samba", Version: "2:4.17.12+dfsg-0+deb12u1", Vendor: "Debian Samba Maintainers"}, {Name: "openssh-server", Version: "1:9.2p1-2+deb12u3", Vendor: "Debian OpenSSH Maintainers"}}
+					}
+					m.ingestInventory(mc, &sysInventory{At: now.UnixMilli(), HW: invHW{Vendor: "Dell Inc.", Model: "PowerEdge T150", Serial: "SIM" + x.id, BIOS: "1.9.2", CPU: "Intel(R) Xeon(R) E-2314 CPU @ 2.80GHz", Cores: 4, Threads: 4, RAM: x.mem,
+						Disks: []invDisk{{Model: "DELL PERC H355 Front", Size: 480 * g}}, NICs: []invNIC{{Name: "Ethernet", MAC: "00:11:22:33:44:5" + strconv.Itoa(i), IPs: []string{"192.168.10." + strconv.Itoa(10+i)}}}},
+						OS: invOS{Name: x.os, Build: "20348", Installed: now.AddDate(-2, 0, 0).UnixMilli(), Boot: now.Add(-72 * time.Hour).UnixMilli(), Domain: "firma.local", InDomain: true, User: "FIRMA\\mueller", Activation: "aktiviert"}, SW: sw})
+				}
 			}
 		}
 		time.Sleep(20 * time.Second)

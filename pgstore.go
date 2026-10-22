@@ -54,6 +54,7 @@ var pgSchema = []string{
 	`CREATE TABLE IF NOT EXISTS pw_if (host TEXT NOT NULL, t BIGINT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (host, t))`,
 	`CREATE INDEX IF NOT EXISTS pw_if_t ON pw_if (t)`,
 	`CREATE TABLE IF NOT EXISTS pw_ifinfo (host TEXT PRIMARY KEY, data TEXT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS pw_blob (key TEXT PRIMARY KEY, data TEXT NOT NULL)`,
 }
 
 // databaseDSN ermittelt die Verbindungsdaten aus der Umgebung.
@@ -581,4 +582,23 @@ func dbDownMail(err error) {
 	if e := sendMail(splitAddrs(to), "[PingWacht] Datenbank nicht erreichbar", txt, "", nil); e != nil {
 		log.Printf("Hinweis-Mail Datenbank: %v", e)
 	}
+}
+
+// SaveBlob/LoadBlob/DeleteBlob: größere Datensätze (z. B. Inventar der Rechner).
+func (s *PgStore) SaveBlob(key string, b []byte) error {
+	_, err := s.db.Exec(`INSERT INTO pw_blob (key, data) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data`, key, string(b))
+	if err != nil {
+		s.logErr("Inventar speichern", err)
+	}
+	return err
+}
+
+func (s *PgStore) LoadBlob(key string) ([]byte, error) {
+	var d string
+	err := s.db.QueryRow(`SELECT data FROM pw_blob WHERE key = $1`, key).Scan(&d)
+	return []byte(d), err
+}
+
+func (s *PgStore) DeleteBlob(key string) {
+	s.db.Exec(`DELETE FROM pw_blob WHERE key = $1`, key)
 }

@@ -277,6 +277,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 .mrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
 .mrow b{flex:1 1 140px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mrow select,.mrow input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--fg)}
+
+.b-inv{background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
+.mtabs{margin:10px 0 0}
+.kvt td:first-child{color:var(--mut);width:38%;white-space:nowrap}
+.invch{font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
+.invch:first-child{border-top:0}
+.heal-list{display:grid;gap:4px;margin:6px 0 0 26px}
 </style>
 </head>
 <body>
@@ -360,6 +367,20 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <button class="btn sm ed" id="m-mute" style="margin-left:auto">🔕 Stummschalten</button>
     <button class="btn sm ed" id="m-edit">Bearbeiten</button>
   </div>
+  <div class="seg mtabs" id="m-tabs"><button data-t="ov" class="on">Übersicht</button><button data-t="inv">Inventar</button></div>
+  <div id="m-inv" style="display:none">
+    <div class="row" style="margin:12px 0 4px;flex-wrap:wrap"><button class="btn sm pri ed" id="inv-now">Jetzt aktualisieren</button><a class="btn sm" id="inv-csv" href="#">CSV (dieser Rechner)</a><a class="btn sm" href="/api/export/inventory.csv">Inventarliste aller Rechner (CSV)</a><a class="btn sm" href="/api/export/inventory.csv?software=1">Software aller Rechner (CSV)</a><span class="muted" id="inv-at" style="font-size:12.5px;align-self:center"></span></div>
+    <div class="mcols">
+      <div><h2>Hardware</h2><div class="panel" style="overflow-x:auto"><table class="tbl kvt" id="inv-hw"></table></div></div>
+      <div><h2>Betriebssystem</h2><div class="panel" style="overflow-x:auto"><table class="tbl kvt" id="inv-os"></table></div></div>
+    </div>
+    <h2>Installierte Software <span class="sub muted" id="inv-swn" style="font-weight:400;font-size:12.5px"></span> <input type="search" id="inv-q" placeholder="Software suchen …" style="margin-left:auto;width:220px;max-width:50%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></h2>
+    <div class="panel" style="overflow-x:auto;max-height:60vh;overflow-y:auto"><table class="tbl" id="inv-sw"></table></div>
+    <h2>Änderungen</h2>
+    <div class="panel" style="padding:8px 14px" id="inv-ch"></div>
+    <p class="muted" style="font-size:12.5px">Nur Auslesen: Lizenz- und Produktschlüssel werden nicht erfasst, bei Windows nur der Aktivierungsstatus. Die Inventur läuft beim Start des Agenten und alle 24 Stunden.</p>
+  </div>
+  <div id="m-ovw">
   <div class="mprob" id="m-probs"></div>
   <div class="stats" id="m-stats"></div>
   <div class="panel" style="padding:12px;margin-top:12px">
@@ -373,6 +394,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </div>
   <h2>Ereignisse <span class="sub muted" style="font-weight:400;font-size:12.5px">letzte 7 Tage</span></h2>
   <div class="panel evlist" id="m-events"></div>
+  </div>
 </section>
 
 <section id="v-events">
@@ -380,7 +402,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <select id="f-group" style="display:none"><option value="">Alle Gruppen</option></select>
     <select id="f-host"><option value="">Alle Hosts</option></select>
     <div class="seg" id="f-types">
-      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button><button data-t="reboot" class="on">Neustarts</button><button data-t="wan" class="on">WAN</button><button data-t="sys" class="on">Rechner</button>
+      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button><button data-t="reboot" class="on">Neustarts</button><button data-t="wan" class="on">WAN</button><button data-t="sys" class="on">Rechner</button><button data-t="inv" class="on">Inventar</button>
     </div>
     <select id="f-range">
       <option value="1">Letzte 24 h</option><option value="7" selected>Letzte 7 Tage</option><option value="30">Letzte 30 Tage</option><option value="0">Alles</option>
@@ -746,7 +768,9 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
     <div class="dlg-b" style="display:block">
       <label class="check"><input type="checkbox" name="on"> <span><b>Rechner überwachen</b> – der Rechner mit dem Agent und weitere Rechner mit dem Agent im Modus „nur Rechner“ melden jede Minute CPU, Arbeitsspeicher, Laufwerke, Dienste, Updates, Virenschutz und ausstehende Neustarts. Es wird nur gemessen, nichts ferngesteuert.</span></label>
       <label class="field" style="margin-top:10px">Überwachte Dienste (einer pro Zeile)<textarea name="services" rows="3" placeholder="Spooler&#10;MSSQLSERVER&#10;smbd"></textarea><small>Windows: Dienstname oder Anzeigename (services.msc). Linux: systemd-Dienst. Mac: launchd-Label. Meldung, wenn ein Dienst nicht läuft.</small></label>
-      <div class="syscfg-grid">
+      <label class="check" style="margin-top:4px"><input type="checkbox" name="selfHeal"> <span><b>Selbstheilung erlauben</b> – gestoppte Dienste, die unten markiert sind, startet der Agent automatisch neu (höchstens 3 Versuche im Abstand von 1 Minute). Andere Dienste und Befehle werden nie ausgeführt. Kann auf dem Rechner zusätzlich mit <code>"noSelfHeal": true</code> in der agent.json abgeschaltet werden; unter Windows braucht der Agent dafür Administratorrechte.</span></label>
+      <div class="heal-list" id="sy-heal"></div>
+      <div class="syscfg-grid" style="margin-top:8px">
         <label class="field">Laufwerk voll ab (%)<input name="diskPct" type="number" min="50" max="99"></label>
         <label class="field">oder weniger frei als (GB, 0 = aus)<input name="diskMinGB" type="number" min="0" step="0.5"></label>
         <label class="field">CPU dauerhaft über (%)<input name="cpuPct" type="number" min="50" max="100"></label>
@@ -905,7 +929,7 @@ const MSTATUS={ok:['OK','--ok'],warn:['Warnung','--warn'],bad:['Problem','--bad'
 const MBAD=m=>['bad','warn','off'].includes(m.status);
 const fmtBytes=b=>{ if(!b) return '0 GB'; const g=b/1073741824; return g>=1024?(g/1024).toLocaleString('de-DE',{maximumFractionDigits:1})+' TB':g>=100?Math.round(g)+' GB':g.toLocaleString('de-DE',{maximumFractionDigits:1})+' GB'; };
 const STATUS={ok:['OK','--ok'],spike:['Latenzspitze','--warn'],loss:['Paketverlust','--loss'],down:['Keine Antwort','--bad'],stale:['Keine Daten','--off'],siteoff:['Standort offline','--off'],paused:['Pausiert','--off'],unknown:['Warte auf Daten','--off']};
-const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down',reboot:'Neustart',wan:'WAN getrennt',sys:'Rechner'};
+const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down',reboot:'Neustart',wan:'WAN getrennt',sys:'Rechner',inv:'Inventar'};
 
 /* ---------- Tooltip ---------- */
 const tip=$('#tip');
@@ -1102,6 +1126,7 @@ function evText(e){
     case 'reboot': return 'UniFi-Gerät neu gestartet';
     case 'wan': return 'Internetleitung getrennt';
     case 'sys': return 'Rechner-Überwachung';
+    case 'inv': return 'Inventur';
     case 'device': return e.name==='UniFi-Konsole'?'Konsole nicht erreichbar':'offline in der UniFi-Konsole';
   } return ''; }
 function ackHTML(e){ if(e.type!=='outage'&&e.type!=='offline') return '';
@@ -1991,7 +2016,7 @@ function route(){
     $$('#d-range button').forEach(b=>b.classList.toggle('on',b.dataset.r===D.preset)); $('#d-back').style.display=D.preset?'none':''; $('#d-date').value='';
     D.data=null; $('#d-events')._all=false; drawChart(); renderDetailHead(); loadDetail(); }
   else S.hostId=null;
-  if(v==='machine'){ MD.id=parts[1]; MD.data=null; renderMachine(); loadMachine(); } else MD.id=null;
+  if(v==='machine'){ if(MD.id!==parts[1]){ INV.data=null; INV.id=null; } MD.id=parts[1]; MD.data=null; mTab(q.get('t')==='inv'?'inv':(MD.tab||'ov')); renderMachine(); loadMachine(); } else MD.id=null;
   if(v==='events') loadEvents();
   if(v==='stats'){ fillHostSelects(); renderReportBox(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
   if(v==='settings'){ setCat(parts[1]); renderSettings(); }
@@ -2062,6 +2087,29 @@ function drawMachineChart(){ const c=$('#m-chart'); if(!c||!MD.data) return; con
     for(const p of pts){ const v=p[k]; if(v==null||v<0||p.t<t0){ first=true; continue; } const x=X(p.t), y=Y(v); if(first||p.t-lastT>(MD.range==='7d'?40*6e4:5*6e4)) g.moveTo(x,y); else g.lineTo(x,y); first=false; lastT=p.t; } g.stroke();
     if(pts.length<40){ g.fillStyle=col; for(const p of pts){ const v=p[k]; if(v==null||v<0||p.t<t0) continue; g.beginPath(); g.arc(X(p.t),Y(v),2.2,0,7); g.fill(); } } }
   if(!pts.length){ g.fillStyle=mut; g.fillText('Noch kein Verlauf – die ersten Werte kommen innerhalb einer Minute.',L+8,H/2); } }
+const INV={id:null,data:null,at:0};
+function mTab(t){ MD.tab=t; $$('#m-tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); $('#m-inv').style.display=t==='inv'?'':'none'; $('#m-ovw').style.display=t==='inv'?'none':''; if(t==='inv') loadInv(true); else drawMachineChart(); }
+$$('#m-tabs button').forEach(b=>b.onclick=()=>mTab(b.dataset.t));
+async function loadInv(force){ const id=MD.id; if(!id) return; if(!force&&INV.id===id&&Date.now()-INV.at<60000) return;
+  try{ const d=await api('/api/machine/inventory?id='+encodeURIComponent(id)); if(MD.id!==id) return; INV.id=id; INV.data=d; INV.at=Date.now(); renderInv(); }catch(e){} }
+function renderInv(){ const d=INV.data||{}, inv=d.inv; $('#inv-csv').href='/api/export/inventory.csv?id='+encodeURIComponent(MD.id||'');
+  const kv=rows=>rows.filter(x=>x[1]!==''&&x[1]!=null&&x[1]!==0).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td class="empty">–</td></tr>';
+  if(!inv){ $('#inv-at').textContent='Noch keine Inventur – der Agent liefert sie kurz nach dem Start (Agent ab Version 1.4.0).'; $('#inv-hw').innerHTML=$('#inv-os').innerHTML=$('#inv-sw').innerHTML=''; $('#inv-ch').innerHTML='<div class="muted">–</div>'; $('#inv-swn').textContent=''; return; }
+  $('#inv-at').textContent='Stand '+fmtDT(inv.at,false)+(inv.err?' · '+inv.err:'');
+  const h=inv.hw||{}, o=inv.os||{};
+  $('#inv-hw').innerHTML=kv([['Hersteller',esc(h.vendor||'')],['Modell',esc(h.model||'')],['Seriennummer',esc(h.serial||'')],['BIOS',esc(h.bios||'')],['Prozessor',esc(h.cpu||'')],['Kerne / Threads',h.cores?h.cores+' / '+(h.threads||h.cores):''],['Arbeitsspeicher',h.ram?fmtBytes(h.ram):''],
+    ...(h.disks||[]).map(x=>['Datenträger',esc((x.m||'')+' · '+fmtBytes(x.s))]),...(h.nics||[]).map(x=>['Netzwerk',esc(x.n)+(x.mac?' · <span class="num">'+esc(x.mac)+'</span>':'')+((x.ip||[]).length?'<br><span class="muted num">'+x.ip.map(esc).join(', ')+'</span>':'')])]);
+  $('#inv-os').innerHTML=kv([['Name',esc(o.name||'')],['Version',esc(o.version||'')],['Build',esc(o.build||'')],['Aktivierung',o.activation?`<span style="color:var(${o.activation==='aktiviert'?'--ok':'--warn'})">${esc(o.activation)}</span>`:''],['Domäne / Arbeitsgruppe',esc(o.domain||'')+(o.domain?(o.inDomain?' (Domäne)':' (Arbeitsgruppe)'):'')],['Angemeldeter Benutzer',esc(o.user||'')],['Installiert am',o.installed?new Date(o.installed).toLocaleDateString('de-DE'):''],['Letzter Neustart',o.boot?fmtDT(o.boot,false):'']]);
+  const q=($('#inv-q').value||'').toLowerCase().trim(), sw=(inv.sw||[]).filter(x=>!q||(x.n+' '+(x.p||'')).toLowerCase().includes(q));
+  $('#inv-swn').textContent=(inv.sw||[]).length+' Programme'+(q?` · ${sw.length} gefunden`:'');
+  $('#inv-sw').innerHTML=sw.length?'<tr><th>Name</th><th>Version</th><th class="hide-m">Hersteller</th><th class="hide-m">Installiert</th></tr>'+sw.map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${esc(x.v||'')}</td><td class="hide-m">${esc(x.p||'')}</td><td class="hide-m num">${esc(x.d||'')}</td></tr>`).join(''):'<tr><td class="empty">Keine Software gefunden</td></tr>';
+  const KL={neu:['neu','--ok'],entfernt:['entfernt','--bad'],aktualisiert:['aktualisiert','--acc'],hardware:['Hardware','--warn']};
+  $('#inv-ch').innerHTML=(d.changes||[]).length?d.changes.slice(0,200).map(c=>{ const [l,col]=KL[c.k]||[c.k,'--mut']; return `<div class="invch"><span class="muted num">${fmtDT(c.t,false)}</span> · <b style="color:var(${col})">${l}</b> ${esc(c.w)}${c.from||c.to?` <span class="muted">${esc(c.from||'')}${c.from&&c.to?' → ':''}${esc(c.to||'')}</span>`:''}</div>`; }).join(''):'<div class="muted" style="font-size:13px">Noch keine Änderungen seit der ersten Inventur.</div>'; }
+$('#inv-q').oninput=renderInv;
+$('#inv-now').onclick=async()=>{ const b=$('#inv-now'); b.disabled=true; b.textContent='Wird ausgelesen …';
+  try{ const r=await api('/api/jobs',{method:'POST',body:JSON.stringify({kind:'inventory',params:{machine:MD.id}})});
+    for(let i=0;i<60;i++){ await new Promise(x=>setTimeout(x,3000)); const j=await api('/api/jobs?id='+r.id).catch(()=>null); if(j&&j.status==='error'){ alert('Inventur: '+j.error); break; } if(j&&j.status==='done'){ toast('Inventur aktualisiert'); await loadInv(true); break; } }
+  }catch(e){ alert(e.message); } b.disabled=false; b.textContent='Jetzt aktualisieren'; };
 $$('#m-range button').forEach(b=>b.onclick=()=>{ MD.range=b.dataset.r; $$('#m-range button').forEach(x=>x.classList.toggle('on',x===b)); drawMachineChart(); });
 $('#m-mute').onclick=()=>{ const m=machineOf(MD.id); if(m) openMute('machine',m.id,m.name); };
 $('#m-edit').onclick=()=>{ const m=machineOf(MD.id); if(m) openSys(m.site); };
@@ -2071,10 +2119,16 @@ const sydlg=$('#dlg-sys'), syf=$('#sy-form'); let SY={site:null};
 function openSys(siteId){ const st=S.state; const s=st&&st.sites.find(x=>x.id===siteId); if(!s) return; SY.site=siteId;
   const c=Object.assign({diskPct:90,diskMinGB:0,cpuPct:95,memPct:95,highMin:15,avSigDays:3,rebootDays:7,evCrit:1,services:[]},s.sys||{});
   $('#sy-title').textContent='Rechner-Überwachung – '+s.name; syf.on.checked=!!(s.sys&&s.sys.on); syf.services.value=(c.services||[]).join('\n');
+  syf.selfHeal.checked=!!c.selfHeal; SY.restart=new Set((c.restart||[]).map(x=>x.toLowerCase())); renderHealList();
   for(const k of ['diskPct','diskMinGB','cpuPct','memPct','highMin','avSigDays','rebootDays','evCrit']) syf[k].value=c[k];
   const pl=(st.org&&st.plans||[]).find(p=>p.id===st.org.plan); const lim=pl?pl.machinesPerSite:(st.org&&st.org.plan==='internal'?-1:undefined);
   $('#sy-limit').textContent=lim>0?`(Paket: bis ${lim} Rechner je Standort)`:lim===0?'(im aktuellen Paket nicht enthalten)':'';
   renderSysMachines(); $('#sy-err').textContent=''; sydlg.showModal(); }
+const HEAL_OK=/^[A-Za-z0-9_.@ -]{1,120}$/;
+function renderHealList(){ const svcs=syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean); const on=syf.selfHeal.checked;
+  $('#sy-heal').innerHTML=!on?'':svcs.length?svcs.map(x=>HEAL_OK.test(x)&&!x.startsWith('-')?`<label class="check" style="font-size:13px"><input type="checkbox" data-heal="${esc(x)}"${SY.restart.has(x.toLowerCase())?' checked':''}> „${esc(x)}“ automatisch neu starten</label>`:`<span class="muted" style="font-size:12.5px">„${esc(x)}“: Name enthält Sonderzeichen – kein automatischer Neustart möglich</span>`).join(''):'<span class="muted" style="font-size:12.5px">Zuerst oben Dienste eintragen.</span>';
+  $$('#sy-heal [data-heal]').forEach(c=>c.onchange=()=>{ const k=c.dataset.heal.toLowerCase(); if(c.checked) SY.restart.add(k); else SY.restart.delete(k); }); }
+syf.services.addEventListener('input',renderHealList); syf.selfHeal.addEventListener('change',renderHealList);
 function renderSysMachines(){ const st=S.state, ms=((st&&st.machines)||[]).filter(m=>m.site===SY.site), gs=(st&&st.groups)||[];
   $('#sy-machines').innerHTML=ms.length?ms.map(m=>`<div class="mrow"><span class="dot" style="background:var(${(MSTATUS[m.status]||MSTATUS.unknown)[1]})"></span><b title="${esc(m.host||'')}">${esc(m.name)}</b><span class="muted" style="font-size:12px">${m.sysOnly?'nur Rechner':'Standort-Agent'}</span>
     <select class="ed" data-mgrp="${esc(m.id)}"><option value="">Ohne Gruppe</option>${gs.map(g=>`<option value="${esc(g.id)}"${g.id===m.group?' selected':''}>${esc(g.name)}</option>`).join('')}</select>
@@ -2083,7 +2137,9 @@ function renderSysMachines(){ const st=S.state, ms=((st&&st.machines)||[]).filte
   $$('#sy-machines [data-mren]').forEach(b=>b.onclick=async()=>{ const m=machineOf(b.dataset.mren); const n=prompt('Neuer Name:',m?m.name:''); if(!n) return; try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:b.dataset.mren,name:n})}); await refreshState(); renderSysMachines(); }catch(e){ alert(e.message); } });
   $$('#sy-machines [data-mdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Rechner entfernen? Solange dort der Agent läuft, erscheint er wieder.')) return; try{ await api('/api/machine?id='+encodeURIComponent(b.dataset.mdel),{method:'DELETE'}); await refreshState(); renderSysMachines(); }catch(e){ alert(e.message); } }); }
 syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
-  const num=k=>+syf[k].value||0; const sys={on:syf.on.checked,services:syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean),diskPct:num('diskPct'),diskMinGB:num('diskMinGB'),cpuPct:num('cpuPct'),memPct:num('memPct'),highMin:num('highMin'),avSigDays:num('avSigDays'),rebootDays:num('rebootDays'),evCrit:num('evCrit')};
+  const num=k=>+syf[k].value||0; const svcList=syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean);
+  const restart=svcList.filter(x=>SY.restart.has(x.toLowerCase())&&HEAL_OK.test(x));
+  const sys={on:syf.on.checked,selfHeal:syf.selfHeal.checked,restart,services:svcList,diskPct:num('diskPct'),diskMinGB:num('diskMinGB'),cpuPct:num('cpuPct'),memPct:num('memPct'),highMin:num('highMin'),avSigDays:num('avSigDays'),rebootDays:num('rebootDays'),evCrit:num('evCrit')};
   try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
 
 /* ---------- KI-Assistent ---------- */

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"regexp"
 	"strconv"
@@ -95,4 +96,35 @@ func pendingUpdates() (int, bool) {
 		return -1, false
 	}
 	return parseSoftwareUpdate(b), true
+}
+
+func restartService(string) error {
+	return errors.New("automatischer Neustart auf dem Mac nicht unterstützt")
+}
+
+func collectInventory() *sysInventory {
+	b, _ := runCmd(180*time.Second, "system_profiler", "SPHardwareDataType", "SPApplicationsDataType", "-json")
+	inv := parseMacProfiler(b)
+	if v, err := runCmd(5*time.Second, "sw_vers", "-productVersion"); err == nil {
+		inv.OS.Name, inv.OS.Version = "macOS", strings.TrimSpace(string(v))
+	}
+	if v, err := runCmd(5*time.Second, "sw_vers", "-buildVersion"); err == nil {
+		inv.OS.Build = strings.TrimSpace(string(v))
+	}
+	if b, err := runCmd(5*time.Second, "sysctl", "-n", "kern.boottime"); err == nil {
+		if m := reBoot.FindSubmatch(b); m != nil {
+			if sec, err := strconv.ParseInt(string(m[1]), 10, 64); err == nil {
+				inv.OS.Boot = sec * 1000
+			}
+		}
+	}
+	if u, err := runCmd(5*time.Second, "stat", "-f", "%Su", "/dev/console"); err == nil {
+		inv.OS.User = strings.TrimSpace(string(u))
+	}
+	var st syscall.Statfs_t
+	if syscall.Statfs("/", &st) == nil {
+		inv.HW.Disks = append(inv.HW.Disks, invDisk{Model: "Systemvolume", Size: st.Blocks * uint64(st.Bsize)})
+	}
+	inv.HW.NICs = netInventory()
+	return inv
 }
