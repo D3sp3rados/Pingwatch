@@ -385,10 +385,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		time.Sleep(800 * time.Millisecond)
-		msg := ""
-		if e := err.Error(); !strings.Contains(e, "falsch") {
-			msg = "&m=" + url.QueryEscape(e) // gesperrt/abgelaufen – Grund anzeigen
-		}
+		msg := "&m=" + url.QueryEscape(err.Error()) // inkl. „noch 3 Versuche“ bzw. gesperrt/abgelaufen
 		http.Redirect(w, r, "/login?f=1"+msg, http.StatusFound)
 		return
 	}

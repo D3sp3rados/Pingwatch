@@ -64,6 +64,32 @@ func loginFailed(account, ip string) {
 	}
 }
 
+// loginLeft: verbleibende Versuche für ein Konto (für den Hinweis „noch 3 Versuche“).
+func loginLeft(account string) int {
+	loginGuard.Lock()
+	defer loginGuard.Unlock()
+	n := 0
+	for _, t := range loginGuard.fails["a:"+account] {
+		if time.Since(t) < loginLock {
+			n++
+		}
+	}
+	return loginMaxPerAccount - n
+}
+
+// withLeft ergänzt eine Fehlermeldung um die verbleibenden Versuche.
+func withLeft(err error, account string) error {
+	left := loginLeft(account)
+	switch {
+	case left <= 0:
+		return fmt.Errorf("%s – Anmeldung jetzt für %d Minuten gesperrt", err.Error(), int(loginLock.Minutes()))
+	case left == 1:
+		return fmt.Errorf("%s – Achtung: noch 1 Versuch, danach %d Minuten gesperrt", err.Error(), int(loginLock.Minutes()))
+	default:
+		return fmt.Errorf("%s – noch %d Versuche, danach %d Minuten gesperrt", err.Error(), left, int(loginLock.Minutes()))
+	}
+}
+
 func loginSucceeded(account string) {
 	loginGuard.Lock()
 	delete(loginGuard.fails, "a:"+account)
@@ -90,6 +116,7 @@ func (s *Server) loginSecure(email, pw, code, device string, r *http.Request) (s
 	if err != nil {
 		if strings.Contains(err.Error(), "falsch") {
 			loginFailed(acct, ip)
+			return "", nil, withLeft(err, acct)
 		}
 		return "", nil, err
 	}
@@ -111,7 +138,7 @@ func (s *Server) loginSecure(email, pw, code, device string, r *http.Request) (s
 		}
 		if err := totpCheck(sub, sec, code, time.Now()); err != nil {
 			loginFailed(acct, ip)
-			return "", u, err
+			return "", u, withLeft(err, acct)
 		}
 	}
 	loginSucceeded(acct)
@@ -262,7 +289,7 @@ func (s *Server) finish2FA(email, code, device string, r *http.Request) (string,
 	}
 	if err := totpCheck(sub, sec, code, time.Now()); err != nil {
 		loginFailed(acct, ip)
-		return "", err
+		return "", withLeft(err, acct)
 	}
 	loginSucceeded(acct)
 	if u != nil {
