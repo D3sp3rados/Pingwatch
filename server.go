@@ -151,6 +151,7 @@ func runServer(args []string) {
 func maintenanceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Retry-After", "30")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-PingWacht", "maintenance") // eigene Seite – der Service Worker ersetzt sie nicht
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
