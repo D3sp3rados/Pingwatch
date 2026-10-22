@@ -221,7 +221,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <body>
 <div class="conn" id="conn">Keine Verbindung zum Server – Anzeige ist nicht aktuell</div>
 <header class="top"><div class="top-in">
-  <div class="brand"><img src="/icon.svg" alt="">Ping<span style="color:var(--acc)">Wacht</span></div>
+  <div class="brand"><img src="/icon.svg" alt=""><span>Ping<span style="color:var(--acc)">Wacht</span></span></div>
   <div class="summary" id="summary"></div>
   <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
   <button class="btn sm ed" id="mute-btn" title="Meldungen pausieren">🔔 Meldungen</button>
@@ -454,6 +454,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <input type="search" id="a-q" placeholder="Suchen …" style="margin-left:auto;width:200px;max-width:45%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="a-tbl"></table></div>
 </section>
+<footer style="text-align:center;font-size:12.5px;color:var(--mut);padding:24px 0 8px">PingWacht · <a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></footer>
 </main>
 
 <dialog id="dlg-org">
@@ -1493,7 +1494,7 @@ function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.
     catch(e){ alert(e.message); b.disabled=false; } });
   $('#b-sum').textContent=o.plan==='free'?'Free: 1 Standort inklusive':'';
   const pv=st.provider||{}; const L=(u,t)=>u?`<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`:'';
-  $('#b-legal').innerHTML=`Anbieter: ${esc(pv.name||'')} ${[L(pv.imprint,'Impressum'),L(pv.privacy,'Datenschutz'),L(pv.terms,'AGB')].filter(Boolean).join(' · ')}. Zahlung über Stripe (Karte, SEPA-Lastschrift u. a.).`;
+  $('#b-legal').innerHTML=`Anbieter: ${esc(pv.name||'')} ${[L(pv.imprint,'Impressum'),L(pv.privacy,'Datenschutz'),L(pv.terms,'AGB')].filter(Boolean).join(' · ')}.`;
 }
 $('#b-sites').oninput=()=>{ $('#b-sites').dataset.touched='1'; renderBilling(); };
 

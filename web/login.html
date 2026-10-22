@@ -15,7 +15,7 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 .err{color:#ef4444;font-size:13px;margin:-8px 0 12px;display:none}
 </style></head><body>
 <form method="post" action="/login">
-<div class="brand"><img src="/icon.svg" alt="">Ping<span style="color:var(--acc)">Wacht</span></div>
+<div class="brand"><img src="/icon.svg" alt=""><span>Ping<span style="color:var(--acc)">Wacht</span></span></div>
 <label for="em">E-Mail</label>
 <input id="em" name="email" type="text" inputmode="email" autocapitalize="none" autocomplete="username" placeholder="name@firma.de" required>
 <label for="pw">Passwort</label>
@@ -23,6 +23,7 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 <div class="err" id="err">E-Mail oder Passwort falsch.</div>
 <button type="submit">Anmelden</button>
 <div id="su" style="display:none;margin-top:14px;font-size:13px;text-align:center;color:var(--mut)">Noch kein Konto? <a href="/signup" style="color:var(--acc)">Kostenlos registrieren</a></div>
+<p style="text-align:center;font-size:12px;margin:16px 0 0"><a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></p>
 </form>
 <script>const q=new URLSearchParams(location.search); if(q.get('f')){ const e=document.getElementById('err'); e.style.display='block'; if(q.get('m')) e.textContent=q.get('m'); }
 document.getElementById('em').focus();

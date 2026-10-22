@@ -58,6 +58,13 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Rechtliches") {
+                if let c = model.creds {
+                    Link("Impressum", destination: c.server.appendingPathComponent("impressum"))
+                    Link("Datenschutz", destination: c.server.appendingPathComponent("datenschutz"))
+                }
+            }
+
             Section {
                 Button("Abmelden", role: .destructive) { confirmLogout = true }
             }

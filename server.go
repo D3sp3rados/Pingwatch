@@ -215,6 +215,8 @@ func (s *Server) routes() http.Handler {
 		b, _ := webFS.ReadFile("web/sw.js")
 		w.Write(b)
 	})
+	mux.HandleFunc("/impressum", s.handleLegal)
+	mux.HandleFunc("/datenschutz", s.handleLegal)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
