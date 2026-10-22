@@ -29,12 +29,13 @@ type HostCfg struct {
 	OutageCount int    `json:"outageCount"`
 	Paused      bool   `json:"paused"`
 	Org         string `json:"org,omitempty"`
-	Parent      string `json:"parent,omitempty"`    // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
-	Expect      string `json:"expect,omitempty"`    // http: Statuscode oder Text; dns: erwartete Adresse
-	DNSServer   string `json:"dnsServer,omitempty"` // dns: abzufragender Server (leer = System)
-	Community   string `json:"community,omitempty"` // snmp: Community (v2c)
-	Watch       string `json:"watch,omitempty"`     // snmp: überwachte Ports (ifIndex, Komma-getrennt)
-	Group       string `json:"group,omitempty"`     // Gruppe/Ordner (z. B. Endkunde)
+	Parent      string `json:"parent,omitempty"`     // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
+	Expect      string `json:"expect,omitempty"`     // http: Statuscode oder Text; dns: erwartete Adresse
+	DNSServer   string `json:"dnsServer,omitempty"`  // dns: abzufragender Server (leer = System)
+	Community   string `json:"community,omitempty"`  // snmp: Community (v2c)
+	Watch       string `json:"watch,omitempty"`      // snmp: überwachte Ports (ifIndex, Komma-getrennt)
+	Group       string `json:"group,omitempty"`      // Gruppe/Ordner (z. B. Endkunde)
+	PauseUntil  int64  `json:"pauseUntil,omitempty"` // pausiert bis (ms), 0 = unbegrenzt
 }
 
 type SiteCfg struct {
@@ -508,6 +509,7 @@ func (m *Monitor) housekeeping() {
 		now := time.Now()
 		nowMs := now.UnixMilli()
 		m.store.Flush()
+		m.resumePaused(nowMs)
 		m.mu.RLock()
 		hosts := make([]*Host, 0, len(m.hosts))
 		for _, h := range m.hosts {

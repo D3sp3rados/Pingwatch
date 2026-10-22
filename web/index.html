@@ -85,6 +85,23 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .site-h:first-child{margin-top:2px}
 .site-h .muted{font-weight:400;font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+#ov.compact .grid{grid-template-columns:1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+#ov.compact .card{padding:7px 12px;border:0;border-radius:0;border-top:1px solid var(--line);box-shadow:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,240px);align-items:center;column-gap:14px}
+#ov.compact .card:first-child{border-top:0}
+#ov.compact .card.down{background:color-mix(in srgb,var(--bad) 9%,var(--panel))}
+#ov.compact .card-h{align-items:center}
+#ov.compact .card-h .dot{margin-top:0}
+#ov.compact .card-t{display:flex;align-items:baseline;gap:10px;min-width:0}
+#ov.compact .card-t b{font-size:14px;flex:0 1 auto}
+#ov.compact .card-t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
+#ov.compact .card-v{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+#ov.compact .card-v b{font-size:15px;display:inline}
+#ov.compact .spark,#ov.compact .kv,#ov.compact .bar-ax,#ov.compact .last:not(.live){display:none}
+#ov.compact .bar{height:14px;margin:0}
+#ov.compact .last.live{grid-column:1/-1;margin:4px 0 0}
+@media(max-width:640px){#ov.compact .card{grid-template-columns:minmax(0,1fr) 70px}#ov.compact .card-t span{display:none}}
+.btn.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}
+.mute-banner{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;margin:0 0 12px;border-radius:12px;border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 10%,var(--panel));font-size:13.5px}
 .card{padding:14px 14px 12px;cursor:pointer;position:relative;transition:border-color .15s}
 .card:hover{border-color:var(--line2)}
 .card.down{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
@@ -207,6 +224,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="brand"><img src="/icon.svg" alt="">PingWatch</div>
   <div class="summary" id="summary"></div>
   <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
+  <button class="btn sm ed" id="mute-btn" title="Meldungen pausieren">🔔 Meldungen</button>
   <nav class="tabs" id="tabs">
     <a href="#/" data-v="overview">Übersicht</a>
     <a href="#/events" data-v="events">Ereignisse</a>
@@ -218,7 +236,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </div></header>
 
 <main>
-<section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></section>
+<div id="mute-banner"></div>
+<section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button></div><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></section>
 
 <section id="v-host">
   <div class="det-h">
@@ -536,6 +555,24 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
   </form>
 </dialog>
 
+<dialog id="dlg-mute">
+  <form method="dialog" id="mu-form">
+    <div class="dlg-h" id="mu-title">Meldungen pausieren</div>
+    <div class="dlg-b" style="display:block">
+      <div class="seg" id="mu-mode" style="margin-bottom:10px"><button type="button" data-m="mute">🔕 Nur Meldungen stumm</button><button type="button" data-m="pause">⏸ Prüfung pausieren</button></div>
+      <p class="muted" style="font-size:12.5px;margin:0 0 10px" id="mu-help"></p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="mu-dur">
+        <button type="button" class="btn" data-d="1h">1 Stunde</button><button type="button" class="btn" data-d="4h">4 Stunden</button>
+        <button type="button" class="btn" data-d="eod">bis heute Abend</button><button type="button" class="btn" data-d="morn">bis morgen 7 Uhr</button>
+        <button type="button" class="btn" data-d="1w">1 Woche</button><button type="button" class="btn" data-d="forever">dauerhaft</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="datetime-local" id="mu-until" style="max-width:220px"><button type="button" class="btn" id="mu-set">bis Zeitpunkt</button></div>
+    </div>
+    <div class="dlg-err" id="mu-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-ulive">
   <form method="dialog" id="ul-form">
     <div class="dlg-h" id="ul-title">UniFi-Livestatus</div>
@@ -707,8 +744,8 @@ function renderOverview(){
   const root=$('#ov');
   if(!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
   // Abschnitte: nach Gruppe (Ordner) oder nach Standort
-  const gs=st.groups||[]; const mode=ovMode();
-  $('#ovbar').style.display=st.hosts.length>1?'flex':'none'; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  const gs=st.groups||[]; const mode=ovMode(); const view=ovView(); root.classList.toggle('compact',view==='list'); $$('#ovview button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  $('#ovbar').style.display=st.hosts.length>1?'flex':'none'; $('#ovbar').style.flexWrap='wrap'; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
   const secs=[];
   if(mode==='group'){
     for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id); if(hs.length) secs.push({key:'g'+g.id,kind:'group',group:g,hosts:hs}); }
@@ -733,7 +770,8 @@ function renderOverview(){
   for(const sec of secs){ const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
     if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
     else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
-      h.innerHTML=`<span class="dot" style="background:var(${dn?'--bad':wn?'--warn':ok<act.length?'--off':'--ok'})"></span>📁 ${esc(sec.group.name)} <span class="muted">${ok}/${act.length} OK${dn?` · <b style="color:var(--bad)">${dn} ohne Antwort</b>`:''}${sec.group.note?' · '+esc(sec.group.note):''}</span>`; }
+      h.innerHTML=`<span class="dot" style="background:var(${dn?'--bad':wn?'--warn':ok<act.length?'--off':'--ok'})"></span>📁 ${esc(sec.group.name)} <span class="muted">${ok}/${act.length} OK${dn?` · <b style="color:var(--bad)">${dn} ohne Antwort</b>`:''}${sec.group.note?' · '+esc(sec.group.note):''}</span>${sec.group.id?` <a href="#" class="ed" data-gmute="${sec.group.id}" title="Kunde stummschalten / pausieren" style="font-size:13px;text-decoration:none">🔕</a>`:''}`;
+      const gm=h.querySelector('[data-gmute]'); if(gm) gm.onclick=e=>{ e.preventDefault(); openMute('group',sec.group.id,sec.group.name); }; }
   }
   for(const sec of secs){ if(!sec.site) continue; const u=root.querySelector(`.uf[data-site="${sec.site.id}"]`); if(u) renderUniFi(u,sec.site); }
   for(const h of st.hosts){ const c=cards[h.id]; if(!c) continue;
@@ -991,9 +1029,10 @@ function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return
 function renderSettings(){
   const st=S.state; if(!st) return;
   const hs=st.hosts;
-  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> <button class="btn sm ed" data-pause="${h.id}">${h.paused?'Starten':'Pause'}</button></td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> ${h.paused?`<button class="btn sm ed" data-pause="${h.id}" title="${h.pauseUntil?'pausiert bis '+fmtDT(h.pauseUntil,false):'dauerhaft pausiert'}">▶ Starten</button>`:`<button class="btn sm ed" data-hmute="${h.id}">⏸ Pause ▾</button>`}</td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
-  $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:!h.paused})}); refreshState(); });
+  $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:false})}); refreshState(); });
+  $$('#hosts-tbl [data-hmute]').forEach(b=>b.onclick=()=>{ const h=hs.find(x=>x.id===b.dataset.hmute); openMute('host',h.id,h.name); });
   const sites=st.sites.filter(s=>s.id!=='cloud');
   $('#sites').innerHTML=sites.length? sites.map(s=>`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
     <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.unifi&&s.unifi.on?`<dt>UniFi</dt><dd><a href="#" data-ulist="${s.id}">${s.unifi.err?'<span style="color:var(--bad)">Konsole nicht erreichbar</span>':s.unifi.at?`${s.unifi.total} Geräte${s.unifi.offline?` · <b style="color:var(--bad)">${s.unifi.offline} offline</b>`:' · alle online'}`:'warte auf Agent …'}</a></dd>`:''}${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)}</dd>`:''}</dl>
@@ -1023,13 +1062,15 @@ function renderSettings(){
   if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||''}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
 
 /* Übersicht: Gruppen oder Standorte */
 function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
+function ovView(){ let v=null; try{ v=localStorage.getItem('pw_ovview'); }catch(e){} return v==='list'?'list':'tiles'; }
+$$('#ovview button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_ovview',b.dataset.v); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); });
 $$('#ovmode button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_ovmode',b.dataset.m); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); });
 
 /* UniFi in der Übersicht */
@@ -1160,6 +1201,26 @@ let installEvt=null;
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; const b=$('#install-app'); if(b) b.style.display=''; });
 window.addEventListener('appinstalled',()=>{ installEvt=null; const b=$('#install-app'); if(b) b.style.display='none'; toast('PingWatch ist installiert'); });
+
+/* Meldungen pausieren / Prüfung pausieren */
+const mudlg=$('#dlg-mute'); const MU={scope:'all',id:'',mode:'mute'};
+function openMute(scope,id,label){ MU.scope=scope; MU.id=id||''; MU.mode='mute';
+  $('#mu-title').textContent=scope==='all'?'Alle Meldungen pausieren':scope==='group'?'Kunde: '+label:'Host: '+label; $('#mu-err').textContent=''; muSync(); mudlg.showModal(); }
+function muSync(){ $$('#mu-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===MU.mode));
+  $('#mu-help').textContent=MU.mode==='mute'?'Es wird weiter geprüft und aufgezeichnet, aber es gehen keine Meldungen raus (Push, E-Mail, Teams …).':'Es wird gar nicht mehr geprüft (z. B. Gerät abgebaut). Läuft zum gewählten Zeitpunkt automatisch wieder an.'; }
+$$('#mu-mode button').forEach(b=>b.onclick=()=>{ MU.mode=b.dataset.m; muSync(); });
+async function muApply(until){ try{ await api('/api/mute',{method:'POST',body:JSON.stringify({scope:MU.scope,id:MU.id,mode:MU.mode,until})}); mudlg.close();
+    toast(MU.mode==='mute'?'Meldungen stumm '+(until<0?'(dauerhaft)':'bis '+fmtDT(until,false)):'Pausiert '+(until<0?'(dauerhaft)':'bis '+fmtDT(until,false))); refreshState(); }catch(e){ $('#mu-err').textContent=e.message; } }
+$$('#mu-dur [data-d]').forEach(b=>b.onclick=()=>{ const d=new Date(), k=b.dataset.d; let u;
+  if(k==='1h') u=Date.now()+36e5; else if(k==='4h') u=Date.now()+4*36e5; else if(k==='eod'){ d.setHours(23,59,0,0); u=d.getTime(); }
+  else if(k==='morn'){ d.setDate(d.getDate()+1); d.setHours(7,0,0,0); u=d.getTime(); } else if(k==='1w') u=Date.now()+7*864e5; else u=-1; muApply(u); });
+$('#mu-set').onclick=()=>{ const v=$('#mu-until').value; if(!v){ $('#mu-err').textContent='Bitte Datum und Uhrzeit wählen'; return; } muApply(new Date(v).getTime()); };
+$('#mute-btn').onclick=()=>openMute('all','','');
+function renderMutes(){ const ms=(S.state&&S.state.mutes)||[]; const el=$('#mute-banner'); const all=ms.find(m=>m.all);
+  $('#mute-btn').textContent=all?'🔕 Stumm':'🔔 Meldungen'; $('#mute-btn').classList.toggle('warn',!!all);
+  if(!ms.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="mute-banner">'+ms.map(m=>`<span>${m.all?'<b>🔕 Alle Meldungen stumm</b>':esc(m.name)+(m.hosts>1?` (${m.hosts} Hosts)`:'')} ${m.forever?'– dauerhaft':'bis '+fmtDT(m.end,false)} <button class="btn sm ed" data-unmute="${m.id}">Wieder einschalten</button></span>`).join('<span class="muted">·</span>')+'</div>';
+  $$('#mute-banner [data-unmute]').forEach(b=>b.onclick=async()=>{ await api('/api/maint?id='+b.dataset.unmute,{method:'DELETE'}); toast('Meldungen wieder an'); refreshState(); }); }
 
 /* Liste importieren */
 const lidlg=$('#dlg-limport'); let LI={rows:[]};
@@ -1592,7 +1653,7 @@ function route(){
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox();
+  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes();
   if(S.view==='billing') renderBilling();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();

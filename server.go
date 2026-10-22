@@ -275,6 +275,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
 	mux.HandleFunc("/api/import", protect(s.handleImport))
+	mux.HandleFunc("/api/mute", protect(s.handleMute))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))
@@ -497,6 +498,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
 		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
 		"groups": m.groupsOf(p.Org),
+		"mutes":  m.activeMutes(p.Org),
 	}
 	for k, v := range s.accountInfo(r) {
 		out[k] = v
