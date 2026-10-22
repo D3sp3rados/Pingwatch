@@ -567,7 +567,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="act-tbl"></table></div>
   </div>
   <div class="setcat" data-cat="team">
-  <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
+  <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm" id="org-ren" style="display:none">Firmennamen ändern</button> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="users-tbl"></table></div>
   <p class="muted" style="font-size:12.5px">Rollen: <b>Inhaber</b> = alles inkl. Abo · <b>Admin</b> = Hosts, Standorte, Benutzer · <b>Nur lesen</b> = sieht alles, ändert nichts.</p>
 
@@ -1770,6 +1770,7 @@ function renderSettings(){
   if(hasUser){ const sig=(st.me.name||'')+'|'+(st.me.email||''); const pn=$('#pf-name'), pe=$('#pf-email');
     if(pn.dataset.sig!==sig&&document.activeElement!==pn&&document.activeElement!==pe){ pn.value=st.me.name||''; pe.value=st.me.email||''; pn.dataset.sig=sig; $('#pf-curf').style.display='none'; } }
   if(st.org) $('#team-sub').textContent=st.org.name;
+  $('#org-ren').style.display=st.org&&(st.me.role==='owner'||st.me.super)?'':'none';
   loadUsers(); loadAlerts(); loadMaint(); loadStatusPage(); renderGroups(); if(!UC.loaded) ucLoad();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
@@ -1830,6 +1831,7 @@ uaf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok
   try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi',setCustomer:uaf.cust.value||undefined})});
     await api('/api/unifi',{method:'POST',body:JSON.stringify({site:sc.id,on:true,mode:'cloud',console:con,consoleName:cname,usite:uaf.usite.value||''})});
     $('#dlg-ucadd').close(); toast('UniFi-Standort „'+n+'“ angelegt – erste Werte gleich'); refreshState(); }catch(err){ $('#ua-err').textContent=err.message; } });
+$('#org-ren').onclick=async()=>{ const n=await uiPrompt('Name Ihrer Firma bzw. Ihres Kontos:',(S.state.org&&S.state.org.name)||''); if(!n) return; try{ await api('/api/org/name',{method:'POST',body:JSON.stringify({name:n})}); toast('Name geändert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#add-site').onclick=async()=>{ const n=await uiPrompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ const nw=$('#g-new').value;

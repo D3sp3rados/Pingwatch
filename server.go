@@ -314,6 +314,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
+	mux.HandleFunc("/api/org/name", protect(s.handleOrgName))
 	mux.HandleFunc("/api/totp", protect(s.handleTOTP))
 	mux.HandleFunc("/api/terms/accept", protect(s.handleTermsAccept))
 	mux.HandleFunc("/api/actions/consent", protect(s.handleActionsConsent))

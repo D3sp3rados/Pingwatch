@@ -165,3 +165,34 @@ func filterEventsBySites(evs []Event, sites map[string]bool, limit int) []Event 
 	}
 	return out
 }
+
+// POST /api/org/name {name} – Inhaber ändert den Namen des eigenen Kontos (Firma).
+func (s *Server) handleOrgName(w http.ResponseWriter, r *http.Request) {
+	p := principal(r)
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	if !p.isOwner() {
+		http.Error(w, "Nur der Inhaber kann den Namen ändern", 403)
+		return
+	}
+	var req struct{ Name string }
+	if !readJSON(w, r, &req) {
+		return
+	}
+	n := strings.TrimSpace(req.Name)
+	if n == "" || len(n) > 100 {
+		http.Error(w, "Bitte einen Namen angeben (höchstens 100 Zeichen)", 400)
+		return
+	}
+	s.m.mu.Lock()
+	for i := range s.m.cfg.Orgs {
+		if s.m.cfg.Orgs[i].ID == p.Org {
+			s.m.cfg.Orgs[i].Name = n
+		}
+	}
+	s.m.saveConfigLocked()
+	s.m.mu.Unlock()
+	writeJSON(w, map[string]bool{"ok": true})
+}
