@@ -748,6 +748,14 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
   </form>
 </dialog>
 
+<dialog id="dlg-ui">
+  <form method="dialog">
+    <div class="dlg-h" id="ui-t">PingWacht</div>
+    <div class="dlg-b" style="display:block"><p id="ui-x" style="margin:0;white-space:pre-line"></p><input id="ui-in" style="margin-top:12px;width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--fg)"></div>
+    <div class="dlg-f"><button class="btn" id="ui-cancel" formnovalidate>Abbrechen</button><button class="btn pri" id="ui-ok">OK</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-mute">
   <form method="dialog" id="mu-form">
     <div class="dlg-h" id="mu-title">Meldungen pausieren</div>
@@ -938,6 +946,22 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
 
 <script>
 'use strict';
+/* Eigene Dialoge im PingWacht-Design statt alert/confirm/prompt des Browsers */
+function uiDialog({title='',text='',input=null,ok='OK',cancel=null,danger=false}){ return new Promise(res=>{
+  const d=$('#dlg-ui'); $('#ui-t').textContent=title||'PingWacht'; $('#ui-x').textContent=text||''; const inp=$('#ui-in');
+  inp.style.display=input===null?'none':''; inp.value=input===null?'':String(input);
+  const okb=$('#ui-ok'), cb=$('#ui-cancel'); okb.textContent=ok; okb.className='btn '+(danger?'danger':'pri');
+  cb.style.display=cancel?'':'none'; cb.textContent=cancel||'';
+  const done=v=>{ d.onclose=null; d.close(); res(v); };
+  okb.onclick=e=>{ e.preventDefault(); done(input===null?true:inp.value); };
+  cb.onclick=e=>{ e.preventDefault(); done(input===null?false:null); };
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); okb.click(); } };
+  d.onclose=()=>res(input===null?false:null);
+  d.showModal(); setTimeout(()=>{ (input===null?okb:inp).focus(); if(input!==null) inp.select(); },30); }); }
+function uiAlert(text){ return uiDialog({text:String(text),ok:'OK'}); }
+function uiConfirm(text){ const dz=/(löschen|entfernen|entziehen|zurücksetzen|nicht mehr|sperren)/i.test(text); return uiDialog({title:'Bitte bestätigen',text,ok:dz?'Ja, fortfahren':'OK',cancel:'Abbrechen',danger:dz}); }
+function uiPrompt(text,val){ return uiDialog({text,input:val==null?'':val,ok:'OK',cancel:'Abbrechen'}); }
+
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -1164,8 +1188,8 @@ function evText(e){
 function ackHTML(e){ if(e.type!=='outage'&&e.type!=='offline') return '';
   if(e.ackAt) return ` <span class="tag ok" title="${esc(e.ackNote||'')}">✓ ${esc(e.ackBy)} ${fmtTime(e.ackAt,false)}${e.ackNote?' · '+esc(e.ackNote.slice(0,40)):''}</span>`;
   return e.end?'':` <button class="btn sm" data-ack="${e.id}">Quittieren</button>`; }
-async function ackEvent(id){ const note=prompt('Quittieren – „ich kümmere mich“.\nNotiz (optional):',''); if(note===null) return;
-  try{ await api('/api/events/ack',{method:'POST',body:JSON.stringify({id:+id,note})}); toast('Quittiert – keine Eskalation mehr'); refreshState(); if(S.view==='events') loadEvents(); if(S.view==='host') loadDetail(); }catch(e){ alert(e.message); } }
+async function ackEvent(id){ const note=await uiPrompt('Quittieren – „ich kümmere mich“.\nNotiz (optional):',''); if(note===null) return;
+  try{ await api('/api/events/ack',{method:'POST',body:JSON.stringify({id:+id,note})}); toast('Quittiert – keine Eskalation mehr'); refreshState(); if(S.view==='events') loadEvents(); if(S.view==='host') loadDetail(); }catch(e){ uiAlert(e.message); } }
 function renderEvents(el,evs,showHost,limit){
   if(!evs.length){ el.innerHTML='<div class="empty">Keine Ereignisse im gewählten Zeitraum 👍</div>'; return; }
   const now=Date.now(); const all=evs; if(limit&&evs.length>limit&&!el._all) evs=evs.slice(0,limit);
@@ -1395,17 +1419,17 @@ function renderSettings(){
   $$('#sites [data-sys]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openSys(a.dataset.sys); });
   $$('#sites [data-sysb]').forEach(b=>b.onclick=()=>openSys(b.dataset.sysb));
   $$('#sites [data-ulist]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openULive(a.dataset.ulist); });
-  $$('#sites [data-autoupd]').forEach(c=>c.onchange=async()=>{ try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:c.dataset.autoupd,setAutoUpdate:c.checked})}); toast(c.checked?'Automatische Updates an':'Automatische Updates aus'); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#sites [data-autoupd]').forEach(c=>c.onchange=async()=>{ try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:c.dataset.autoupd,setAutoUpdate:c.checked})}); toast(c.checked?'Automatische Updates an':'Automatische Updates aus'); refreshState(); }catch(e){ uiAlert(e.message); } });
   $$('#sites [data-updnow]').forEach(b=>b.onclick=async()=>{ b.disabled=true; b.textContent='Wird aktualisiert …';
     try{ const r=await api('/api/jobs',{method:'POST',body:JSON.stringify({site:b.dataset.updnow,kind:'update'})}); toast('Update gestartet – der Agent startet gleich neu');
-      for(let i=0;i<20;i++){ await new Promise(x=>setTimeout(x,3000)); const j=await api('/api/jobs?id='+r.id).catch(()=>null); if(j&&j.status==='error'){ alert('Update: '+j.error); break; } if(j&&j.status==='done'){ toast((j.result&&j.result.message)||'Update läuft'); break; } }
-    }catch(e){ alert(e.message); } setTimeout(refreshState,15000); });
-  $$('#sites [data-ren]').forEach(b=>b.onclick=async()=>{ const n=prompt('Neuer Name:',siteName(b.dataset.ren)); if(!n) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.ren,name:n})}); refreshState(); });
-  $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!confirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
-  $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
+      for(let i=0;i<20;i++){ await new Promise(x=>setTimeout(x,3000)); const j=await api('/api/jobs?id='+r.id).catch(()=>null); if(j&&j.status==='error'){ uiAlert('Update: '+j.error); break; } if(j&&j.status==='done'){ toast((j.result&&j.result.message)||'Update läuft'); break; } }
+    }catch(e){ uiAlert(e.message); } setTimeout(refreshState,15000); });
+  $$('#sites [data-ren]').forEach(b=>b.onclick=async()=>{ const n=await uiPrompt('Neuer Name:',siteName(b.dataset.ren)); if(!n) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.ren,name:n})}); refreshState(); });
+  $$('#sites [data-tok]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Neues Token erzeugen? Der Agent braucht danach eine neue agent.json.')) return; await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.tok,token:'new'})}); toast('Neues Token erzeugt – agent.json neu herunterladen'); });
+  $$('#sites [data-del]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Standort löschen? Zugehörige Hosts werden pausiert.')) return; await api('/api/sites?id='+b.dataset.del,{method:'DELETE'}); refreshState(); });
   const devs=st.devices||[]; const yes=b=>b?'✔':'–';
   $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b> <span class="tag">${d.kind==='web'?'Browser':'iPhone-App'}</span></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger ed" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein Gerät. Oben „Benachrichtigungen auf diesem Gerät aktivieren“ oder in der iPhone-App anmelden.</td></tr>';
-  $$('#dev-tbl [data-deldev]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gerät entfernen? Es bekommt dann keine Benachrichtigungen mehr.')) return; await api('/api/app/device?id='+encodeURIComponent(b.dataset.deldev),{method:'DELETE'}); refreshState(); });
+  $$('#dev-tbl [data-deldev]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Gerät entfernen? Es bekommt dann keine Benachrichtigungen mehr.')) return; await api('/api/app/device?id='+encodeURIComponent(b.dataset.deldev),{method:'DELETE'}); refreshState(); });
   $('#push-info').innerHTML=st.push?'Push für die iPhone-App ist eingerichtet.':(st.me&&st.me.super?'<b style="color:var(--warn)">Push für die iPhone-App nicht aktiv</b>: '+esc(st.pushErr||'APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID setzen')+'. Browser-Benachrichtigungen funktionieren trotzdem.':'');
   $('#push-test').style.display=devs.length?'':'none'; wpRender(); if(!MN.loaded){ MN.loaded=true; mnLoad(); } else mnRender();
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
@@ -1429,23 +1453,23 @@ const UC={keySet:false,loaded:false};
 async function ucLoad(){ try{ const r=await api('/api/unifi/cloud'); UC.keySet=!!r.keySet; }catch(e){} UC.loaded=true; ucRender(); }
 function ucRender(){ $('#uc-state').textContent=UC.keySet?'Key hinterlegt':'kein Key'; $('#uc-state').className='tag '+(UC.keySet?'ok':'');
   $('#uc-key').placeholder=UC.keySet?'Key hinterlegt – zum Ersetzen neuen Key einfügen':'API-Key einfügen'; $('#uc-del').style.display=UC.keySet?'':'none'; }
-$('#uc-save').onclick=async()=>{ const k=$('#uc-key').value.trim(); if(!k){ alert('Bitte den API-Key einfügen.'); return; }
+$('#uc-save').onclick=async()=>{ const k=$('#uc-key').value.trim(); if(!k){ uiAlert('Bitte den API-Key einfügen.'); return; }
   try{ const l=await api('/api/unifi/consoles',{method:'POST',body:JSON.stringify({key:k})}); await api('/api/unifi/cloud',{method:'POST',body:JSON.stringify({key:k})}); $('#uc-key').value=''; UC.keySet=true; ucRender(); toast(`Key gespeichert – ${l.length} Konsole(n) im Konto`); }
-  catch(e){ alert('Key nicht gespeichert: '+e.message); } };
-$('#uc-del').onclick=async()=>{ if(!confirm('UniFi-Cloud-Key entfernen? Standorte, die ihn nutzen, werden dann nicht mehr abgefragt.')) return;
-  try{ await api('/api/unifi/cloud',{method:'POST',body:JSON.stringify({remove:true})}); UC.keySet=false; ucRender(); toast('Key entfernt'); }catch(e){ alert(e.message); } };
-$('#uc-addsite').onclick=async()=>{ const n=prompt('Name des UniFi-Cloud-Standorts (z. B. Kundenname):'); if(!n) return;
-  try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi'})}); await refreshState(); openULive(sc.id); }catch(e){ alert(e.message); } };
-$('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
-$('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
+  catch(e){ uiAlert('Key nicht gespeichert: '+e.message); } };
+$('#uc-del').onclick=async()=>{ if(!await uiConfirm('UniFi-Cloud-Key entfernen? Standorte, die ihn nutzen, werden dann nicht mehr abgefragt.')) return;
+  try{ await api('/api/unifi/cloud',{method:'POST',body:JSON.stringify({remove:true})}); UC.keySet=false; ucRender(); toast('Key entfernt'); }catch(e){ uiAlert(e.message); } };
+$('#uc-addsite').onclick=async()=>{ const n=await uiPrompt('Name des UniFi-Cloud-Standorts (z. B. Kundenname):'); if(!n) return;
+  try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi'})}); await refreshState(); openULive(sc.id); }catch(e){ uiAlert(e.message); } };
+$('#add-site').onclick=async()=>{ const n=await uiPrompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ uiAlert(e.message); } };
+$('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ const nw=$('#g-new').value;
-  if(nw.length<8){ alert('Das neue Passwort braucht mindestens 8 Zeichen.'); return; }
-  if(nw!==$('#g-new2').value){ alert('Die beiden neuen Passwörter stimmen nicht überein.'); $('#g-new2').focus(); return; }
-  try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:nw})}); $('#g-old').value=$('#g-new').value=$('#g-new2').value=''; toast('Passwort geändert'); refreshState(); }catch(e){ alert(e.message); } };
+  if(nw.length<8){ uiAlert('Das neue Passwort braucht mindestens 8 Zeichen.'); return; }
+  if(nw!==$('#g-new2').value){ uiAlert('Die beiden neuen Passwörter stimmen nicht überein.'); $('#g-new2').focus(); return; }
+  try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:nw})}); $('#g-old').value=$('#g-new').value=$('#g-new2').value=''; toast('Passwort geändert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 $('#pf-email').addEventListener('input',()=>{ const cur=(S.state&&S.state.me&&S.state.me.email)||''; $('#pf-curf').style.display=$('#pf-email').value.trim().toLowerCase()!==cur.toLowerCase()?'':'none'; });
 $('#pf-save').onclick=async()=>{ const me=(S.state&&S.state.me)||{}; const body={name:$('#pf-name').value.trim()}; const em=$('#pf-email').value.trim();
-  if(em.toLowerCase()!==(me.email||'').toLowerCase()){ body.email=em; body.currentPassword=$('#pf-cur').value; if(!body.currentPassword){ alert('Bitte zur Bestätigung das aktuelle Passwort eingeben.'); $('#pf-cur').focus(); return; } }
-  try{ await api('/api/me/profile',{method:'POST',body:JSON.stringify(body)}); $('#pf-cur').value=''; $('#pf-name').dataset.sig=''; toast(body.email?'E-Mail-Adresse geändert – künftig damit anmelden':'Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
+  if(em.toLowerCase()!==(me.email||'').toLowerCase()){ body.email=em; body.currentPassword=$('#pf-cur').value; if(!body.currentPassword){ uiAlert('Bitte zur Bestätigung das aktuelle Passwort eingeben.'); $('#pf-cur').focus(); return; } }
+  try{ await api('/api/me/profile',{method:'POST',body:JSON.stringify(body)}); $('#pf-cur').value=''; $('#pf-name').dataset.sig=''; toast(body.email?'E-Mail-Adresse geändert – künftig damit anmelden':'Gespeichert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 
 /* Übersicht: Gruppen oder Standorte */
 function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
@@ -1520,7 +1544,7 @@ async function loadSNMP(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.
     <td><span class="dot" style="display:inline-block;margin-right:6px;background:var(${i.up?'--ok':'--off'})"></span>${i.up?'up':'down'}<br><span class="muted" style="font-size:11.5px">seit ${fmtDT(i.since,false)}</span></td>
     <td class="hide-m num">${i.speed?(i.speed>=1000?i.speed/1000+' G':i.speed+' M'):'–'}</td><td class="num">${i.up?fmtBit(i.in):'–'}</td><td class="num">${i.up?fmtBit(i.out):'–'}</td>
     <td class="hide-m num">${fmtBit(Math.max(i.maxIn,i.maxOut))}</td><td class="hide-m num"${i.err24?' style="color:var(--bad);font-weight:600"':''}>${i.err24}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Daten.</td></tr>';
-  $$('#sn-tbl [data-w]').forEach(cb=>{ cb.onclick=e=>e.stopPropagation(); cb.onchange=async()=>{ const w=$$('#sn-tbl [data-w]:checked').map(x=>+x.dataset.w); try{ await api('/api/snmp/watch',{method:'POST',body:JSON.stringify({host:h.id,watch:w})}); toast('Port-Alarm gespeichert'); }catch(e){ alert(e.message); } }; });
+  $$('#sn-tbl [data-w]').forEach(cb=>{ cb.onclick=e=>e.stopPropagation(); cb.onchange=async()=>{ const w=$$('#sn-tbl [data-w]:checked').map(x=>+x.dataset.w); try{ await api('/api/snmp/watch',{method:'POST',body:JSON.stringify({host:h.id,watch:w})}); toast('Port-Alarm gespeichert'); }catch(e){ uiAlert(e.message); } }; });
   $$('#sn-tbl [data-if]').forEach(tr=>tr.onclick=()=>{ SN.ifIdx=+tr.dataset.if; loadSNMP(true); });
   if(SN.ifIdx&&r.series){ const i=ifs.find(x=>x.idx===SN.ifIdx); $('#sn-chartbox').style.display=''; $('#sn-ctitle').textContent=i?i.name+(i.alias?' · '+i.alias:''):''; drawIfChart(r.series); }
 }
@@ -1621,7 +1645,7 @@ function renderStatusPage(){ const p=SP.page||{}; const box=$('#sp-box');
 function spURL(){ const sl=$('#sp-slug').value.trim(); $('#sp-url').innerHTML=sl&&SP&&SP.page&&SP.page.on&&SP.page.slug===sl?`<a href="/status/${esc(sl)}" target="_blank">${location.origin}/status/${esc(sl)}</a>`:sl?location.origin+'/status/'+esc(sl):''; }
 $('#sp-slug').oninput=spURL;
 $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-slug').value.trim().toLowerCase(),title:$('#sp-title').value.trim(),note:$('#sp-note').value.trim(),hosts:$$('#sp-hosts input:checked').map(i=>i.value)};
-  try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ alert(e.message); } };
+  try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ uiAlert(e.message); } };
 
 /* Als App installieren (Android/Chrome) */
 let installEvt=null;
@@ -1689,7 +1713,7 @@ $('#li-text').oninput=()=>{ $('#li-go').disabled=true; };
 /* Meine Benachrichtigungen */
 const MN={v:null};
 async function mnLoad(){ try{ MN.v=await api('/api/me/notify'); }catch(e){ MN.v=null; } mnRender(); }
-async function mnSave(body){ try{ MN.v=await api('/api/me/notify',{method:'POST',body:JSON.stringify(body)}); mnRender(); refreshState(); }catch(e){ alert(e.message); mnRender(); } }
+async function mnSave(body){ try{ MN.v=await api('/api/me/notify',{method:'POST',body:JSON.stringify(body)}); mnRender(); refreshState(); }catch(e){ uiAlert(e.message); mnRender(); } }
 function mnUntilTxt(u){ return u<0?'dauerhaft':'bis '+fmtDT(u,false); }
 function mnRender(){ const box=$('#my-notify'); if(!box) return; const v=MN.v;
   if(!v){ box.style.display='none'; return; } box.style.display='';
@@ -1731,8 +1755,8 @@ $('#wp-on').onclick=async()=>{ try{
       sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:arr}); }
     await api('/api/webpush',{method:'POST',body:JSON.stringify({subscription:sub.toJSON(),name:wpDeviceName(),outage:$('#wp-outage').checked,offline:$('#wp-offline').checked,loss:$('#wp-loss').checked,spike:$('#wp-spike').checked,allOrgs:$('#wp-all').checked})});
     WP.sub=sub; toast('Benachrichtigungen aktiv – Testnachricht über den Button oben'); refreshState(); wpRender();
-  }catch(e){ alert('Aktivieren fehlgeschlagen: '+e.message); } };
-$('#wp-off').onclick=async()=>{ try{ if(WP.sub){ await api('/api/webpush?endpoint='+encodeURIComponent(WP.sub.endpoint),{method:'DELETE'}); await WP.sub.unsubscribe(); } WP.sub=null; toast('Auf diesem Gerät abgeschaltet'); refreshState(); wpRender(); }catch(e){ alert(e.message); } };
+  }catch(e){ uiAlert('Aktivieren fehlgeschlagen: '+e.message); } };
+$('#wp-off').onclick=async()=>{ try{ if(WP.sub){ await api('/api/webpush?endpoint='+encodeURIComponent(WP.sub.endpoint),{method:'DELETE'}); await WP.sub.unsubscribe(); } WP.sub=null; toast('Auf diesem Gerät abgeschaltet'); refreshState(); wpRender(); }catch(e){ uiAlert(e.message); } };
 
 /* Traceroute */
 function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#tr-copy').style.display=''; $('#dlg-trace').showModal(); }
@@ -1764,7 +1788,7 @@ mf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok'
   if(wk){ body.weekdays=$$('#mf-days input:checked').map(i=>+i.value); body.from=mf.from.value; body.to=mf.to.value; if(!body.weekdays.length){ $('#mf-err').textContent='Bitte mindestens einen Wochentag wählen.'; return; } }
   else { body.start=new Date(mf.start.value).getTime(); body.end=new Date(mf.end.value).getTime(); }
   try{ await api('/api/maint',{method:'POST',body:JSON.stringify(body)}); mdlg.close(); toast('Gespeichert'); loadMaint(true); refreshState(); }catch(err){ $('#mf-err').textContent=err.message; } });
-$('#mf-del').onclick=async()=>{ if(!confirm('Wartungsfenster löschen?')) return; await api('/api/maint?id='+mf.dataset.id,{method:'DELETE'}); mdlg.close(); loadMaint(true); };
+$('#mf-del').onclick=async()=>{ if(!await uiConfirm('Wartungsfenster löschen?')) return; await api('/api/maint?id='+mf.dataset.id,{method:'DELETE'}); mdlg.close(); loadMaint(true); };
 
 /* Alarme */
 const ATYPE={email:'E-Mail',teams:'Teams',telegram:'Telegram',webhook:'Webhook'};
@@ -1780,7 +1804,7 @@ function renderAlerts(){ if(!AL) return; const cs=AL.channels||[];
     cs.length?'<tr><th>Art</th><th>Ziel</th><th class="hide-m">Meldungen</th><th>Status</th><th></th></tr>'+cs.map(c=>`<tr><td><b>${esc(c.name)}</b><br><span class="muted" style="font-size:12px">${ATYPE[c.type]}</span></td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis">${tgt(c)}</td><td class="hide-m">${ev(c)} ${kund(c)}</td><td>${stat(c)}</td>
     <td class="act"><button class="btn sm ed" data-atest="${c.id}">Test</button> <button class="btn sm ed" data-aed="${c.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein Alarmweg. Mit „+ Alarmweg“ E-Mail, Teams, Telegram oder Webhook einrichten.</td></tr>';
   $$('#al-tbl [data-aed]').forEach(b=>b.onclick=()=>openAlert(b.dataset.aed));
-  $$('#al-tbl [data-atest]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:b.dataset.atest})}); toast('Testnachricht gesendet'); }catch(e){ alert('Fehler: '+e.message); } b.disabled=false; loadAlerts(true); });
+  $$('#al-tbl [data-atest]').forEach(b=>b.onclick=async()=>{ b.disabled=true; try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:b.dataset.atest})}); toast('Testnachricht gesendet'); }catch(e){ uiAlert('Fehler: '+e.message); } b.disabled=false; loadAlerts(true); });
   $('#add-alert').style.display=AL.allowed?'':'none';
 }
 const adlg=$('#dlg-alert'), af=$('#al-form');
@@ -1823,9 +1847,9 @@ af.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok'
     outage:af.outage.checked,offline:af.offline.checked,loss:af.loss.checked,spike:af.spike.checked,report:af.report.checked&&af.type.value==='email',disabled:af.disabled.checked,escalate:+af.escalate.value,
     hosts:$$('#af-hosts input:checked').map(i=>i.value), groups:$$('#af-groups input:checked').map(i=>i.value)};
   try{ const r=await api('/api/alerts',{method:'POST',body:JSON.stringify(body)}); adlg.close(); await loadAlerts(true);
-    if(!body.id&&confirm('Gespeichert. Jetzt eine Testnachricht senden?')){ try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:r.id})}); toast('Testnachricht gesendet'); }catch(err){ alert('Test fehlgeschlagen: '+err.message); } loadAlerts(true); }
+    if(!body.id&&await uiConfirm('Gespeichert. Jetzt eine Testnachricht senden?')){ try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:r.id})}); toast('Testnachricht gesendet'); }catch(err){ uiAlert('Test fehlgeschlagen: '+err.message); } loadAlerts(true); }
   }catch(err){ $('#af-err').textContent=err.message; } });
-$('#af-del').onclick=async()=>{ if(!confirm('Alarmweg löschen?')) return; await api('/api/alerts?id='+af.dataset.id,{method:'DELETE'}); adlg.close(); loadAlerts(true); };
+$('#af-del').onclick=async()=>{ if(!await uiConfirm('Alarmweg löschen?')) return; await api('/api/alerts?id='+af.dataset.id,{method:'DELETE'}); adlg.close(); loadAlerts(true); };
 
 /* Monatsbericht */
 function renderReportBox(){ const o=S.state&&S.state.org; if(!o) return; const ok=(o.features||[]).includes('report');
@@ -1835,7 +1859,7 @@ function renderReportBox(){ const o=S.state&&S.state.org; if(!o) return; const o
   const g=(S.state.groups||[]).find(x=>x.id===grp); $('#rp-send').textContent=g?(g.reportTo?'An '+g.reportTo.split(',')[0]+(g.reportTo.includes(',')?' …':'')+' senden':'Per E-Mail senden'):'Per E-Mail senden'; $('#rp-open').style.display=$('#rp-send').style.display=ok?'':'none'; sel.parentElement.style.display=ok?'':'none';
   $('#rp-info').innerHTML=ok?'':'Der Monatsbericht ist in den Paketen <b>Pro</b> und <b>Partner</b> enthalten. <a href="#/billing">Paket ansehen →</a>'; }
 $('#rp-month').onchange=renderReportBox; $('#rp-group').onchange=renderReportBox;
-$('#rp-send').onclick=async()=>{ try{ const r=await api('/api/report/send',{method:'POST',body:JSON.stringify({month:$('#rp-month').value,group:$('#rp-group').value})}); toast(`Bericht an ${r.sent} Empfänger gesendet`); }catch(e){ alert(e.message); } };
+$('#rp-send').onclick=async()=>{ try{ const r=await api('/api/report/send',{method:'POST',body:JSON.stringify({month:$('#rp-month').value,group:$('#rp-group').value})}); toast(`Bericht an ${r.sent} Empfänger gesendet`); }catch(e){ uiAlert(e.message); } };
 
 /* Team */
 const ROLES={owner:'Inhaber',admin:'Admin',viewer:'Nur lesen'};
@@ -1847,18 +1871,18 @@ async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-
     <td>${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<select data-role="${u.id}">${Object.entries(ROLES).filter(([k])=>k!=='owner'||own).map(([k,v])=>`<option value="${k}"${k===u.role?' selected':''}>${v}</option>`).join('')}</select>`:ROLES[u.role]||u.role}</td>
     <td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td>
     <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`${me.super&&st.org&&st.org.id==='default'?`<button class="btn sm" data-sup="${u.id}">${u.super?'Betreiber entziehen':'Zum Betreiber'}</button> `:''}<button class="btn sm" data-uexp="${u.id}">Gültig bis</button> <button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
-  $$('#users-tbl [data-role]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:sel.dataset.role,role:sel.value})}); toast('Rolle geändert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+  $$('#users-tbl [data-role]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:sel.dataset.role,role:sel.value})}); toast('Rolle geändert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
   $$('#users-tbl [data-sup]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.sup);
-    if(!u.super&&!confirm(`${u.email} zum Betreiber machen? Er sieht und verwaltet dann alle Kunden.`)) return;
-    try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,super:!u.super})}); toast('Gespeichert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+    if(!u.super&&!await uiConfirm(`${u.email} zum Betreiber machen? Er sieht und verwaltet dann alle Kunden.`)) return;
+    try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,super:!u.super})}); toast('Gespeichert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
   $$('#users-tbl [data-uexp]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.uexp);
-    const v=prompt('Zugang gültig bis (TT.MM.JJJJ), leer = unbegrenzt:',u.expires?fmtDate(u.expires).replace(/^\D+ /,'')+new Date(u.expires).getFullYear():''); if(v===null) return;
-    let ms=0; if(v.trim()){ const m=v.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/); if(!m){ alert('Bitte im Format TT.MM.JJJJ'); return; } const y=+m[3]<100?2000+ +m[3]:+m[3]; ms=new Date(y,+m[2]-1,+m[1],23,59,59).getTime(); }
-    try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,expires:ms})}); toast('Gespeichert'); }catch(e){ alert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
-  $$('#users-tbl [data-rpw]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.rpw); if(!confirm(`Neues Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
-    try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,resetPassword:true})}); showTemp(u.email,r.tempPassword); }catch(e){ alert(e.message); } });
-  $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!confirm(`${u.email} entfernen?`)) return;
-    try{ await api('/api/users?id='+u.id,{method:'DELETE'}); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ alert(e.message); } });
+    const v=await uiPrompt('Zugang gültig bis (TT.MM.JJJJ), leer = unbegrenzt:',u.expires?fmtDate(u.expires).replace(/^\D+ /,'')+new Date(u.expires).getFullYear():''); if(v===null) return;
+    let ms=0; if(v.trim()){ const m=v.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/); if(!m){ uiAlert('Bitte im Format TT.MM.JJJJ'); return; } const y=+m[3]<100?2000+ +m[3]:+m[3]; ms=new Date(y,+m[2]-1,+m[1],23,59,59).getTime(); }
+    try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,expires:ms})}); toast('Gespeichert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+  $$('#users-tbl [data-rpw]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.rpw); if(!await uiConfirm(`Neues Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
+    try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,resetPassword:true})}); showTemp(u.email,r.tempPassword); }catch(e){ uiAlert(e.message); } });
+  $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!await uiConfirm(`${u.email} entfernen?`)) return;
+    try{ await api('/api/users?id='+u.id,{method:'DELETE'}); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ uiAlert(e.message); } });
 }
 /* Zugangsdaten anzeigen / per Mail senden */
 let TMP={};
@@ -1906,7 +1930,7 @@ function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.
   else if(o.status==='past_due') msg='<b style="color:var(--warn)">Die letzte Zahlung ist fehlgeschlagen.</b> Bitte Zahlungsmethode im Kundenportal aktualisieren.';
   $('#b-msg').innerHTML=msg+(own&&o.hasStripe&&st.billingEnabled?` <button class="btn sm" id="b-portal" style="margin-left:8px">Rechnungen &amp; Zahlungsmethode</button>`:'');
   $('#b-msg').style.display=$('#b-msg').innerHTML.trim()?'':'none';
-  if($('#b-portal')) $('#b-portal').onclick=async()=>{ try{ const r=await api('/api/billing/portal',{method:'POST'}); location.href=r.url; }catch(e){ alert(e.message); } };
+  if($('#b-portal')) $('#b-portal').onclick=async()=>{ try{ const r=await api('/api/billing/portal',{method:'POST'}); location.href=r.url; }catch(e){ uiAlert(e.message); } };
   const si=$('#b-sites'); if(document.activeElement!==si&&!si.dataset.touched) si.value=Math.max(1,o.usedSites,o.plan!=='free'?o.sites:1);
   const n=Math.max(1,+si.value||1), sub=o.hasStripe&&o.status!=='canceled';
   $('#b-plans').innerHTML=(st.plans||[]).map(p=>{ const qty=Math.max(n,p.minSites||0), cur=p.id===o.plan;
@@ -1918,11 +1942,11 @@ function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.
       ${p.priceCents?`<div class="muted" style="font-size:12.5px">${qty} × ${eur(p.priceCents)} = <b style="color:var(--fg)">${eur(qty*p.priceCents)}</b> / Monat</div>`:''}
       ${can?`<button class="btn ${cur?'':'pri'}" data-buy="${p.id}" ${cur&&!(sub&&qty!==o.sites)?'disabled':''}>${lbl}</button>`:''}</div>`; }).join('');
   $$('#b-plans [data-buy]').forEach(b=>b.onclick=async()=>{ const p=st.plans.find(x=>x.id===b.dataset.buy), qty=Math.max(n,p.minSites||0);
-    if(!confirm(`${p.name} mit ${qty} Standort(en) für ${eur(qty*p.priceCents)} / Monat zzgl. MwSt.${sub?' – Änderung wird anteilig verrechnet.':''}\n\nFortfahren?`)) return;
+    if(!await uiConfirm(`${p.name} mit ${qty} Standort(en) für ${eur(qty*p.priceCents)} / Monat zzgl. MwSt.${sub?' – Änderung wird anteilig verrechnet.':''}\n\nFortfahren?`)) return;
     b.disabled=true;
     try{ if(sub){ await api('/api/billing/change',{method:'POST',body:JSON.stringify({plan:p.id,sites:qty})}); toast('Paket geändert'); si.dataset.touched=''; refreshState(); }
       else { const r=await api('/api/billing/checkout',{method:'POST',body:JSON.stringify({plan:p.id,sites:qty})}); location.href=r.url; } }
-    catch(e){ alert(e.message); b.disabled=false; } });
+    catch(e){ uiAlert(e.message); b.disabled=false; } });
   $('#b-sum').textContent=o.plan==='free'?'Free: 1 Standort inklusive':'';
   const pv=st.provider||{}; const L=(u,t)=>u?`<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`:'';
   $('#b-legal').innerHTML=`Anbieter: ${esc(pv.name||'')} ${[L(pv.imprint,'Impressum'),L(pv.privacy,'Datenschutz'),L(pv.terms,'AGB')].filter(Boolean).join(' · ')}.`;
@@ -1931,11 +1955,11 @@ $('#b-sites').oninput=()=>{ $('#b-sites').dataset.touched='1'; renderBilling(); 
 
 /* Betreiber: Kunden */
 async function openOrgUsers(orgId){ const o=ORGS.find(x=>x.id===orgId)||{name:''}; let us=[];
-  try{ us=await api('/api/admin/users?org='+encodeURIComponent(orgId)); }catch(e){ alert(e.message); return; }
+  try{ us=await api('/api/admin/users?org='+encodeURIComponent(orgId)); }catch(e){ uiAlert(e.message); return; }
   $('#ou-title').textContent='Zugänge – '+o.name;
   $('#ou-list').innerHTML=us.length?'<table class="tbl"><tr><th>Benutzer</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.email)}</b>${u.name?'<br><span class="muted" style="font-size:12px">'+esc(u.name)+'</span>':''}${u.super?' <span class="tag ok">Betreiber</span>':''}</td><td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td><td class="act"><button class="btn sm" data-ourst="${u.id}">Passwort zurücksetzen</button></td></tr>`).join('')+'</table>':'<p class="muted">Dieser Kunde hat noch keine Benutzer.</p>';
-  $$('#ou-list [data-ourst]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.ourst); if(!confirm(`Neues vorläufiges Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
-    try{ const r=await api('/api/admin/users',{method:'POST',body:JSON.stringify({id:u.id})}); $('#dlg-orgusers').close(); showTemp(r.email,r.tempPassword); }catch(e){ alert(e.message); } });
+  $$('#ou-list [data-ourst]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.ourst); if(!await uiConfirm(`Neues vorläufiges Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
+    try{ const r=await api('/api/admin/users',{method:'POST',body:JSON.stringify({id:u.id})}); $('#dlg-orgusers').close(); showTemp(r.email,r.tempPassword); }catch(e){ uiAlert(e.message); } });
   $('#dlg-orgusers').showModal(); }
 let ORGS=[];
 async function loadAdmin(){ try{ ORGS=await api('/api/admin/orgs'); }catch(e){ return; } renderAdmin(); }
@@ -1955,7 +1979,7 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
   $$('#a-tbl [data-opw]').forEach(b=>b.onclick=()=>openOrgUsers(b.dataset.opw));
 }
 $('#a-q').oninput=renderAdmin;
-async function switchOrg(id,go){ try{ await api('/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ alert(e.message); return; }
+async function switchOrg(id,go){ try{ await api('/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ uiAlert(e.message); return; }
   $('#ov').dataset.sig=''; $$('[data-sig]').forEach(e=>e.dataset.sig=''); SP=null; $('#sp-box').dataset.done=''; AL=null; MT=[]; mtAt=0; $('#users-tbl').dataset.sig='';
   await refreshState(); await refreshOverview(); if(go&&location.hash!==go) location.hash=go; else route(); toast('Geöffnet: '+(S.state.org?S.state.org.name:id)); }
 const odlg=$('#dlg-org'), of=$('#org-form');
@@ -1973,8 +1997,8 @@ of.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok'
   body.expires=of.expires.value?new Date(of.expires.value+'T23:59:59').getTime():0;
   try{ const r=await api('/api/admin/orgs',{method:'POST',body:JSON.stringify(body)}); odlg.close(); toast('Gespeichert'); if(r.tempPassword) showTemp(body.ownerEmail,r.tempPassword); loadAdmin(); refreshState(); }catch(err){ $('#of-err').textContent=err.message; } });
 $('#of-del').onclick=async()=>{ const o=ORGS.find(x=>x.id===of.dataset.id); if(!o) return;
-  if(prompt(`Kunde „${o.name}“ mit allen Hosts, Standorten, Messwerten und Benutzern endgültig löschen?\n\nZur Bestätigung den Namen eingeben:`)!==o.name) return;
-  try{ await api('/api/admin/orgs?id='+o.id,{method:'DELETE'}); odlg.close(); toast('Gelöscht'); if(S.state.org&&S.state.org.id===o.id) await switchOrg('default'); loadAdmin(); }catch(e){ alert(e.message); } };
+  if(await uiPrompt(`Kunde „${o.name}“ mit allen Hosts, Standorten, Messwerten und Benutzern endgültig löschen?\n\nZur Bestätigung den Namen eingeben:`)!==o.name) return;
+  try{ await api('/api/admin/orgs?id='+o.id,{method:'DELETE'}); odlg.close(); toast('Gelöscht'); if(S.state.org&&S.state.org.id===o.id) await switchOrg('default'); loadAdmin(); }catch(e){ uiAlert(e.message); } };
 $('#a-new').onclick=()=>openOrg();
 
 /* Kopfzeile: Organisation */
@@ -1989,36 +2013,36 @@ function renderOrgBox(){ const st=S.state; if(!st) return; const me=st.me||{}, o
   else { const html=o.name&&(me.super||o.plan!=='internal')?`<span class="pill" title="${esc(me.email||'')}">${esc(o.name)} · ${esc(o.planName||'')}</span>`:''; if(box.innerHTML!==html) box.innerHTML=html; box.dataset.sig=''; }
 }
 
-$('#push-test').onclick=async()=>{ try{ const r=await api('/api/app/pushtest',{method:'POST'}); toast(r.errors&&r.errors.length?('Fehler: '+r.errors.join(', ')):`Testnachricht an ${r.sent} Gerät(e) gesendet`); }catch(e){ alert(e.message); } };
+$('#push-test').onclick=async()=>{ try{ const r=await api('/api/app/pushtest',{method:'POST'}); toast(r.errors&&r.errors.length?('Fehler: '+r.errors.join(', ')):`Testnachricht an ${r.sent} Gerät(e) gesendet`); }catch(e){ uiAlert(e.message); } };
 
 /* Zurücksetzen */
 $('#r-range').onchange=()=>{ const d=$('#r-range').value==='day'; $('#r-fromf').style.display=$('#r-tof').style.display=d?'':'none'; };
 $('#r-go').onclick=async()=>{
   const host=$('#r-host').value, range=$('#r-range').value, ev=$('#r-events').checked, sm=$('#r-samples').checked;
-  if(!ev&&!sm){ alert('Bitte Ereignisse und/oder Messwerte auswählen.'); return; }
+  if(!ev&&!sm){ uiAlert('Bitte Ereignisse und/oder Messwerte auswählen.'); return; }
   const body={host,events:ev,samples:sm}; let zr;
   const fd=d=>d.split('-').reverse().join('.');
-  if(range==='day'){ const a=$('#r-from').value, b=$('#r-to').value; if(!a){ alert('Bitte ein Datum wählen.'); return; } body.dayFrom=a; if(b) body.dayTo=b; zr=b&&b!==a?`vom ${fd(a)} bis ${fd(b)}`:`vom ${fd(a)}`; }
+  if(range==='day'){ const a=$('#r-from').value, b=$('#r-to').value; if(!a){ uiAlert('Bitte ein Datum wählen.'); return; } body.dayFrom=a; if(b) body.dayTo=b; zr=b&&b!==a?`vom ${fd(a)} bis ${fd(b)}`:`vom ${fd(a)}`; }
   else { body.hours=+range; zr=$('#r-range').selectedOptions[0].textContent.replace('Letzte','der letzten').replace('Letzten','der letzten'); }
   const was=[ev?'Ereignisse':'',sm?'Messwerte':''].filter(Boolean).join(' und ');
   const wer=host?('von „'+(S.state.hosts.find(h=>h.id===host)||{}).name+'“'):'aller Hosts';
-  if(!confirm(`${was} ${wer} ${zr} endgültig löschen?`)) return;
-  try{ const r=await api('/api/reset',{method:'POST',body:JSON.stringify(body)}); toast(ev?`Gelöscht – ${r.events} Ereignisse entfernt`:'Messwerte gelöscht'); refreshOverview(); refreshState(); }catch(e){ alert(e.message); }
+  if(!await uiConfirm(`${was} ${wer} ${zr} endgültig löschen?`)) return;
+  try{ const r=await api('/api/reset',{method:'POST',body:JSON.stringify(body)}); toast(ev?`Gelöscht – ${r.events} Ereignisse entfernt`:'Messwerte gelöscht'); refreshOverview(); refreshState(); }catch(e){ uiAlert(e.message); }
 };
 
 /* Gruppen */
 function fillGroupSelect(v){ const gs=S.state.groups||[]; $('#hf-group').innerHTML='<option value="">– keine –</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')+'<option value="__new">+ Neue Gruppe …</option>'; $('#hf-group').value=gs.some(g=>g.id===v)?v:''; }
-async function newGroup(){ const n=prompt('Name der Gruppe (z. B. Kundenname):'); if(!n||!n.trim()) return null; try{ const g=await api('/api/groups',{method:'POST',body:JSON.stringify({name:n.trim()})}); await refreshState(); return g; }catch(e){ alert(e.message); return null; } }
+async function newGroup(){ const n=await uiPrompt('Name der Gruppe (z. B. Kundenname):'); if(!n||!n.trim()) return null; try{ const g=await api('/api/groups',{method:'POST',body:JSON.stringify({name:n.trim()})}); await refreshState(); return g; }catch(e){ uiAlert(e.message); return null; } }
 $('#hf-group').onchange=async()=>{ if($('#hf-group').value!=='__new') return; const g=await newGroup(); fillGroupSelect(g?g.id:''); };
 function renderGroups(){ const gs=S.state.groups||[]; const cnt=id=>S.state.hosts.filter(h=>h.group===id).length;
   const sig=JSON.stringify(gs)+S.state.hosts.map(h=>h.group).join(); if($('#grp-tbl').dataset.sig===sig) return; $('#grp-tbl').dataset.sig=sig;
   $('#grp-tbl').innerHTML=gs.length?'<tr><th>Gruppe</th><th>Hosts</th><th class="hide-m">Notiz</th><th></th></tr>'+gs.map(g=>`<tr><td><b>📁 ${esc(g.name)}</b></td><td class="num">${cnt(g.id)}</td><td class="hide-m muted">${esc(g.note||'')}${g.reportTo?`<br><span class="tag">Bericht an ${esc(g.reportTo)}</span>`:''}</td><td class="act"><button class="btn sm ed" data-gmem="${g.id}">Hosts</button> <button class="btn sm ed" data-grep="${g.id}">Monatsbericht</button> <button class="btn sm ed" data-gren="${g.id}">Umbenennen</button> <button class="btn sm ed" data-gnote="${g.id}">Notiz</button> <button class="btn sm danger ed" data-gdel="${g.id}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Gruppen. Fasse z. B. alle Hosts eines Kunden in einer Gruppe zusammen.</td></tr>';
   const G=id=>gs.find(g=>g.id===id);
-  $$('#grp-tbl [data-gren]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gren); const n=prompt('Neuer Name:',g.name); if(!n) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,name:n})}); refreshState(); }catch(e){ alert(e.message); } });
-  $$('#grp-tbl [data-gnote]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gnote); const n=prompt('Notiz (z. B. Ansprechpartner, Telefon):',g.note||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,note:n})}); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#grp-tbl [data-gren]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gren); const n=await uiPrompt('Neuer Name:',g.name); if(!n) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,name:n})}); refreshState(); }catch(e){ uiAlert(e.message); } });
+  $$('#grp-tbl [data-gnote]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gnote); const n=await uiPrompt('Notiz (z. B. Ansprechpartner, Telefon):',g.note||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,note:n})}); refreshState(); }catch(e){ uiAlert(e.message); } });
   $$('#grp-tbl [data-gmem]').forEach(b=>b.onclick=()=>openGroup(b.dataset.gmem));
-  $$('#grp-tbl [data-grep]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.grep); const n=prompt(`Monatsbericht nur für „${g.name}“ am 1. jedes Monats per E-Mail an (mehrere mit Komma, leer = aus):`,g.reportTo||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,reportTo:n})}); toast(n.trim()?'Gruppen-Bericht eingerichtet':'Gruppen-Bericht aus'); refreshState(); }catch(e){ alert(e.message); } });
-  $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); if(!confirm(`Gruppe „${g.name}“ löschen? Die Hosts bleiben erhalten (ohne Gruppe).`)) return; await api('/api/groups?id='+g.id,{method:'DELETE'}); refreshState(); });
+  $$('#grp-tbl [data-grep]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.grep); const n=await uiPrompt(`Monatsbericht nur für „${g.name}“ am 1. jedes Monats per E-Mail an (mehrere mit Komma, leer = aus):`,g.reportTo||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,reportTo:n})}); toast(n.trim()?'Gruppen-Bericht eingerichtet':'Gruppen-Bericht aus'); refreshState(); }catch(e){ uiAlert(e.message); } });
+  $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); if(!await uiConfirm(`Gruppe „${g.name}“ löschen? Die Hosts bleiben erhalten (ohne Gruppe).`)) return; await api('/api/groups?id='+g.id,{method:'DELETE'}); refreshState(); });
 }
 const gdlg=$('#dlg-group'), gf=$('#gr-form');
 function openGroup(id){ const st=S.state, g=id&&(st.groups||[]).find(x=>x.id===id);
@@ -2067,7 +2091,7 @@ hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok'
   const fz=$('#hf-fritzf').style.display!=='none'&&hf.fritz.checked; Object.assign(body,{fritz:fz,fritzUser:fz?hf.fritzUser.value.trim():'',fritzPass:fz?hf.fritzPass.value:'',fritzPort:+hf.fritzPort.value||49000});
   if(fz&&!hf.fritzPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).fritzPassSet){ $('#hf-err').textContent='Bitte das Passwort des Fritzbox-Benutzers eingeben.'; return; }
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
-$('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
+$('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!await uiConfirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
 $('#add-host').onclick=()=>openHost();
 
 /* ---------- Routing & Polling ---------- */
@@ -2187,8 +2211,8 @@ function renderInv(){ const d=INV.data||{}, inv=d.inv; $('#inv-csv').href='/api/
 $('#inv-q').oninput=renderInv;
 $('#inv-now').onclick=async()=>{ const b=$('#inv-now'); b.disabled=true; b.textContent='Wird ausgelesen …';
   try{ const r=await api('/api/jobs',{method:'POST',body:JSON.stringify({kind:'inventory',params:{machine:MD.id}})});
-    for(let i=0;i<60;i++){ await new Promise(x=>setTimeout(x,3000)); const j=await api('/api/jobs?id='+r.id).catch(()=>null); if(j&&j.status==='error'){ alert('Inventur: '+j.error); break; } if(j&&j.status==='done'){ toast('Inventur aktualisiert'); await loadInv(true); break; } }
-  }catch(e){ alert(e.message); } b.disabled=false; b.textContent='Jetzt aktualisieren'; };
+    for(let i=0;i<60;i++){ await new Promise(x=>setTimeout(x,3000)); const j=await api('/api/jobs?id='+r.id).catch(()=>null); if(j&&j.status==='error'){ uiAlert('Inventur: '+j.error); break; } if(j&&j.status==='done'){ toast('Inventur aktualisiert'); await loadInv(true); break; } }
+  }catch(e){ uiAlert(e.message); } b.disabled=false; b.textContent='Jetzt aktualisieren'; };
 $$('#m-range button').forEach(b=>b.onclick=()=>{ MD.range=b.dataset.r; $$('#m-range button').forEach(x=>x.classList.toggle('on',x===b)); drawMachineChart(); });
 $('#m-mute').onclick=()=>{ const m=machineOf(MD.id); if(m) openMute('machine',m.id,m.name); };
 $('#m-edit').onclick=()=>{ const m=machineOf(MD.id); if(m) openSys(m.site); };
@@ -2212,9 +2236,9 @@ function renderSysMachines(){ const st=S.state, ms=((st&&st.machines)||[]).filte
   $('#sy-machines').innerHTML=ms.length?ms.map(m=>`<div class="mrow"><span class="dot" style="background:var(${(MSTATUS[m.status]||MSTATUS.unknown)[1]})"></span><b title="${esc(m.host||'')}">${esc(m.name)}</b><span class="muted" style="font-size:12px">${m.sysOnly?'nur Rechner':'Standort-Agent'}</span>
     <select class="ed" data-mgrp="${esc(m.id)}"><option value="">Ohne Gruppe</option>${gs.map(g=>`<option value="${esc(g.id)}"${g.id===m.group?' selected':''}>${esc(g.name)}</option>`).join('')}</select>
     <button type="button" class="btn sm ed" data-mren="${esc(m.id)}">Umbenennen</button><button type="button" class="btn sm danger ed" data-mdel="${esc(m.id)}">Entfernen</button></div>`).join(''):'<div class="muted" style="font-size:13px">Noch keine Rechner gemeldet. Nach dem Einschalten meldet sich der Rechner mit dem Agent innerhalb einer Minute.</div>';
-  $$('#sy-machines [data-mgrp]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:sel.dataset.mgrp,group:sel.value})}); toast('Gruppe gespeichert'); await refreshState(); }catch(e){ alert(e.message); } });
-  $$('#sy-machines [data-mren]').forEach(b=>b.onclick=async()=>{ const m=machineOf(b.dataset.mren); const n=prompt('Neuer Name:',m?m.name:''); if(!n) return; try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:b.dataset.mren,name:n})}); await refreshState(); renderSysMachines(); }catch(e){ alert(e.message); } });
-  $$('#sy-machines [data-mdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Rechner entfernen? Solange dort der Agent läuft, erscheint er wieder.')) return; try{ await api('/api/machine?id='+encodeURIComponent(b.dataset.mdel),{method:'DELETE'}); await refreshState(); renderSysMachines(); }catch(e){ alert(e.message); } }); }
+  $$('#sy-machines [data-mgrp]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:sel.dataset.mgrp,group:sel.value})}); toast('Gruppe gespeichert'); await refreshState(); }catch(e){ uiAlert(e.message); } });
+  $$('#sy-machines [data-mren]').forEach(b=>b.onclick=async()=>{ const m=machineOf(b.dataset.mren); const n=await uiPrompt('Neuer Name:',m?m.name:''); if(!n) return; try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:b.dataset.mren,name:n})}); await refreshState(); renderSysMachines(); }catch(e){ uiAlert(e.message); } });
+  $$('#sy-machines [data-mdel]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Rechner entfernen? Solange dort der Agent läuft, erscheint er wieder.')) return; try{ await api('/api/machine?id='+encodeURIComponent(b.dataset.mdel),{method:'DELETE'}); await refreshState(); renderSysMachines(); }catch(e){ uiAlert(e.message); } }); }
 syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const num=k=>+syf[k].value||0; const svcList=syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean);
   const restart=svcList.filter(x=>SY.restart.has(x.toLowerCase())&&HEAL_OK.test(x));
@@ -2283,9 +2307,9 @@ function renderRequests(){ const L=RQ.list.filter(r=>RQ.f==='alle'||RQ_OPEN.incl
       <div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn sm pri" data-st="umsetzen">Umsetzen</button><button class="btn sm" data-st="rueckfrage">Rückfrage</button><button class="btn sm danger" data-st="abgelehnt">Ablehnen</button><button class="btn sm" data-st="erledigt">Erledigt</button><button class="btn sm" data-rdel style="margin-left:auto">Löschen</button></div></div>`; }).join('')
     :`<div class="panel empty">${RQ.f==='offen'?'Keine offenen Anfragen.':'Noch keine Anfragen.'}</div>`;
   $$('#rq-list [data-st]').forEach(b=>b.onclick=async()=>{ const card=b.closest('.rq'); const reply=card.querySelector('[data-reply]').value.trim();
-    if(b.dataset.st==='rueckfrage'&&!reply){ alert('Bitte die Rückfrage an den Kunden ins Antwortfeld schreiben.'); return; }
-    try{ const r=await api('/api/requests',{method:'POST',body:JSON.stringify({id:card.dataset.id,status:b.dataset.st,reply})}); toast(r.mailed?'Gespeichert – Kunde per E-Mail informiert':'Gespeichert'); await loadRequests(); refreshState(); }catch(e){ alert(e.message); } });
-  $$('#rq-list [data-rdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Anfrage löschen?')) return; try{ await api('/api/requests?id='+encodeURIComponent(b.closest('.rq').dataset.id),{method:'DELETE'}); await loadRequests(); refreshState(); }catch(e){ alert(e.message); } });
+    if(b.dataset.st==='rueckfrage'&&!reply){ uiAlert('Bitte die Rückfrage an den Kunden ins Antwortfeld schreiben.'); return; }
+    try{ const r=await api('/api/requests',{method:'POST',body:JSON.stringify({id:card.dataset.id,status:b.dataset.st,reply})}); toast(r.mailed?'Gespeichert – Kunde per E-Mail informiert':'Gespeichert'); await loadRequests(); refreshState(); }catch(e){ uiAlert(e.message); } });
+  $$('#rq-list [data-rdel]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Anfrage löschen?')) return; try{ await api('/api/requests?id='+encodeURIComponent(b.closest('.rq').dataset.id),{method:'DELETE'}); await loadRequests(); refreshState(); }catch(e){ uiAlert(e.message); } });
 }
 window.addEventListener('hashchange',route);
 (async()=>{ await refreshState(); await refreshOverview(); route(); })();
