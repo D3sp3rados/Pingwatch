@@ -44,6 +44,9 @@ type SiteCfg struct {
 	Token string    `json:"token"`
 	Org   string    `json:"org,omitempty"`
 	UniFi *UniFiCfg `json:"unifi,omitempty"` // UniFi-Livestatus über den Agenten
+	// Agent nicht automatisch aktualisieren
+	NoAutoUpdate bool  `json:"noAutoUpdate,omitempty"`
+	SetAuto      *bool `json:"setAutoUpdate,omitempty"` // nur API-Eingabe
 }
 
 type Config struct {
@@ -714,6 +717,9 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 				}
 				if s.Token == "new" {
 					m.cfg.Sites[i].Token = randHex(24)
+				}
+				if s.SetAuto != nil {
+					m.cfg.Sites[i].NoAutoUpdate = !*s.SetAuto
 				}
 				s = m.cfg.Sites[i]
 			}

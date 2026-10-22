@@ -49,6 +49,7 @@ var (
 	pShellNotifyIconW       = shell32.NewProc("Shell_NotifyIconW")
 	pShellExecuteW          = shell32.NewProc("ShellExecuteW")
 	pCreateMutexW           = kernel32.NewProc("CreateMutexW")
+	pCloseHandle            = kernel32.NewProc("CloseHandle")
 	pGetModuleHandleW       = kernel32.NewProc("GetModuleHandleW")
 	pRegOpenKeyExW          = advapi32.NewProc("RegOpenKeyExW")
 	pRegSetValueExW         = advapi32.NewProc("RegSetValueExW")
@@ -161,8 +162,11 @@ func agentDataDir() string {
 }
 
 func singleInstance() bool {
-	_, _, err := pCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(u16("Local\\PingWatchAgent"))))
+	h, _, err := pCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(u16("Local\\PingWatchAgent"))))
 	if e, ok := err.(syscall.Errno); ok && e == 183 { // ERROR_ALREADY_EXISTS
+		if h != 0 {
+			pCloseHandle.Call(h)
+		}
 		return false
 	}
 	return true
@@ -279,6 +283,7 @@ func agentUI(a *Agent) {
 	pSetTimer.Call(hwnd, 1, 5000, 0)
 
 	a.changed = func() { pPostMessageW.Call(t.hwnd, wmRefresh, 0, 0) }
+	a.requestExit = func() { pPostMessageW.Call(t.hwnd, wmClose, 0, 0) }
 	a.notify = func(title, msg string, warn bool) {
 		t.mu.Lock()
 		on := t.prefs.Notify
@@ -416,6 +421,18 @@ func (t *tray) menu() {
 	add(3, mfString|f, "Benachrichtigungen bei Ausfall")
 	add(4, mfString, "Log-Ordner öffnen")
 	add(0, mfSeparator, "")
+	t.a.mu.Lock()
+	latest := t.a.latest
+	t.a.mu.Unlock()
+	if latest != "" && newerVersion(latest, version) {
+		add(5, mfString, "Auf neueste Version aktualisieren ("+version+" → "+latest+")")
+	} else {
+		add(5, mfString, "Nach Update suchen (Version "+version+")")
+	}
+	if m := updateStatus(); m != "" {
+		add(102, mfString|mfGrayed, m)
+	}
+	add(0, mfSeparator, "")
 	add(9, mfString, "Beenden")
 
 	var pt struct{ x, y int32 }
@@ -436,6 +453,19 @@ func (t *tray) menu() {
 		t.savePrefs()
 	case 4:
 		openURL(t.a.dataDir)
+	case 5:
+		go func() {
+			t.a.fetchConfig() // neueste Version vom Server holen
+			t.a.mu.Lock()
+			latest := t.a.latest
+			t.a.mu.Unlock()
+			msg, err := t.a.selfUpdate(latest, true)
+			if err != nil {
+				t.a.notify("PingWacht-Agent", "Update fehlgeschlagen: "+err.Error(), true)
+			} else {
+				t.a.notify("PingWacht-Agent", msg, false)
+			}
+		}()
 	case 9:
 		pShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&t.nid)))
 		pDestroyWindow.Call(t.hwnd)
@@ -473,6 +503,9 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		}
 		return 0
 	case wmClose:
+		if t != nil {
+			pShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&t.nid)))
+		}
 		pDestroyWindow.Call(hwnd)
 		return 0
 	case wmDestroy:

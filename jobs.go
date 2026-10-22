@@ -91,7 +91,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.Kind != "scan" && req.Kind != "unifi" && req.Kind != "unifiprobe" {
+	if req.Kind != "scan" && req.Kind != "unifi" && req.Kind != "unifiprobe" && req.Kind != "update" {
 		http.Error(w, "Auftrag unbekannt", 400)
 		return
 	}
@@ -117,6 +117,8 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	} else if req.Kind == "update" {
+		req.Params = map[string]string{"version": version}
 	} else if req.Kind == "unifiprobe" {
 		// Diagnose: nutzt die gespeicherte Konfiguration des Standorts
 		if site.UniFi == nil || site.UniFi.Key == "" || !principal(r).Super {
@@ -187,6 +189,20 @@ func (a *Agent) runJob(j agentJob) {
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
 		res, err = unifiProbe(j.Params["url"], j.Params["key"], strings.Split(j.Params["paths"], ","))
+	case "update":
+		a.mu.Lock()
+		latest := a.latest
+		a.mu.Unlock()
+		if v := j.Params["version"]; v != "" {
+			latest = v
+		}
+		if !newerVersion(latest, version) {
+			res = map[string]string{"message": "Agent ist bereits aktuell (" + version + ")"}
+			break
+		}
+		// erst antworten, dann aktualisieren (der Agent startet dabei neu)
+		defer func() { go a.selfUpdate(latest, true) }()
+		res = map[string]string{"message": "Update von " + version + " auf " + latest + " gestartet"}
 	default:
 		err = errors.New("unbekannter Auftrag – Agent aktualisieren")
 	}

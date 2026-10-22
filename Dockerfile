@@ -7,7 +7,9 @@ RUN go build -trimpath -ldflags "-s -w" -o /out/pingwatch . \
  && mkdir -p /out/downloads \
  && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H windowsgui -s -w" -o /out/downloads/pingwatch-agent.exe . \
  && GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /out/downloads/pingwatch-agent-linux-amd64 . \
- && GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /out/downloads/pingwatch-agent-linux-arm64 .
+ && GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /out/downloads/pingwatch-agent-linux-arm64 . \
+ && GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /out/downloads/pingwatch-agent-darwin-arm64 . \
+ && GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /out/downloads/pingwatch-agent-darwin-amd64 .
 
 # ---- Laufzeit ----
 FROM alpine:3.20

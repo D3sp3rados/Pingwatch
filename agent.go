@@ -51,6 +51,10 @@ type Agent struct {
 	notify   func(title, msg string, warn bool)
 	changed  func()
 	client   *http.Client
+	// Aktualisierung
+	latest      string // Version auf dem Server
+	autoUpdate  bool
+	requestExit func() // Oberfläche beenden (Windows-Tray)
 }
 
 const maxBuffer = 2_000_000
@@ -101,7 +105,14 @@ func runAgent(args []string) {
 		}
 		log.SetOutput(io.MultiWriter(lf, os.Stderr))
 	}
-	if !singleInstance() {
+	// nach einem Update kurz warten, bis die alte Version beendet ist
+	if os.Getenv("PINGWACHT_UPDATED") == "1" {
+		os.Unsetenv("PINGWACHT_UPDATED")
+		for i := 0; i < 60 && !singleInstance(); i++ {
+			time.Sleep(500 * time.Millisecond)
+		}
+		log.Printf("Agent nach Update gestartet (Version %s)", version)
+	} else if !singleInstance() {
 		showError("PingWacht-Agent läuft bereits (siehe Infobereich der Taskleiste).")
 		return
 	}
@@ -216,6 +227,8 @@ func (a *Agent) fetchConfig() bool {
 		Version int64      `json:"version"`
 		Jobs    []agentJob `json:"jobs"`
 		UniFi   *UniFiCfg  `json:"unifi"`
+		Latest  string     `json:"latest"`
+		Auto    *bool      `json:"autoUpdate"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
 		a.setServer(false, err.Error())
@@ -223,6 +236,14 @@ func (a *Agent) fetchConfig() bool {
 	}
 	for _, j := range cfg.Jobs {
 		go a.runJob(j)
+	}
+	a.mu.Lock()
+	a.latest = cfg.Latest
+	a.autoUpdate = cfg.Auto == nil || *cfg.Auto
+	auto := a.autoUpdate
+	a.mu.Unlock()
+	if auto && cfg.Latest != "" && newerVersion(cfg.Latest, version) {
+		go a.selfUpdate(cfg.Latest, false)
 	}
 	a.setServer(true, "")
 	a.mu.Lock()

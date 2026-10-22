@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -482,7 +483,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
-		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name}, Online: on, Hosts: cnt[sc.ID]}
+		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate}, Online: on, Hosts: cnt[sc.ID]}
 		if sc.UniFi != nil && sc.UniFi.On {
 			u := m.unifiSiteView(&sc)
 			v.UniFi = &u
@@ -981,7 +982,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		w.Write(b)
 		return
 	}
-	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true}
+	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true, "pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true}
 	if !allowed[name] {
 		http.NotFound(w, r)
 		return
@@ -1002,7 +1003,7 @@ func (s *Server) handleAgentBinary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimPrefix(r.URL.Path, "/api/agent/binary/")
-	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true}
+	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true, "pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true}
 	p := filepath.Join(s.agentDir, name)
 	if !allowed[name] {
 		http.NotFound(w, r)
@@ -1012,6 +1013,10 @@ func (s *Server) handleAgentBinary(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Datei nicht im Image enthalten", 404)
 		return
 	}
+	if sum := fileSHA256(p); sum != "" {
+		w.Header().Set("X-Sha256", sum)
+	}
+	w.Header().Set("X-Agent-Version", version)
 	http.ServeFile(w, r, p)
 }
 
@@ -1049,7 +1054,8 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
-	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver}
+	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver,
+		"latest": version, "autoUpdate": !site.NoAutoUpdate}
 	if site.UniFi != nil && site.UniFi.On {
 		out["unifi"] = site.UniFi
 	}
@@ -1411,4 +1417,29 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]any{"sent": ok, "errors": errs})
+}
+
+var shaCache sync.Map // Pfad|Größe|Zeit → Prüfsumme
+
+func fileSHA256(p string) string {
+	fi, err := os.Stat(p)
+	if err != nil {
+		return ""
+	}
+	key := fmt.Sprintf("%s|%d|%d", p, fi.Size(), fi.ModTime().UnixNano())
+	if v, ok := shaCache.Load(key); ok {
+		return v.(string)
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	sum := hex.EncodeToString(h.Sum(nil))
+	shaCache.Store(key, sum)
+	return sum
 }
