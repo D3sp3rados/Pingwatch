@@ -134,6 +134,9 @@ func TestParseWANs(t *testing.T) {
 }
 
 func TestUniFiCategoryAndUnusedWAN(t *testing.T) {
+	if c := unifiCategory(unifiDevice{Model: "Gateway Max", Features: []string{"switching"}}); c != "gateway" {
+		t.Fatal("UXG-Max als „Gateway Max“:", c)
+	}
 	if c := unifiCategory(unifiDevice{Model: "UAP-AC-M-Pro", Features: []string{"switching", "accessPoint"}}); c != "ap" {
 		t.Fatal(c)
 	}

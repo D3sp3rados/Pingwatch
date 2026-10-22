@@ -399,6 +399,12 @@ func isGateway(d unifiDevice) bool {
 			return true
 		}
 	}
+	// Die Integration-API liefert oft den Anzeigenamen statt des Kürzels (z. B. „Gateway Max“)
+	for _, p := range []string{"GATEWAY", "DREAM MACHINE", "DREAM ROUTER", "DREAM WALL", "UNIFI EXPRESS", "EXPRESS 7"} {
+		if strings.Contains(m, p) {
+			return true
+		}
+	}
 	return false
 }
 
