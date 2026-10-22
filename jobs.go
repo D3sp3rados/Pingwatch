@@ -131,15 +131,59 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		req.Params = map[string]string{}
 	}
 	if req.Kind == "scan" {
-		if c := strings.TrimSpace(req.Params["cidr"]); c != "" {
+		var list []string
+		for _, c := range strings.FieldsFunc(req.Params["cidr"], func(r rune) bool { return r == ',' || r == ';' || r == ' ' }) {
 			if _, n, err := net.ParseCIDR(c); err != nil || !isPrivateNet(n) {
-				http.Error(w, "Bitte ein privates Netz angeben, z. B. 192.168.1.0/24", 400)
+				http.Error(w, "Bitte private Netze angeben, z. B. 192.168.1.0/24 (mehrere mit Komma)", 400)
 				return
 			} else if ones, bits := n.Mask.Size(); bits-ones > 10 {
-				http.Error(w, "Netz zu groß – höchstens /22 (1024 Adressen)", 400)
+				http.Error(w, "Netz "+c+" zu groß – höchstens /22 (1024 Adressen)", 400)
 				return
 			}
+			list = append(list, c)
 		}
+		_, sst := s.m.siteOnline(site.ID)
+		agentVer := ""
+		if sst != nil {
+			agentVer = sst.version
+		}
+		multiOK := !newerVersion("1.5.2", agentVer)
+		if len(list) > 1 && !multiOK {
+			http.Error(w, "Mehrere Netze auf einmal: bitte den Agenten auf Version 1.5.2 aktualisieren (Standorte → Jetzt aktualisieren)", 400)
+			return
+		}
+		if len(list) > maxScanNets {
+			http.Error(w, fmt.Sprintf("Höchstens %d Netze auf einmal", maxScanNets), 400)
+			return
+		}
+		params := map[string]string{"cidr": strings.Join(list, ",")}
+		if req.Params["vlans"] == "1" {
+			u := site.UniFi
+			switch {
+			case u == nil || !u.On:
+				http.Error(w, "Für „Alle VLANs aus UniFi“ bitte zuerst den UniFi-Livestatus am Standort einrichten", 400)
+				return
+			case !multiOK:
+				http.Error(w, "Für „Alle VLANs aus UniFi“ bitte den Agenten auf Version 1.5.2 aktualisieren (Standorte → Jetzt aktualisieren)", 400)
+				return
+			case u.isCloud():
+				key := s.m.unifiCloudKey(*site)
+				if key == "" || u.Console == "" {
+					http.Error(w, "UniFi-Cloud-Key oder Konsole fehlt (UniFi-Livestatus)", 400)
+					return
+				}
+				nets, err := newUniFiCloudAPI(u.Console, key).networks(u.Site)
+				if err != nil {
+					http.Error(w, err.Error(), 400)
+					return
+				}
+				params["cidr"] = strings.Join(normScanNets(append(list, nets...)), ",")
+				params["own"] = "1" // zusätzlich die eigenen Netze des Agenten
+			default:
+				params["vlans"], params["url"], params["key"], params["usite"], params["own"] = "1", u.URL, u.Key, u.Site, "1"
+			}
+		}
+		req.Params = params
 	} else if req.Kind == "update" {
 		req.Params = map[string]string{"version": version}
 	} else if req.Kind == "unifiprobe" {
@@ -180,8 +224,23 @@ func (s *Server) handleAgentJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobs.Lock()
-	defer jobs.Unlock()
 	st := jobs.byID[req.ID]
+	kind := ""
+	if st != nil {
+		kind = st.Kind
+	}
+	jobs.Unlock()
+	if st != nil && st.Site == site.ID && kind == "scan" && req.Error == "" {
+		var sr scanResult
+		if json.Unmarshal(req.Result, &sr) == nil {
+			nameScanHits(&sr, s.m.unifiScanNames(site))
+			if b, err := json.Marshal(sr); err == nil {
+				req.Result = b
+			}
+		}
+	}
+	jobs.Lock()
+	defer jobs.Unlock()
 	if st == nil || st.Site != site.ID {
 		http.Error(w, "Auftrag unbekannt", 404)
 		return
@@ -207,7 +266,25 @@ func (a *Agent) runJob(j agentJob) {
 	var err error
 	switch j.Kind {
 	case "scan":
-		res, err = scanNetwork(j.Params["cidr"])
+		cidrs := j.Params["cidr"]
+		var names map[string]string
+		if j.Params["vlans"] == "1" && j.Params["url"] != "" {
+			// UniFi-Konsole im lokalen Netz: Netze und Client-Namen direkt abfragen
+			u := newUniFiAPI(j.Params["url"], j.Params["key"])
+			nets, e := u.networks(j.Params["usite"])
+			if e != nil {
+				err = e
+				break
+			}
+			cidrs = strings.Join(normScanNets(append(strings.Split(cidrs, ","), nets...)), ",")
+			names = u.clientNames(j.Params["usite"])
+		}
+		var sr *scanResult
+		sr, err = scanNetwork(cidrs, j.Params["own"] == "1")
+		if err == nil {
+			nameScanHits(sr, names)
+			res = sr
+		}
 	case "unifi":
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
@@ -310,16 +387,30 @@ func hostsIn(n *net.IPNet) []net.IP {
 	return out
 }
 
-func scanNetwork(cidr string) (*scanResult, error) {
+// scanNetwork: angegebene Netze (Komma-getrennt), ohne Angabe bzw. mit own die eigenen Netze des Agenten.
+func scanNetwork(cidr string, own bool) (*scanResult, error) {
 	var nets []*net.IPNet
-	if c := strings.TrimSpace(cidr); c != "" {
+	seen := map[string]bool{}
+	for _, c := range strings.Split(cidr, ",") {
+		if c = strings.TrimSpace(c); c == "" {
+			continue
+		}
 		_, n, err := net.ParseCIDR(c)
 		if err != nil {
 			return nil, err
 		}
-		nets = append(nets, n)
-	} else {
-		nets = localNets()
+		if !seen[n.String()] {
+			seen[n.String()] = true
+			nets = append(nets, n)
+		}
+	}
+	if len(nets) == 0 || own {
+		for _, n := range localNets() {
+			if !seen[n.String()] {
+				seen[n.String()] = true
+				nets = append(nets, n)
+			}
+		}
 	}
 	if len(nets) == 0 && simMode {
 		_, n, _ := net.ParseCIDR("192.168.178.0/24")
@@ -338,7 +429,11 @@ func scanNetwork(cidr string) (*scanResult, error) {
 		ips = ips[:4096]
 	}
 	var mu sync.Mutex
-	sem := make(chan struct{}, 64)
+	par := 64
+	if len(ips) > 1024 {
+		par = 256 // viele VLANs: sonst dauert der Scan zu lange
+	}
+	sem := make(chan struct{}, par)
 	var wg sync.WaitGroup
 	for _, ip := range ips {
 		wg.Add(1)

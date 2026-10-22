@@ -714,7 +714,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <form method="dialog" id="im-form">
     <div class="dlg-h" id="im-title">Netzwerk scannen</div>
     <div class="dlg-b" style="display:block">
-      <div id="im-scanf"><label class="field">Netz (leer = Netze des Agenten automatisch)<input name="cidr" placeholder="z. B. 192.168.1.0/24"></label></div>
+      <div id="im-scanf"><label class="field">Netz (leer = Netze des Agenten automatisch)<input name="cidr" placeholder="z. B. 192.168.1.0/24, 192.168.10.0/24"><small>Mehrere Netze mit Komma trennen, je höchstens /22.</small></label>
+        <label class="check" id="im-vlanw"><input type="checkbox" name="vlans"> <span><b>Alle VLANs aus UniFi</b> – holt die Netze aus der UniFi-Konsole und scannt sie zusätzlich zum eigenen Netz. Andere VLANs findet der Agent nur, wenn die Firewall Ping oder die Ports 80/443/22/445/8080 dorthin erlaubt. Namen kommen aus UniFi (Geräte und Clients).</span></label></div>
       <div id="im-unifif">
         <label class="field">Adresse der UniFi-Konsole (vom Agent aus)<input name="url" placeholder="https://192.168.1.1"></label>
         <label class="field">API-Schlüssel<input name="key" autocomplete="off"><small>UniFi Network → Einstellungen → Control Plane → Integrationen → API-Schlüssel erstellen. Der Schlüssel wird nicht gespeichert.</small></label>
@@ -1587,15 +1588,15 @@ function drawIfChart(pts){ const c=$('#sn-chart'), dpr=devicePixelRatio||1, W=c.
 /* Netzwerk-Scan & UniFi-Import */
 const idlg=$('#dlg-import'), imf=$('#im-form'); let IM={};
 function openImport(site,kind){ IM={site,kind,rows:[]}; $('#im-title').textContent=(kind==='scan'?'Netzwerk scannen':'UniFi-Geräte importieren')+' · '+siteName(site);
-  $('#im-scanf').style.display=kind==='scan'?'':'none'; $('#im-unifif').style.display=kind==='unifi'?'':'none';
+  $('#im-scanf').style.display=kind==='scan'?'':'none'; { const so=(S.state.sites||[]).find(x=>x.id===site)||{}, uo=!!(so.unifi&&so.unifi.on); $('#im-vlanw').style.display=uo?'':'none'; imf.vlans.checked=uo; } $('#im-unifif').style.display=kind==='unifi'?'':'none';
   $('#im-res').innerHTML=''; $('#im-state').textContent=''; $('#im-err').textContent=''; $('#im-add').disabled=true; $('#im-go').disabled=false; idlg.showModal(); }
-$('#im-go').onclick=async()=>{ const params=IM.kind==='scan'?{cidr:imf.cidr.value.trim()}:{url:imf.url.value.trim().replace(/\/$/,''),key:imf.key.value.trim(),site:imf.usite.value.trim()};
+$('#im-go').onclick=async()=>{ const params=IM.kind==='scan'?{cidr:imf.cidr.value.trim(),vlans:imf.vlans.checked?'1':''}:{url:imf.url.value.trim().replace(/\/$/,''),key:imf.key.value.trim(),site:imf.usite.value.trim()};
   if(IM.kind==='unifi'&&!/^https:\/\//.test(params.url)) params.url='https://'+params.url;
   $('#im-err').textContent=''; $('#im-res').innerHTML=''; $('#im-go').disabled=true;
   try{ const r=await api('/api/jobs',{method:'POST',body:JSON.stringify({site:IM.site,kind:IM.kind,params})}); imf.key.value='';
     const t0=Date.now(); let st;
-    while(Date.now()-t0<180000){ await new Promise(r=>setTimeout(r,2000)); if(!idlg.open) return; st=await api('/api/jobs?id='+r.id);
-      $('#im-state').textContent=st.status==='queued'?'warte auf den Agenten … ('+Math.round((Date.now()-t0)/1000)+' s)':st.status==='running'?(IM.kind==='scan'?'scanne … (bis ca. 1 Minute)':'frage Konsole ab …'):'';
+    while(Date.now()-t0<300000){ await new Promise(r=>setTimeout(r,2000)); if(!idlg.open) return; st=await api('/api/jobs?id='+r.id);
+      $('#im-state').textContent=st.status==='queued'?'warte auf den Agenten … ('+Math.round((Date.now()-t0)/1000)+' s)':st.status==='running'?(IM.kind==='scan'?'scanne … (bis ca. 1–2 Minuten)':'frage Konsole ab …'):'';
       if(st.status==='done'||st.status==='error') break; }
     $('#im-go').disabled=false;
     if(!st||st.status==='queued'||st.status==='running'){ $('#im-err').textContent='Keine Antwort vom Agenten. Ist er aktuell (neue Version herunterladen)?'; return; }

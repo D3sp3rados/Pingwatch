@@ -97,7 +97,7 @@ func TestJobsStatusUnifi(t *testing.T) {
 	if len(cfg.Jobs) != 1 || cfg.Jobs[0].Kind != "scan" {
 		t.Fatalf("Auftrag nicht ausgeliefert: %+v", cfg)
 	}
-	res, err := scanNetwork(cfg.Jobs[0].Params["cidr"])
+	res, err := scanNetwork(cfg.Jobs[0].Params["cidr"], false)
 	if err != nil || len(res.Hits) == 0 {
 		t.Fatal("scan (Simulation)", err)
 	}
