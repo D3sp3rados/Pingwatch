@@ -41,6 +41,8 @@ type HostCfg struct {
 	FritzPort int    `json:"fritzPort,omitempty"` // 49000 (http) oder 49443 (https)
 	FritzUser string `json:"fritzUser,omitempty"`
 	FritzPass string `json:"fritzPass,omitempty"` // nur an den Agenten, nie an den Browser
+	// FritzNewDev: neue Geräte im Heimnetz der Fritzbox melden
+	FritzNewDev bool `json:"fritzNewDev,omitempty"`
 }
 
 type SiteCfg struct {
@@ -167,7 +169,7 @@ func (h *HostCfg) normalize() {
 		h.Site = "cloud"
 	}
 	if !h.Fritz || h.Site == "cloud" {
-		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass = false, 0, "", ""
+		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev = false, 0, "", "", false
 	} else if h.FritzPort != 49443 {
 		h.FritzPort = 49000
 	}

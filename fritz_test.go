@@ -22,12 +22,18 @@ type fakeFritz struct {
 	boxUp      int64
 	ipMode     bool // Verbindung über WANIPConnection statt PPP
 	calls      int
+	files      map[string]string                        // Dateien ohne Anmeldung (Pfad mit sid)
+	more       func(act, body string) map[string]string // weitere Aktionen (nil = unbekannt)
 }
 
 func (f *fakeFritz) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
+	if c, ok := f.files[r.URL.Path]; ok {
+		fmt.Fprint(w, c)
+		return
+	}
 	const realm, nonce = "F!Box SOAP-Auth", "4F2A1C9E"
 	auth := parseDigest(r.Header.Get("Authorization"))
 	ok := false
@@ -43,8 +49,14 @@ func (f *fakeFritz) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	act := r.Header.Get("SoapAction")
-	io.Copy(io.Discard, r.Body)
+	bb, _ := io.ReadAll(r.Body)
 	vals := map[string]string{}
+	if f.more != nil {
+		if v := f.more(act, string(bb)); v != nil {
+			act = "x#" + act[strings.Index(act, "#")+1:]
+			vals = v
+		}
+	}
 	switch act {
 	case svcDeviceInfo + "#GetInfo":
 		vals = map[string]string{"NewModelName": "FRITZ!Box 7590 AX", "NewSoftwareVersion": "164.08.00", "NewUpTime": fmt.Sprint(f.boxUp)}
@@ -66,7 +78,11 @@ func (f *fakeFritz) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		vals = map[string]string{"NewExternalIPAddress": "203.0.113.7"}
 	case svcDSL + "#GetInfo":
 		vals = map[string]string{"NewDownstreamCurrRate": "116789", "NewUpstreamCurrRate": "40123"}
+	case "":
 	default:
+		if strings.HasPrefix(act, "x#") {
+			break
+		}
 		w.WriteHeader(500)
 		fmt.Fprint(w, `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault><detail><UPnPError xmlns="urn:dslforum-org:control-1-0"><errorCode>401</errorCode><errorDescription>Invalid Action</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>`)
 		return

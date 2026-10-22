@@ -247,7 +247,7 @@ func (d Device) wants(n notice) bool {
 		if !d.Outage {
 			return false
 		}
-	case "devoff", "devon", "reboot", "wandown", "wanup":
+	case "devoff", "devon", "reboot", "wandown", "wanup", "fritzdev", "fritzfw":
 		return d.Outage || d.Offline
 	case "syswarn", "sysok", "sysoff", "syson":
 		return d.Outage || d.Offline

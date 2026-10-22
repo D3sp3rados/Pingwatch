@@ -47,6 +47,7 @@ type fritzSample struct {
 	T   int64        `json:"t"`
 	S   *fritzStatus `json:"s,omitempty"`
 	Err string       `json:"err,omitempty"`
+	X   *fritzExtra  `json:"x,omitempty"` // erweiterte Daten (alle 5 Minuten)
 }
 
 // ---------- TR-064-Client ----------
@@ -55,11 +56,13 @@ type tr064Client struct {
 	base       string // http://192.168.178.1:49000
 	user, pass string
 	hc         *http.Client
-	realm      string
-	nonce      string
-	opaque     string
-	qop        string
-	nc         int
+	// bodyOverride: SOAP-Text mit Eingabewerten (callArgs), sonst leer
+	bodyOverride string
+	realm        string
+	nonce        string
+	opaque       string
+	qop          string
+	nc           int
 }
 
 func fritzBase(addr string, port int) string {
@@ -161,6 +164,9 @@ const soapEnv = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http
 // call führt eine TR-064-Aktion aus und liefert die Ausgabewerte (z. B. NewModelName).
 func (c *tr064Client) call(control, service, action string) (map[string]string, error) {
 	body := fmt.Sprintf(soapEnv, action, service, action)
+	if c.bodyOverride != "" {
+		body = c.bodyOverride
+	}
 	var resp *http.Response
 	for try := 0; try < 2; try++ {
 		req, err := http.NewRequest("POST", c.base+control, strings.NewReader(body))
@@ -305,6 +311,7 @@ const fritzPollEvery = 60 * time.Second
 func (a *Agent) fritzLoop(ah *agentHost) {
 	c := newTR064(fritzBase(ah.cfg.Addr, ah.cfg.FritzPort), ah.cfg.FritzUser, ah.cfg.FritzPass)
 	var pend []fritzSample
+	var lastExtra time.Time
 	for {
 		s := fritzSample{T: time.Now().UnixMilli()}
 		st, err := fritzQuery(c)
@@ -312,6 +319,10 @@ func (a *Agent) fritzLoop(ah *agentHost) {
 			s.Err = err.Error()
 		} else {
 			s.S = st
+			if time.Since(lastExtra) >= fritzExtraEvery {
+				lastExtra = time.Now()
+				s.X = fritzExtraQuery(c)
+			}
 		}
 		select {
 		case <-ah.stop:
@@ -361,6 +372,9 @@ type fritzHost struct {
 	hist      []fritzPoint
 	drops     []int64 // Abbrüche/Neueinwahlen (Zeitpunkte, 24 h)
 	boots     []int64
+	extra     *fritzExtra
+	known     map[string]bool // bekannte Geräte (MAC) für „neues Gerät“
+	fwNoted   string          // Firmware-Version, zu der schon gemeldet wurde
 }
 
 var fritzData = struct {
@@ -401,6 +415,9 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 			continue
 		}
 		fh.at = s.T
+		if s.X != nil {
+			notes = append(notes, m.fritzExtraIngest(hc, fh, s.X, s.T >= now-15*60000)...)
+		}
 		if s.Err != "" || s.S == nil {
 			fh.err = s.Err
 			if fh.err == "" {
@@ -534,6 +551,7 @@ type fritzView struct {
 	MaxDown   int32        `json:"maxDown,omitempty"`
 	Avail     float64      `json:"avail"` // % verbunden in 24 h (-1 = keine Daten)
 	Hist      []fritzPoint `json:"hist,omitempty"`
+	Extra     *fritzExtra  `json:"extra,omitempty"`
 }
 
 func (m *Monitor) fritzHostView(hc HostCfg) fritzView {
@@ -545,7 +563,7 @@ func (m *Monitor) fritzHostView(hc HostCfg) fritzView {
 	cut := now - 24*3600*1000
 	fh := getFritzHost(hc.ID)
 	fh.mu.Lock()
-	v.At, v.Err, v.Status, v.ConnSince = fh.at, fh.err, fh.cur, fh.connSince
+	v.At, v.Err, v.Status, v.ConnSince, v.Extra = fh.at, fh.err, fh.cur, fh.connSince, fh.extra
 	drops := trimTimes(fh.drops, cut)
 	v.Boots24 = len(trimTimes(fh.boots, cut))
 	var known, up int

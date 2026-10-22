@@ -110,7 +110,8 @@ func (s *Server) handleInstallPS(w http.ResponseWriter, r *http.Request) {
 }
 
 // installPS: in einer PowerShell als Administrator:
-//   & ([scriptblock]::Create((irm https://app.pingwacht.de/install.ps1))) <STANDORT-TOKEN> [-SysOnly]
+//
+//	& ([scriptblock]::Create((irm https://app.pingwacht.de/install.ps1))) <STANDORT-TOKEN> [-SysOnly]
 const installPS = `param([Parameter(Position=0)][string]$Token, [switch]$SysOnly)
 $ErrorActionPreference = 'Stop'
 $Server = '@@SERVER@@'
