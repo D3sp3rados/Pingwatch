@@ -93,6 +93,13 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 #ov.compact .card{padding:7px 12px;border:0;border-radius:0;border-top:1px solid var(--line);box-shadow:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,240px);align-items:center;column-gap:14px}
 #ov.compact .card:first-child{border-top:0}
 #ov .ov-more{display:block;margin:8px auto 4px}
+.inst-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.inst-tile{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--fg);font:inherit;cursor:pointer;box-shadow:var(--shadow);position:relative}
+.inst-tile .ic{font-size:26px;line-height:1.1;margin-bottom:4px}.inst-tile b{font-size:15px}.inst-tile .muted{font-size:12.5px}
+.inst-tile .tag{position:absolute;top:10px;right:10px}
+.inst-tile.on{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 35%,transparent)}
+.inst-detail{padding:16px 18px}.inst-detail h3{margin:0 0 8px;font-size:16px}.inst-detail ol{margin:0;padding-left:20px;line-height:1.6}.inst-detail li{margin:4px 0}.inst-detail code{font-size:12.5px;word-break:break-all}
+@media(max-width:640px){.inst-tiles{grid-template-columns:repeat(2,1fr)}}
 #ov.compact .card.down{background:color-mix(in srgb,var(--bad) 9%,var(--panel))}
 #ov.compact .card-h{align-items:center}
 #ov.compact .card-h .dot{margin-top:0}
@@ -262,6 +269,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <a href="#/events" data-v="events">Ereignisse</a>
     <a href="#/stats" data-v="stats">Statistik</a>
     <a href="#/settings" data-v="settings">Einstellungen</a>
+    <a href="#/install" data-v="install">⬇︎ Installieren</a>
     <a href="#/billing" data-v="billing" id="tab-billing" style="display:none">Abo</a>
     <a href="#/admin" data-v="admin" id="tab-admin" style="display:none">Kunden</a>
     <a href="#/requests" data-v="requests" id="tab-req" style="display:none">Anfragen<span class="badge" id="req-badge" style="display:none"></span></a>
@@ -477,9 +485,9 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <p class="muted" style="font-size:12.5px" id="push-info"></p>
 
   <div class="panel help" style="margin-top:12px">
-    <b style="color:var(--fg)">Als App auf den Home-Bildschirm</b> <button class="btn sm pri" id="install-app" style="display:none">📲 Jetzt als App installieren</button><br>
+    <b style="color:var(--fg)">Als App auf den Home-Bildschirm</b> <button class="btn sm pri install-btn" id="install-app" style="display:none">📲 Jetzt als App installieren</button><br>
     <b>Android:</b> Seite in Chrome öffnen → Menü ⋮ → <b>Zum Startbildschirm hinzufügen</b> (bzw. „App installieren“).<br>
-    <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWacht vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWacht-App aus TestFlight nutzen.
+    <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWacht vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWacht-App aus TestFlight nutzen.<br><a href="#/install">Alle Installations-Wege (Apps und Agenten) →</a>
   </div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
   </div>
@@ -511,6 +519,14 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </div>
 
   </div>
+</section>
+
+<section id="v-install">
+  <h2>Installieren</h2>
+  <p class="muted" style="margin:-4px 0 12px;font-size:13.5px">Wählen Sie, was Sie einrichten möchten. Ihr aktuelles Gerät ist vorausgewählt.</p>
+  <div class="inst-tiles" id="inst-tiles"></div>
+  <p class="muted" id="inst-norights" style="display:none;font-size:13px">Agenten für Windows, Mac und Linux richtet ein Administrator Ihres Teams ein – bitte Administrator fragen.</p>
+  <div class="panel inst-detail" id="inst-detail"></div>
 </section>
 
 <section id="v-billing">
@@ -906,6 +922,30 @@ function renderOverview(){
   }
   drawBars();
 }
+/* Installieren: Agent-Downloads (gemeinsam mit den Standort-Karten) und Apps */
+const AGENT_DL={win:[['pingwatch-agent.exe','Windows-Agent']],linux:[['pingwatch-agent-linux-arm64','Pi (ARM64)'],['pingwatch-agent-linux-amd64','Linux x64']],mac:[['pingwatch-agent-darwin-arm64','Mac (Apple)'],['pingwatch-agent-darwin-amd64','Mac (Intel)']]};
+function agentDlLinks(keys,pri){ return keys.flatMap(k=>AGENT_DL[k]||[]).map(([f,l])=>`<a class="btn sm${pri?' pri':''}" href="/download/${f}">${l}</a>`).join(''); }
+function detectPlatform(){ const ua=navigator.userAgent||''; if(/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)) return 'ios'; if(/Android/.test(ua)) return 'android'; if(/Windows/.test(ua)) return 'win'; if(/Macintosh|Mac OS X/.test(ua)) return 'mac'; if(/Linux|X11/.test(ua)) return 'linux'; return 'win'; }
+const INST={sel:null};
+function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; const canAgent=me.super||me.role!=='viewer'; const dev=detectPlatform();
+  const tiles=[['win','🪟','Windows','Agent',true],['mac','🍎','Mac','Agent',true],['linux','🐧','Linux / Raspberry Pi','Agent · Home Assistant',true],['ios','📱','iPhone / iPad','App',false],['android','🤖','Android','App',false]].filter(t=>canAgent||!t[4]);
+  if(!INST.sel||!tiles.some(t=>t[0]===INST.sel)) INST.sel=tiles.some(t=>t[0]===dev)?dev:tiles[0][0];
+  $('#inst-norights').style.display=canAgent?'none':'';
+  $('#inst-tiles').innerHTML=tiles.map(([k,ic,n,sub])=>`<button class="inst-tile${k===INST.sel?' on':''}" data-inst="${k}"><span class="ic">${ic}</span><b>${n}</b><span class="muted">${sub}</span>${k===dev?'<span class="tag">Ihr Gerät</span>':''}</button>`).join('');
+  $$('#inst-tiles [data-inst]').forEach(b=>b.onclick=()=>{ INST.sel=b.dataset.inst; renderInstall(); });
+  const sites=st.sites.filter(x=>x.id!=='cloud');
+  const siteJson=sites.length?`<div class="row" style="margin:6px 0">${sites.map(x=>`<a class="btn sm" href="/download/agent.json?site=${x.id}">agent.json – ${esc(x.name)}</a>`).join('')}</div>`:`<div class="muted" style="margin:6px 0">Noch kein Standort – zuerst unter <a href="#/settings/sites">Einstellungen → Standorte</a> einen Standort anlegen (z. B. „Büro“).</div>`;
+  const step1=`<li><b>Standort wählen</b> und dessen <b>agent.json</b> herunterladen (ein Standort = ein lokales Netz):${siteJson}</li>`;
+  const push=`<a href="#/settings/konto">Einstellungen → Mein Konto</a>`;
+  const D={
+    win:`<h3>🪟 Windows-Agent</h3><ol>${step1}<li>Agent herunterladen: <span class="row" style="display:inline-flex">${agentDlLinks(['win'],true)}</span></li><li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\\PingWacht</code>) und <b>pingwatch-agent.exe</b> starten.</li><li>Erscheint „Der Computer wurde durch Windows geschützt“ (SmartScreen): <b>Weitere Informationen → Trotzdem ausführen</b>.</li><li>Der Agent sitzt als Symbol im Infobereich der Taskleiste, startet ab jetzt automatisch mit Windows und aktualisiert sich selbst.</li></ol>`,
+    mac:`<h3>🍎 Mac-Agent</h3><ol>${step1}<li>Agent herunterladen – <b>Apple</b> für M1/M2/M3…, <b>Intel</b> für ältere Macs: <span class="row" style="display:inline-flex">${agentDlLinks(['mac'],true)}</span></li><li>Beide Dateien in denselben Ordner legen und im Terminal dort starten:<br><code>chmod +x pingwatch-agent-darwin-arm64 &amp;&amp; ./pingwatch-agent-darwin-arm64 agent -config agent.json</code></li><li>Blockiert macOS den Start: in Systemeinstellungen → Datenschutz &amp; Sicherheit <b>„Dennoch öffnen“</b> wählen.</li></ol>`,
+    linux:`<h3>🐧 Linux / Raspberry Pi</h3><ol>${step1}<li>Agent herunterladen – <b>ARM64</b> für Raspberry Pi, <b>x64</b> für normale PCs/Server: <span class="row" style="display:inline-flex">${agentDlLinks(['linux'],true)}</span></li><li>Starten: <code>chmod +x pingwatch-agent-linux-arm64 &amp;&amp; ./pingwatch-agent-linux-arm64 agent -config agent.json</code> (am besten als systemd-Dienst).</li></ol>
+      <h3 style="margin-top:14px">🏠 Home Assistant (Add-on)</h3><ol><li>Einstellungen → Add-ons → Add-on-Store → ⋮ → <b>Repositories</b> → <code>https://github.com/D3sp3rados/Pingwatch</code> hinzufügen.</li><li>Add-on <b>„PingWacht Agent“</b> installieren.</li><li>In der Konfiguration das <b>Token</b> aus der agent.json des Standorts eintragen und starten. Bei jedem Start holt sich das Add-on die aktuelle Version.</li></ol>`,
+    ios:`<h3>📱 iPhone / iPad</h3><p class="muted" style="margin:0 0 8px">Die App im App Store folgt – in der Testphase gibt es sie über <b>TestFlight</b> (Einladung beim Anbieter anfragen).</p><p style="margin:0 0 4px">Bis dahin als <b>Web-App</b>:</p><ol><li>Diese Seite in <b>Safari</b> öffnen.</li><li>Teilen-Symbol (Quadrat mit Pfeil nach oben) → <b>„Zum Home-Bildschirm“</b>.</li><li>PingWacht vom Home-Bildschirm starten und unter ${push} die <b>Benachrichtigungen aktivieren</b> (ab iOS 16.4).</li></ol>`,
+    android:`<h3>🤖 Android</h3>${installEvt?'<p><button class="btn pri install-btn" id="inst-android-btn">📲 PingWacht jetzt installieren</button></p>':''}<ol><li>Diese Seite in <b>Chrome</b> öffnen.</li><li>Menü <b>⋮</b> → <b>„App installieren“</b> (bzw. „Zum Startbildschirm hinzufügen“).</li><li>PingWacht vom Startbildschirm öffnen und unter ${push} die <b>Benachrichtigungen aktivieren</b>.</li></ol>`};
+  $('#inst-detail').innerHTML=D[INST.sel]||'';
+  const ib=$('#inst-android-btn'); if(ib) ib.onclick=installApp; }
 /* Übersicht: je Abschnitt zunächst ~2 Zeilen (Liste: 4 Einträge), gestörte Hosts immer zuerst und immer sichtbar */
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
 const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
@@ -1173,7 +1213,7 @@ function renderSettings(){
   const sites=st.sites.filter(s=>s.id!=='cloud');
   $('#sites').innerHTML=sites.length? sites.map(s=>`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
     <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.unifi&&s.unifi.on?`<dt>UniFi</dt><dd><a href="#" data-ulist="${s.id}">${s.unifi.err?'<span style="color:var(--bad)">Konsole nicht erreichbar</span>':s.unifi.at?`${s.unifi.total} Geräte${s.unifi.offline?` · <b style="color:var(--bad)">${s.unifi.offline} offline</b>`:' · alle online'}`:'warte auf Agent …'}</a></dd>`:''}${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)} ${verNewer(st.version,s.version)?`<span class="tag warn">Update auf ${esc(st.version)} verfügbar</span>`:'<span class="tag ok">aktuell</span>'}</dd>`:''}<dt>Updates</dt><dd><label class="check" style="display:inline-flex"><input type="checkbox" class="ed" data-autoupd="${s.id}"${s.noAutoUpdate?'':' checked'}> automatisch</label>${s.online&&s.version&&verNewer(st.version,s.version)?` <button class="btn sm pri ed" data-updnow="${s.id}">Jetzt aktualisieren</button>`:''}</dd></dl>
-    <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a><a class="btn sm" href="/download/pingwatch-agent.exe">Windows-Agent</a><a class="btn sm" href="/download/pingwatch-agent-linux-arm64">Pi (ARM64)</a><a class="btn sm" href="/download/pingwatch-agent-linux-amd64">Linux x64</a><a class="btn sm" href="/download/pingwatch-agent-darwin-arm64">Mac (Apple)</a><a class="btn sm" href="/download/pingwatch-agent-darwin-amd64">Mac (Intel)</a></div>
+    <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a>${agentDlLinks(['win','linux','mac'])}</div>
     <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button><button class="btn sm" data-ulive="${s.id}">UniFi-Livestatus</button></div>
     <div class="row ed" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
   $$('#sites [data-scan]').forEach(b=>b.onclick=()=>openImport(b.dataset.scan,'scan'));
@@ -1376,8 +1416,9 @@ $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-
 /* Als App installieren (Android/Chrome) */
 let installEvt=null;
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
-window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; const b=$('#install-app'); if(b) b.style.display=''; });
-window.addEventListener('appinstalled',()=>{ installEvt=null; const b=$('#install-app'); if(b) b.style.display='none'; toast('PingWacht ist installiert'); });
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; $$('.install-btn').forEach(b=>b.style.display=''); if(S.view==='install') renderInstall(); });
+window.addEventListener('appinstalled',()=>{ installEvt=null; $$('.install-btn').forEach(b=>b.style.display='none'); toast('PingWacht ist installiert'); if(S.view==='install') renderInstall(); });
+async function installApp(){ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt=null; $$('.install-btn').forEach(b=>b.style.display='none'); if(S.view==='install') renderInstall(); }
 
 /* Meldungen pausieren / Prüfung pausieren */
 const mudlg=$('#dlg-mute'); const MU={scope:'all',id:'',mode:'mute'};
@@ -1458,7 +1499,7 @@ $('#mn-mailto').onchange=()=>mnSave({mailTo:$('#mn-mailto').value});
 $$('#my-notify [data-pause]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pause; const d=new Date(); d.setDate(d.getDate()+n); d.setHours(7,0,0,0); mnSave({pauseUntil:d.getTime()}); });
 $('#mn-pset').onclick=()=>{ const v=$('#mn-pdate').value; if(!v) return; const d=new Date(v+'T23:59:59'); mnSave({pauseUntil:d.getTime()}); };
 $('#mn-poff').onclick=()=>mnSave({pauseUntil:0});
-$('#install-app').onclick=async()=>{ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt=null; $('#install-app').style.display='none'; };
+$('#install-app').onclick=installApp;
 
 /* Web-Push */
 const WP={sub:null,checked:false};
@@ -1825,10 +1866,11 @@ function fillHostSelects(force){ const st=S.state; if(!st) return; const gs=st.g
   const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=gopts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
-  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','billing','admin','requests'].includes(v)) v='overview';
+  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','install','billing','admin','requests'].includes(v)) v='overview';
   if((v==='admin'||v==='requests')&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
   S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||(v==='host'&&a.dataset.v==='overview')));
+  { const ta=$('#tabs a.on'); const tb=$('#tabs'); if(ta&&tb&&tb.scrollWidth>tb.clientWidth) tb.scrollLeft=Math.max(0,ta.offsetLeft-tb.clientWidth/2+ta.offsetWidth/2); }
   hideTip();
   if(v==='host'){ S.hostId=parts[1]; const r=q.get('r'); if(q.get('from')){ D.preset=null; D.from=+q.get('from'); D.to=+q.get('to')||Date.now(); } else { D.preset=r&&RANGES[r]?r:(D.preset||'1h'); }
     $$('#d-range button').forEach(b=>b.classList.toggle('on',b.dataset.r===D.preset)); $('#d-back').style.display=D.preset?'none':''; $('#d-date').value='';
@@ -1838,6 +1880,7 @@ function route(){
   if(v==='stats'){ fillHostSelects(); renderReportBox(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
   if(v==='settings'){ setCat(parts[1]); renderSettings(); }
   if(v==='billing') renderBilling();
+  if(v==='install') renderInstall();
   if(v==='admin') loadAdmin();
   if(v==='requests') loadRequests();
   if(v==='overview') { renderOverview(); }
@@ -1847,6 +1890,7 @@ async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
   renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderAI();
   if(S.view==='billing') renderBilling();
+  if(S.view==='install') renderInstall();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();
   if(S.view==='settings') renderSettings();

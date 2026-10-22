@@ -197,7 +197,7 @@ func priceSheet(o *Org) string {
 // ---------- Systemprompt ----------
 
 const aiProductHelp = `PRODUKTHILFE PINGWACHT (nur das hier gilt – erfinde keine weiteren Funktionen):
-Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Einstellungen (#/settings, mit Reitern: Hosts & Gruppen, Standorte, Alarme & Wartung, Team, Statusseite, Mein Konto, System), Abo (#/billing). Oben rechts der Knopf „🔔 Meldungen“ zum Stummschalten.
+Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Installieren (#/install: Agenten für Windows/Mac/Linux/Home Assistant und Apps für iPhone/Android mit Anleitung), Einstellungen (#/settings, mit Reitern: Hosts & Gruppen, Standorte, Alarme & Wartung, Team, Statusseite, Mein Konto, System), Abo (#/billing). Oben rechts der Knopf „🔔 Meldungen“ zum Stummschalten.
 - Übersicht: alle Hosts als Kacheln oder als Liste (Umschalter oben), Status, Antwortzeiten, Ausfälle.
 - Host anlegen: Einstellungen → Hosts & Gruppen → „+ Host hinzufügen“. Name, Adresse (IP oder Hostname), Standort und Methode wählen. Methoden: ICMP (klassischer Ping), TCP-Verbindung (Port), Webseite HTTP/HTTPS (Pro), DNS-Auflösung (Pro), SNMP für Switches/Router (Pro). Viele Hosts auf einmal: „Liste importieren“ (Liste aus Excel/CSV einfügen).
 - Standort „Cloud“: Prüfung aus dem Rechenzentrum, nur für öffentlich erreichbare Adressen und Webseiten. Kein Standort im Sinne der Abrechnung.
