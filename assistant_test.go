@@ -308,7 +308,7 @@ func TestAssistant(t *testing.T) {
 	var list []requestView
 	_, body = cc.do("GET", "/api/requests", nil)
 	mustJSON(t, body, &list)
-	if len(list) != 3 || list[0].Assessment.Machbar != "" || list[0].Chat != "" {
+	if len(list) != 2 || list[0].Assessment.Machbar != "" || list[0].Chat != "" {
 		t.Fatalf("Kunde C sieht: %+v", list)
 	}
 	_, body = cb.do("GET", "/api/requests", nil)
@@ -318,7 +318,7 @@ func TestAssistant(t *testing.T) {
 	}
 	_, body = admin.do("GET", "/api/requests", nil)
 	mustJSON(t, body, &list)
-	if len(list) != 3 || list[2].Assessment.Machbar != "vermutlich" || list[2].Assessment.Aufwand != "groß" || list[2].UserEmail != "c@kunde-c.de" {
+	if len(list) != 2 || list[1].Assessment.Machbar != "vermutlich" || list[1].Assessment.Aufwand != "groß" || list[1].UserEmail != "c@kunde-c.de" {
 		t.Fatalf("Betreiber sieht: %+v", list)
 	}
 	_, body = admin.do("GET", "/api/state", nil)
@@ -328,7 +328,7 @@ func TestAssistant(t *testing.T) {
 	}
 
 	// Statuswechsel nur durch Betreiber, Kunde bekommt Mail
-	id := list[2].ID
+	id := list[1].ID
 	if code, _ := cc.do("POST", "/api/requests", map[string]string{"id": id, "status": "umsetzen"}); code != http.StatusForbidden {
 		t.Fatalf("Kunde darf Status ändern: %d", code)
 	}
@@ -367,5 +367,18 @@ func TestAssistant(t *testing.T) {
 	}
 	if code, _ := ask(cc, "Hallo"); code != http.StatusServiceUnavailable {
 		t.Fatalf("ohne Schlüssel: %d", code)
+	}
+}
+
+func TestLooksLikeWish(t *testing.T) {
+	for _, q := range []string{"Wie richte ich eine Fritzbox ein?", "Was kostet Pro mit 3 Standorten?", "Wo finde ich den Agent?"} {
+		if looksLikeWish(q) {
+			t.Errorf("Frage als Wunsch erkannt: %q", q)
+		}
+	}
+	for _, q := range []string{"Mir fehlt ein CSV-Export", "Ich hätte gern eine Grafik für den Sync", "Könnt ihr Teams-Kanäle pro Kunde einbauen?", "Ja, genau so"} {
+		if !looksLikeWish(q) {
+			t.Errorf("Wunsch nicht erkannt: %q", q)
+		}
 	}
 }

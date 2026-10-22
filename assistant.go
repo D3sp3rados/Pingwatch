@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -320,6 +321,7 @@ Regeln:
 - Formatierung: nur **fett**, Listen mit „- “ und Zeilenumbrüche.
 ÄNDERUNGSWÜNSCHE: Wenn die Person eine Funktion vermisst oder etwas anders haben möchte, prüfe zuerst anhand der Produkthilfe, ob es das schon gibt, und erkläre es dann. Wenn nicht: kläre mit höchstens einer Rückfrage, was genau gewünscht ist. Sobald klar ist, was gewünscht wird, schreibe ans Ende deiner Antwort genau eine Zeile:
 [[WUNSCH: präzise Zusammenfassung des Wunsches in einem Satz]]
+Diese Zeile NUR, wenn die Person ausdrücklich etwas vermisst oder eine Änderung wünscht, die es laut Produkthilfe NICHT gibt. NIEMALS bei normalen Fragen („Wie …?“, „Was kostet …?“, „Wo finde ich …?“) oder wenn du die Frage mit vorhandenen Funktionen beantworten kannst.
 Versprich nie, dass ein Wunsch umgesetzt wird.
 
 `)
@@ -642,6 +644,9 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply, wish := extractWish(reply)
+	if wish != "" && len(msgs) > 0 && !looksLikeWish(msgs[len(msgs)-1].Content) {
+		wish = "" // reine Frage – keine Anfrage anlegen
+	}
 	out := map[string]any{}
 	if wish != "" {
 		if !planHas(o.Plan, "requests") {
@@ -666,13 +671,15 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 				fr.UserName = "Betreiber"
 			}
 			if a.OK && a.GibtEsSchon {
+				// gibt es schon: nichts speichern, nur kurz erklären
 				fr.Status = "vorhanden"
 				how := a.WieGenau
 				if how == "" {
 					how = a.Zusammenfassung
 				}
-				reply += "\n\n**Gute Nachricht:** Das gibt es bereits. " + how
-				s.m.addRequest(fr)
+				if how != "" {
+					reply += "\n\n**Hinweis:** Das gibt es bereits. " + how
+				}
 			} else {
 				s.m.addRequest(fr)
 				go s.m.notifyRequest(fr)
@@ -821,4 +828,22 @@ func (s *Server) aiAccountInfo(p *Principal, o *Org, out map[string]any) {
 		s.m.mu.RUnlock()
 		out["requestsNew"] = n
 	}
+}
+
+// looksLikeWish: enthält die letzte Nachricht einen Änderungswunsch (und nicht nur eine Frage)?
+func looksLikeWish(t string) bool {
+	t = strings.ToLower(t)
+	for _, w := range []string{"fehlt", "vermisse", "wünsch", "hätte gern", "hätte ich gern", "gerne hätte", "wäre schön", "wäre toll", "wäre gut", "möchte", "einbauen", "hinzufügen", "ergänzen", "ändern", "anders", "feature", "wunsch", "bitte bau", "könnt ihr", "können sie"} {
+		if strings.Contains(t, w) {
+			return true
+		}
+	}
+	// kurze Bestätigung auf eine Rückfrage des Assistenten
+	for _, w := range strings.FieldsFunc(t, func(r rune) bool { return !unicode.IsLetter(r) }) {
+		switch w {
+		case "ja", "genau", "richtig", "korrekt", "bitte":
+			return true
+		}
+	}
+	return false
 }
