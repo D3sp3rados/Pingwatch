@@ -315,6 +315,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
 	mux.HandleFunc("/api/unifi/cloud", protect(s.handleUniFiCloudKey))
+	mux.HandleFunc("/api/unifi/sites", protect(s.handleUniFiCloudSites))
 	mux.HandleFunc("/api/unifi/consoles", protect(s.handleUniFiConsoles))
 	mux.HandleFunc("/api/unifi/test", protect(s.handleUniFiCloudTest))
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))

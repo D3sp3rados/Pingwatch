@@ -804,12 +804,12 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       <div id="ul-cloud" style="display:none">
         <div id="ul-ckey" class="muted" style="font-size:13px;margin:8px 0"></div>
         <label class="field">Konsole<select name="console" id="ul-console"><option value="">– bitte „Konsolen laden“ –</option></select></label>
-        <div class="row" style="margin:4px 0 8px"><button class="btn sm" type="button" id="ul-load">Konsolen laden</button><button class="btn sm" type="button" id="ul-test">Verbindung testen</button></div>
+        <div class="row" style="margin:4px 0 8px"><button class="btn sm" type="button" id="ul-load">Konsolen laden</button><button class="btn sm" type="button" id="ul-sites">Sites laden</button><button class="btn sm" type="button" id="ul-test">Verbindung testen</button></div>
         <details style="font-size:13px"><summary style="cursor:pointer;color:var(--acc)">Anderer Key nur für diesen Standort</summary>
           <label class="field" style="margin-top:6px">UniFi-Cloud-Key (optional)<input name="ckey" type="password" autocomplete="off" placeholder="leer = Key aus „UniFi-Cloud (ohne Agent)“"><small>Z. B. wenn die Konsole einem anderen UniFi-Konto gehört.</small></label></details>
         <div id="ul-steps" style="margin:8px 0"></div>
       </div>
-      <label class="field">UniFi-Site (leer = alle)<input name="usite" placeholder="Default"></label>
+      <label class="field">UniFi-Site (leer = alle)<input name="usite" placeholder="Default" list="ul-sitelist" autocomplete="off"><datalist id="ul-sitelist"></datalist><small id="ul-sitehint"></small></label>
       <label class="field">WAN-Anschlüsse ignorieren (optional)<input name="wanign" placeholder="z. B. WAN3"><small>Vorbereitete, aber ungenutzte Leitungen – keine Meldung und keine Anzeige „WAN getrennt“. Mehrere mit Komma trennen.</small></label>
       <div id="ul-info" class="muted" style="font-size:13px;margin:8px 0"></div>
       <div id="ul-devs" style="max-height:40vh;overflow:auto"></div>
@@ -1625,10 +1625,18 @@ function ulConsoles(list,sel,selName){ const o=$('#ul-console');
   if(sel&&!list.some(c=>c.id===sel)) o.insertAdjacentHTML('beforeend',`<option value="${esc(sel)}">${esc(selName||sel)}</option>`);
   o.value=sel||''; }
 $('#ul-load').onclick=async()=>{ const b=$('#ul-load'); b.disabled=true; $('#ul-err').textContent='';
-  try{ const l=await api('/api/unifi/consoles',{method:'POST',body:JSON.stringify({key:ulf.ckey.value.trim(),site:ulf.dataset.site})}); ulConsoles(l,$('#ul-console').value); toast(l.length+' Konsole(n) gefunden'); }
+  try{ const l=await api('/api/unifi/consoles',{method:'POST',body:JSON.stringify({key:ulf.ckey.value.trim(),site:ulf.dataset.site})}); ulConsoles(l,$('#ul-console').value); ulLoadSites(true); toast(l.length+' Konsole(n) gefunden'); }
   catch(e){ $('#ul-err').textContent=e.message; } b.disabled=false; };
+function ulSiteList(l){ $('#ul-sitelist').innerHTML=(l||[]).map(n=>`<option value="${esc(n)}">`).join('');
+  $('#ul-sitehint').textContent=!l||!l.length?'':l.length>1?`${l.length} Sites auf der Konsole – ins Feld klicken und den Kunden auswählen (Tippen filtert).`:''; }
+async function ulLoadSites(quiet){ if(!$('#ul-console').value){ if(!quiet) $('#ul-err').textContent='Bitte zuerst eine Konsole wählen'; return; }
+  try{ const l=await api('/api/unifi/sites',{method:'POST',body:JSON.stringify({key:ulf.ckey.value.trim(),site:ulf.dataset.site,console:$('#ul-console').value})}); ulSiteList(l); if(!quiet) toast(l.length+' Site(s) gefunden'); }
+  catch(e){ if(!quiet) $('#ul-err').textContent=e.message; } }
+$('#ul-sites').onclick=async()=>{ const b=$('#ul-sites'); b.disabled=true; $('#ul-err').textContent=''; await ulLoadSites(false); b.disabled=false; };
+$('#ul-console').addEventListener('change',()=>{ ulSiteList([]); ulLoadSites(true); });
 $('#ul-test').onclick=async()=>{ const b=$('#ul-test'); b.disabled=true; $('#ul-steps').innerHTML='<span class="muted">Teste …</span>';
   try{ const r=await api('/api/unifi/test',{method:'POST',body:JSON.stringify({key:ulf.ckey.value.trim(),site:ulf.dataset.site,console:$('#ul-console').value,usite:ulf.usite.value.trim()})});
+    if(r.sites&&r.sites.length) ulSiteList(r.sites);
     $('#ul-steps').innerHTML='<table class="tbl">'+(r.steps||[]).map(x=>`<tr><td style="width:24px">${x.warn?'⚠️':x.ok?'✅':'❌'}</td><td><b>${esc(x.name)}</b><br><span class="muted" style="font-size:12.5px">${esc(x.msg)}</span></td></tr>`).join('')+'</table>'; }
   catch(e){ $('#ul-steps').innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`; } b.disabled=false; };
 async function openULive(site){ ulf.dataset.site=site; $('#ul-title').textContent='UniFi-Livestatus · '+siteName(site); $('#ul-err').textContent=''; $('#ul-steps').innerHTML='';
@@ -1639,7 +1647,7 @@ async function openULive(site){ ulf.dataset.site=site; $('#ul-title').textConten
   ulf.on.checked=cloudOnly&&!v.on?true:!!v.on; ulf.url.value=v.url||''; ulf.key.value=''; ulf.ckey.value=''; ulf.usite.value=v.site||''; ulf.wanign.value=(v.wanIgnore||[]).map(x=>x==='WAN'?'WAN1':x).join(', ');
   ulf.key.placeholder=v.on&&v.mode!=='cloud'?'leer lassen = unverändert':'API-Schlüssel einfügen';
   ulf.ckey.placeholder=v.keySet&&v.mode==='cloud'?'eigener Key hinterlegt – leer = unverändert':'leer = Key aus „UniFi-Cloud (ohne Agent)“';
-  ulConsoles([],v.console||'',v.consoleName||'');
+  ulConsoles([],v.console||'',v.consoleName||''); ulSiteList([]);
   const ck=UC.keySet; $('#ul-ckey').innerHTML=ck?'✅ UniFi-Cloud-Key ist hinterlegt (Einstellungen → Standorte).':'⚠️ Noch kein UniFi-Cloud-Key – oben unter <b>„UniFi-Cloud (ohne Agent)“</b> eintragen oder unten einen Key nur für diesen Standort angeben.';
   if((ck||v.keySet)&&v.mode==='cloud'||ck&&cloudOnly) $('#ul-load').click();
   $('#ul-info').innerHTML=!v.on?'':v.err?`<b style="color:var(--bad)">Fehler:</b> ${esc(v.err)}`:v.at?`Stand ${fmtTime(v.at)} · ${v.total} Geräte · ${v.offline} offline${v.mode==='cloud'?' · über UniFi-Cloud':''}`:(v.mode==='cloud'?'Warte auf die erste Abfrage über die UniFi-Cloud …':'Warte auf die erste Abfrage durch den Agenten (bis zu 2 Minuten, Agent ab Version 1.1.0) …');

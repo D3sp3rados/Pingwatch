@@ -95,7 +95,7 @@ func TestUniFiCloudConsolesAndDiagnose(t *testing.T) {
 	if err != nil || len(cons) != 2 || cons[1].Name != "UDM Zuhause" || !cons[1].Online || cons[1].Model == "" || cons[0].Name != "Alte UDM" {
 		t.Fatalf("Konsolen: %+v %v", cons, err)
 	}
-	steps := unifiCloudDiagnose("good-key", "c1", "")
+	steps, _ := unifiCloudDiagnose("good-key", "c1", "")
 	txt, _ := json.Marshal(steps)
 	if len(steps) != 6 || !steps[2].OK || !steps[3].OK || !steps[4].OK || !steps[5].Warn {
 		t.Fatalf("Diagnose: %s", txt)
@@ -103,20 +103,20 @@ func TestUniFiCloudConsolesAndDiagnose(t *testing.T) {
 	f.mu.Lock()
 	f.wanOK = true
 	f.mu.Unlock()
-	if s := unifiCloudDiagnose("good-key", "c1", ""); s[5].Warn || !s[5].OK {
+	if s, _ := unifiCloudDiagnose("good-key", "c1", ""); s[5].Warn || !s[5].OK {
 		t.Fatalf("WAN verfügbar: %+v", s[5])
 	}
-	s404 := unifiCloudDiagnose("good-key", "c404", "")
+	s404, _ := unifiCloudDiagnose("good-key", "c404", "")
 	if last := s404[len(s404)-1]; last.OK || !strings.Contains(last.Msg, "5.0.3") {
 		t.Fatalf("404 → Firmware-Hinweis: %+v", last)
 	}
 	f.mu.Lock()
 	f.consoleUp = false
 	f.mu.Unlock()
-	if s := unifiCloudDiagnose("good-key", "c1", ""); s[len(s)-1].OK || !strings.Contains(s[len(s)-1].Msg, "offline") {
+	if s, _ := unifiCloudDiagnose("good-key", "c1", ""); s[len(s)-1].OK || !strings.Contains(s[len(s)-1].Msg, "offline") {
 		t.Fatalf("Konsole offline: %+v", s)
 	}
-	if s := unifiCloudDiagnose("bad", "c1", ""); len(s) != 1 || s[0].OK {
+	if s, _ := unifiCloudDiagnose("bad", "c1", ""); len(s) != 1 || s[0].OK {
 		t.Fatalf("falscher Key: %+v", s)
 	}
 }
@@ -259,6 +259,7 @@ func TestUniFiCloudRateLimitAndModeSwitch(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	unifiCloudPoll.Lock()
 	unifiCloudPoll.next[sc.ID] = time.Time{}
+	delete(unifiCloudPoll.next, "key:good-key")
 	unifiCloudPoll.Unlock()
 	s.m.unifiCloudPollSite(sc) // 429 mit Retry-After 120 → Pause, kein Fehler-Ereignis
 	unifiCloudPoll.Lock()

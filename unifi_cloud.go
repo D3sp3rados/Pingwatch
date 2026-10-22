@@ -23,6 +23,8 @@ const (
 	siteKindUniFi     = "unifi" // SiteCfg.Kind: Standort ohne Agent, nur UniFi-Cloud
 	unifiCloudEvery   = 60 * time.Second
 	unifiCloudWorkers = 4
+	unifiCloudMaxAll  = 3               // mehr Sites auf einer Konsole → Site muss gewählt werden (sonst Drosselung)
+	unifiCloudStatAge = 5 * time.Minute // Statistik je Gerät über die Cloud nur alle 5 Minuten neu
 )
 
 func (c *UniFiCfg) isCloud() bool { return c != nil && c.Mode == unifiModeCloud }
@@ -184,6 +186,13 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 		m.ingestUniFi(s, nil, "Kein UniFi-Cloud-Key oder keine Konsole gewählt")
 		return
 	}
+	kk := "key:" + key
+	unifiCloudPoll.Lock()
+	paused := time.Now().Before(unifiCloudPoll.next[kk])
+	unifiCloudPoll.Unlock()
+	if paused {
+		return // derselbe Key wird gerade von Ubiquiti gedrosselt
+	}
 	devs, err := newUniFiCloudAPI(s.UniFi.Console, key).fetch(s.UniFi.Site, true)
 	var re *unifiRateErr
 	if errors.As(err, &re) {
@@ -193,6 +202,7 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 		}
 		unifiCloudPoll.Lock()
 		unifiCloudPoll.next[s.ID] = time.Now().Add(wait)
+		unifiCloudPoll.next[kk] = time.Now().Add(wait) // alle Standorte mit diesem Key pausieren
 		unifiCloudPoll.Unlock()
 		log.Printf("UniFi-Cloud %s: gedrosselt, Pause %s", s.Name, wait)
 		return // Drosselung ist kein Ausfall der Konsole
@@ -214,18 +224,17 @@ type unifiStep struct {
 }
 
 // unifiCloudDiagnose prüft Schritt für Schritt, was über die Cloud geht.
-func unifiCloudDiagnose(key, console, siteFilter string) []unifiStep {
-	var steps []unifiStep
+func unifiCloudDiagnose(key, console, siteFilter string) (steps []unifiStep, siteNames []string) {
 	add := func(name string, ok bool, msg string) { steps = append(steps, unifiStep{Name: name, OK: ok, Msg: msg}) }
 	cons, err := unifiConsoles(key)
 	if err != nil {
 		add("UniFi-Cloud-Key", false, err.Error())
-		return steps
+		return
 	}
 	add("UniFi-Cloud-Key", true, fmt.Sprintf("gültig – %d Konsole(n) im Konto", len(cons)))
 	if console == "" {
 		add("Konsole", false, "Keine Konsole gewählt")
-		return steps
+		return
 	}
 	var c *unifiConsole
 	for i := range cons {
@@ -236,10 +245,10 @@ func unifiCloudDiagnose(key, console, siteFilter string) []unifiStep {
 	switch {
 	case c == nil:
 		add("Konsole", false, "Konsole nicht in diesem Konto gefunden")
-		return steps
+		return
 	case !c.Online:
 		add("Konsole", false, c.Name+" ist laut UniFi-Cloud offline")
-		return steps
+		return
 	default:
 		add("Konsole", true, strings.TrimSpace(c.Name+" · "+c.Model+" · Firmware "+c.Firmware))
 	}
@@ -251,17 +260,33 @@ func unifiCloudDiagnose(key, console, siteFilter string) []unifiStep {
 	}
 	if err := u.get(unifiIntAPI+"/sites?limit=200", &sites); err != nil {
 		add("Zugriff über den Cloud-Proxy", false, err.Error())
-		return steps
+		return
 	}
-	names := []string{}
+	found := siteFilter == ""
 	for _, s := range sites.Data {
-		names = append(names, s.Name)
+		siteNames = append(siteNames, s.Name)
+		if siteFilter != "" && (strings.EqualFold(siteFilter, s.Name) || siteFilter == s.ID || siteFilter == s.InternalReference) {
+			found = true
+		}
 	}
-	add("Zugriff über den Cloud-Proxy", true, fmt.Sprintf("%d UniFi-Site(s): %s", len(sites.Data), strings.Join(names, ", ")))
+	sort.Strings(siteNames)
+	shown := siteNames
+	if len(shown) > 8 {
+		shown = append(append([]string{}, shown[:8]...), "…")
+	}
+	add("Zugriff über den Cloud-Proxy", true, fmt.Sprintf("%d UniFi-Site(s): %s", len(sites.Data), strings.Join(shown, ", ")))
+	switch {
+	case !found:
+		add("UniFi-Site", false, "„"+siteFilter+"“ gibt es auf dieser Konsole nicht – bitte aus der Liste wählen")
+		return
+	case siteFilter == "" && len(sites.Data) > unifiCloudMaxAll:
+		add("UniFi-Site", false, fmt.Sprintf("Die Konsole verwaltet %d Sites – bitte unten die UniFi-Site dieses Kunden wählen", len(sites.Data)))
+		return
+	}
 	devs, err := u.fetch(siteFilter, false)
 	if err != nil {
 		add("Geräte", false, err.Error())
-		return steps
+		return
 	}
 	add("Geräte", true, fmt.Sprintf("%d Geräte gefunden", len(devs)))
 	// Statistik und WAN für ein Gerät bzw. das Gateway
@@ -303,7 +328,7 @@ func unifiCloudDiagnose(key, console, siteFilter string) []unifiStep {
 				Msg: "über die UniFi-Cloud nicht verfügbar – Geräte, Status und Statistik funktionieren trotzdem"})
 		}
 	}
-	return steps
+	return
 }
 
 // ---------- API ----------
@@ -383,7 +408,37 @@ func (s *Server) handleUniFiCloudTest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, map[string]any{"steps": unifiCloudDiagnose(key, strings.TrimSpace(req.Console), strings.TrimSpace(req.USite))})
+	steps, sites := unifiCloudDiagnose(key, strings.TrimSpace(req.Console), strings.TrimSpace(req.USite))
+	writeJSON(w, map[string]any{"steps": steps, "sites": sites})
+}
+
+// POST /api/unifi/sites {key?, site?, console} → Namen der UniFi-Sites auf der Konsole
+func (s *Server) handleUniFiCloudSites(w http.ResponseWriter, r *http.Request) {
+	var req struct{ Key, Site, Console string }
+	if !readJSON(w, r, &req) {
+		return
+	}
+	key, ok := s.keyFor(w, r, req.Key, req.Site)
+	if !ok {
+		return
+	}
+	if strings.TrimSpace(req.Console) == "" {
+		http.Error(w, "Bitte zuerst eine Konsole wählen", 400)
+		return
+	}
+	var sites struct {
+		Data []struct{ Name string } `json:"data"`
+	}
+	if err := newUniFiCloudAPI(req.Console, key).get(unifiIntAPI+"/sites?limit=200", &sites); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	names := []string{}
+	for _, x := range sites.Data {
+		names = append(names, x.Name)
+	}
+	sort.Strings(names)
+	writeJSON(w, names)
 }
 
 func (s *Server) unifiReqKey(w http.ResponseWriter, r *http.Request) (string, bool) {

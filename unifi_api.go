@@ -195,11 +195,16 @@ func (u *unifiAPI) fetch(siteFilter string, all bool) ([]unifiDevice, error) {
 	if err := u.get(unifiIntAPI+"/sites?limit=200", &sites); err != nil {
 		return nil, err
 	}
+	if u.cloud && siteFilter == "" && len(sites.Data) > unifiCloudMaxAll {
+		return nil, fmt.Errorf("Die Konsole verwaltet %d Sites – bitte im UniFi-Livestatus die UniFi-Site dieses Kunden wählen", len(sites.Data))
+	}
 	out := []unifiDevice{}
+	matched := false
 	for _, st := range sites.Data {
 		if siteFilter != "" && !strings.EqualFold(siteFilter, st.Name) && siteFilter != st.ID && siteFilter != st.InternalReference {
 			continue
 		}
+		matched = true
 		var devs []unifiDevice
 		for offset := 0; offset < 5000; offset += 200 {
 			var page struct {
@@ -239,13 +244,20 @@ func (u *unifiAPI) fetch(siteFilter string, all bool) ([]unifiDevice, error) {
 		}
 		out = append(out, devs...)
 	}
+	if siteFilter != "" && !matched {
+		return nil, fmt.Errorf("UniFi-Site „%s“ auf der Konsole nicht gefunden", siteFilter)
+	}
 	return out, nil
 }
 
 // enrich: Statistiken je Gerät (Laufzeit, CPU, RAM, Uplink) und eigener Ping vom Agenten.
 func (u *unifiAPI) enrich(siteID string, devs []unifiDevice) {
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
+	par := 8
+	if u.cloud {
+		par = 2 // Cloud-Proxy schonen
+	}
+	sem := make(chan struct{}, par)
 	for i := range devs {
 		d := &devs[i]
 		wg.Add(1)
@@ -254,6 +266,9 @@ func (u *unifiAPI) enrich(siteID string, devs []unifiDevice) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			if d.ID != "" && strings.EqualFold(d.State, "ONLINE") {
+				if u.cloud && statCache.use(d) {
+					return
+				}
 				var st map[string]any
 				if u.get(fmt.Sprintf("%s/sites/%s/devices/%s/statistics/latest", unifiIntAPI, siteID, d.ID), &st) == nil {
 					d.Uptime = int64(fnum(st["uptimeSec"]))
@@ -261,6 +276,9 @@ func (u *unifiAPI) enrich(siteID string, devs []unifiDevice) {
 					d.Mem = fnum(st["memoryUtilizationPct"])
 					if up, ok := st["uplink"].(map[string]any); ok {
 						d.Tx, d.Rx = fnum(up["txRateBps"]), fnum(up["rxRateBps"])
+					}
+					if u.cloud {
+						statCache.put(d)
 					}
 				}
 			}
@@ -436,4 +454,40 @@ func unifiProbe(base, key string, paths []string) (map[string]string, error) {
 		out[p] = fmt.Sprintf("HTTP %d: %s", code, s)
 	}
 	return out, nil
+}
+
+// statCache: Geräte-Statistik über die Cloud nur alle unifiCloudStatAge neu abfragen.
+var statCache = &devStatCache{m: map[string]devStat{}}
+
+type devStat struct {
+	at               time.Time
+	up               int64
+	cpu, mem, tx, rx float64
+}
+
+type devStatCache struct {
+	sync.Mutex
+	m map[string]devStat
+}
+
+func (c *devStatCache) use(d *unifiDevice) bool {
+	c.Lock()
+	defer c.Unlock()
+	s, ok := c.m[d.ID]
+	if !ok || time.Since(s.at) > unifiCloudStatAge {
+		return false
+	}
+	// Laufzeit seit der letzten Messung weiterzählen
+	d.Uptime = s.up + int64(time.Since(s.at).Seconds())
+	d.CPU, d.Mem, d.Tx, d.Rx = s.cpu, s.mem, s.tx, s.rx
+	return true
+}
+
+func (c *devStatCache) put(d *unifiDevice) {
+	c.Lock()
+	defer c.Unlock()
+	if len(c.m) > 20000 {
+		c.m = map[string]devStat{}
+	}
+	c.m[d.ID] = devStat{at: time.Now(), up: d.Uptime, cpu: d.CPU, mem: d.Mem, tx: d.Tx, rx: d.Rx}
 }
