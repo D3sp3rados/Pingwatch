@@ -11,3 +11,4 @@ ios/PingWatchWidget/Info.plist
 ios/PingWatchWidget/PingWatchWidget.entitlements
 ios/build/
 xcuserdata/
+/pw
