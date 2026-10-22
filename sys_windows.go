@@ -204,13 +204,13 @@ func antivirus() *sysAV {
 }
 
 // psUpdates: alle nicht installierten, nicht ausgeblendeten Updates wie in „Windows Update“
-// (Software und Treiber), Ausgabe „gesamt;davon Treiber“.
-const psUpdates = `try{$s=New-Object -ComObject Microsoft.Update.Session; $r=$s.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0"); $d=0; foreach($u in $r.Updates){ if($u.Type -eq 2){$d++} }; "$($r.Updates.Count);$d"}catch{-1}`
+// (online gesucht, inkl. Defender-Signaturen, .NET und Treiber) – Anzahl, davon Treiber, Titel.
+const psUpdates = `try{$s=New-Object -ComObject Microsoft.Update.Session; $q=$s.CreateUpdateSearcher(); $q.Online=$true; $r=$q.Search("IsInstalled=0 and IsHidden=0"); $d=0; $t=@(); foreach($u in $r.Updates){ if($u.Type -eq 2){$d++}; $t+=[string]$u.Title }; ConvertTo-Json -Compress @{n=$r.Updates.Count; d=$d; t=$t}}catch{'{"n":-1}'}`
 
-func pendingUpdates() (int, int, bool) {
+func pendingUpdates() (int, int, []string, bool) {
 	b, err := runPS(5*time.Minute, psUpdates)
 	if err != nil && len(b) == 0 {
-		return -1, 0, false
+		return -1, 0, nil, false
 	}
 	return parseWinUpdates(string(b))
 }

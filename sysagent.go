@@ -51,6 +51,8 @@ func psEncoded(script string) string {
 }
 
 func runPS(timeout time.Duration, script string) ([]byte, error) {
+	// Ausgabe als UTF-8, sonst kommen Umlaute (Programm- und Update-Namen) verstümmelt an
+	script = "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); " + script
 	return runCmd(timeout, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", psEncoded(script))
 }
 
@@ -78,6 +80,7 @@ type sysSlow struct {
 	evCrit, evErr int
 	updates       int
 	updDrv        int
+	updList       []string
 	updAt         int64
 	av            *sysAV
 	reboot        int
@@ -147,16 +150,16 @@ func (c *sysCollector) collect(services []string) *sysReport {
 		c.mu.Unlock()
 	})
 	c.due("updates", 2*time.Hour, func() {
-		n, drv, ok := pendingUpdates()
+		n, drv, list, ok := pendingUpdates()
 		c.mu.Lock()
 		if ok {
-			c.slow.updates, c.slow.updDrv, c.slow.updAt = n, drv, time.Now().UnixMilli()
+			c.slow.updates, c.slow.updDrv, c.slow.updList, c.slow.updAt = n, drv, list, time.Now().UnixMilli()
 		}
 		c.mu.Unlock()
 	})
 	c.mu.Lock()
 	r.EvCrit, r.EvErr = c.slow.evCrit, c.slow.evErr
-	r.Updates, r.UpdDrv, r.UpdAt = c.slow.updates, c.slow.updDrv, c.slow.updAt
+	r.Updates, r.UpdDrv, r.UpdList, r.UpdAt = c.slow.updates, c.slow.updDrv, c.slow.updList, c.slow.updAt
 	r.AV, r.Reboot = c.slow.av, c.slow.reboot
 	c.mu.Unlock()
 	return r
@@ -918,25 +921,44 @@ func runCmdCombined(timeout time.Duration, name string, args ...string) ([]byte,
 	return cmd.CombinedOutput()
 }
 
-// parseWinUpdates: „6;2“ (gesamt;davon Treiber) bzw. ältere Ausgabe „6“.
-func parseWinUpdates(out string) (int, int, bool) {
-	for _, line := range strings.Split(out, "\n") {
-		v := strings.TrimSpace(line)
-		if v == "" {
-			continue
+// parseWinUpdates: JSON {"n":6,"d":0,"t":["…"]} (ab 1.5.1) bzw. ältere Ausgabe „6“.
+func parseWinUpdates(out string) (int, int, []string, bool) {
+	out = strings.TrimSpace(strings.TrimPrefix(out, "\ufeff"))
+	if i := strings.Index(out, "{"); i >= 0 {
+		var v struct {
+			N int             `json:"n"`
+			D int             `json:"d"`
+			T json.RawMessage `json:"t"`
 		}
-		a, b, _ := strings.Cut(v, ";")
-		n, ok := atoiSafe(strings.TrimSpace(a))
-		if !ok || n < 0 {
-			continue
+		if json.Unmarshal([]byte(out[i:]), &v) != nil || v.N < 0 {
+			return -1, 0, nil, false
 		}
-		d, _ := atoiSafe(strings.TrimSpace(b))
-		if d > n {
-			d = n
+		var list []string
+		if json.Unmarshal(v.T, &list) != nil {
+			var one string
+			if json.Unmarshal(v.T, &one) == nil && one != "" {
+				list = []string{one}
+			}
 		}
-		return n, d, true
+		if len(list) > 50 {
+			list = list[:50]
+		}
+		for k := range list {
+			if r := []rune(list[k]); len(r) > 200 {
+				list[k] = string(r[:200])
+			}
+		}
+		if v.D > v.N {
+			v.D = v.N
+		}
+		return v.N, v.D, list, true
 	}
-	return -1, 0, false
+	for _, line := range strings.Split(out, "\n") {
+		if n, ok := atoiSafe(strings.TrimSpace(line)); ok && n >= 0 {
+			return n, 0, nil, true
+		}
+	}
+	return -1, 0, nil, false
 }
 
 func atoiSafe(s string) (int, bool) {

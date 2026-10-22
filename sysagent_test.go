@@ -3,10 +3,19 @@ package main
 import "testing"
 
 func TestParseWinUpdates(t *testing.T) {
-	for in, want := range map[string][3]int{"6;2\r\n": {6, 2, 1}, "4": {4, 0, 1}, "-1": {-1, 0, 0}, "": {-1, 0, 0}, "3;9": {3, 3, 1}} {
-		n, d, ok := parseWinUpdates(in)
-		if n != want[0] || d != want[1] || ok != (want[2] == 1) {
-			t.Errorf("%q → %d %d %v", in, n, d, ok)
+	n, d, l, ok := parseWinUpdates("\ufeff{\"n\":6,\"d\":0,\"t\":[\"KB2267602 Defender\",\"2026-10 .NET\"]}\r\n")
+	if !ok || n != 6 || d != 0 || len(l) != 2 || l[0] != "KB2267602 Defender" {
+		t.Fatal(n, d, l, ok)
+	}
+	if n, _, l, ok := parseWinUpdates(`{"n":1,"d":1,"t":"Intel Treiber"}`); !ok || n != 1 || len(l) != 1 {
+		t.Fatal("einzelner Titel", n, l)
+	}
+	if n, _, _, ok := parseWinUpdates("4\r\n"); !ok || n != 4 {
+		t.Fatal("alt", n)
+	}
+	for _, bad := range []string{"", `{"n":-1}`, "-1", "Fehler"} {
+		if _, _, _, ok := parseWinUpdates(bad); ok {
+			t.Fatal("ungültig akzeptiert:", bad)
 		}
 	}
 }
