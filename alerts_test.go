@@ -189,3 +189,14 @@ func TestMailFromRename(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestMailDomainHeaders(t *testing.T) {
+	t.Setenv("SMTP_FROM", "PingWacht <support@pingwacht.de>")
+	if d := mailDomain(); d != "pingwacht.de" {
+		t.Fatal(d)
+	}
+	m := string(buildMail([]string{"a@b.de"}, "Test", "x", "", nil))
+	if !strings.Contains(m, "@pingwacht.de>\r\nMIME-Version") {
+		t.Fatal("Message-ID ohne echte Domain")
+	}
+}

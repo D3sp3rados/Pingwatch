@@ -383,6 +383,16 @@ func mailFrom() string {
 	return f
 }
 
+// mailDomain: Domain der Absenderadresse (für Message-ID und HELO – manche Spamfilter
+// verwerfen Mails mit Fantasie-Domains wie „@pingwatch“).
+func mailDomain() string {
+	a := addrOnly(mailFrom())
+	if i := strings.LastIndex(a, "@"); i >= 0 && i < len(a)-1 {
+		return strings.ToLower(strings.TrimSpace(a[i+1:]))
+	}
+	return "pingwacht.de"
+}
+
 func addrOnly(s string) string {
 	if i := strings.LastIndex(s, "<"); i >= 0 {
 		return strings.Trim(s[i:], "<> ")
@@ -398,8 +408,8 @@ func buildMail(to []string, subject, text, htmlBody string, att *attachment) []b
 	}
 	bnd := "pw" + randHex(12)
 	alt := "pa" + randHex(12)
-	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%s@pingwatch>\r\nMIME-Version: 1.0\r\nAuto-Submitted: auto-generated\r\n",
-		from, strings.Join(to, ", "), mime.QEncoding.Encode("utf-8", subject), time.Now().Format(time.RFC1123Z), randHex(16))
+	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%s@%s>\r\nMIME-Version: 1.0\r\nAuto-Submitted: auto-generated\r\n",
+		from, strings.Join(to, ", "), mime.QEncoding.Encode("utf-8", subject), time.Now().Format(time.RFC1123Z), randHex(16), mailDomain())
 	writeAlt := func() {
 		fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%s\r\n\r\n", alt)
 		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n", alt, wrap76(base64.StdEncoding.EncodeToString([]byte(text))))
@@ -473,7 +483,7 @@ func sendMailSMTP(to []string, msg []byte) error {
 		return err
 	}
 	defer c.Close()
-	if err := c.Hello(envOr("SMTP_HELO", "pingwatch")); err != nil {
+	if err := c.Hello(envOr("SMTP_HELO", mailDomain())); err != nil {
 		return err
 	}
 	if mode == "starttls" {
