@@ -58,6 +58,9 @@ type SiteCfg struct {
 	// Agent nicht automatisch aktualisieren
 	NoAutoUpdate bool  `json:"noAutoUpdate,omitempty"`
 	SetAuto      *bool `json:"setAutoUpdate,omitempty"` // nur API-Eingabe
+	CheckUpdate  bool  `json:"checkUpdate,omitempty"`   // nur API-Eingabe: „Jetzt prüfen“
+	// UpdateNow: Zeitpunkt von „Jetzt prüfen“ – alle Agenten des Standorts prüfen dann sofort auf Updates
+	UpdateNow int64 `json:"updateNow,omitempty"`
 	// Rechner-Überwachung (CPU, RAM, Laufwerke, Dienste …)
 	Sys *SysCfg `json:"sys,omitempty"`
 	// Zuordnung zu einem Kunden des Kontos und eigene Kundennummer des Standorts
@@ -786,6 +789,9 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 				}
 				if s.SetAuto != nil {
 					m.cfg.Sites[i].NoAutoUpdate = !*s.SetAuto
+				}
+				if s.CheckUpdate {
+					m.cfg.Sites[i].UpdateNow = time.Now().UnixMilli()
 				}
 				if s.SetCustomer != nil {
 					m.cfg.Sites[i].Customer = *s.SetCustomer

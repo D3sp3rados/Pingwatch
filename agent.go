@@ -64,6 +64,7 @@ type Agent struct {
 	autoUpdate    bool
 	requestExit   func() // Oberfläche beenden (Windows-Tray)
 	lastAutoCheck time.Time
+	checkSeen     int64 // zuletzt bearbeitetes „Jetzt prüfen“
 	// Datenbank-Sicherungen auf diesem Agenten
 	backupOn   bool
 	backupKeep int
@@ -296,6 +297,7 @@ func (a *Agent) fetchConfig() bool {
 		UniFi    *UniFiCfg  `json:"unifi"`
 		Latest   string     `json:"latest"`
 		Auto     *bool      `json:"autoUpdate"`
+		CheckNow int64      `json:"checkNow"`
 		Backup   *struct {
 			On   bool `json:"on"`
 			Keep int  `json:"keep"`
@@ -320,6 +322,20 @@ func (a *Agent) fetchConfig() bool {
 	a.autoUpdate = cfg.Auto == nil || *cfg.Auto
 	auto := a.autoUpdate
 	a.mu.Unlock()
+	// „Jetzt prüfen“ im Dashboard: sofort prüfen, auch wenn automatische Updates aus sind
+	if cfg.CheckNow > a.checkSeen {
+		fresh := a.checkSeen != 0 || time.Since(time.UnixMilli(cfg.CheckNow)) < 10*time.Minute
+		a.checkSeen = cfg.CheckNow
+		if fresh && cfg.Latest != "" {
+			a.lastAutoCheck = time.Now()
+			if newerVersion(cfg.Latest, version) {
+				log.Printf("Update-Prüfung angefordert: %s verfügbar", cfg.Latest)
+				go a.selfUpdate(cfg.Latest, false)
+			} else {
+				log.Printf("Update-Prüfung angefordert: Agent ist aktuell (%s)", version)
+			}
+		}
+	}
 	// automatische Updates nur stündlich prüfen (manuell per Knopf sofort)
 	if auto && cfg.Latest != "" && time.Since(a.lastAutoCheck) >= time.Hour {
 		a.lastAutoCheck = time.Now()

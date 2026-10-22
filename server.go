@@ -1202,7 +1202,7 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	if sysOnly {
 		// „Nur Rechner“-Agent: keine Hosts, keine Aufträge, Standort bleibt Sache des Standort-Agenten
 		out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name, "org": site.Org, "customer": site.Customer}, "signKeys": s.m.orgSignKeys(site.Org), "hosts": []HostCfg{},
-			"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut}
+			"latest": version, "autoUpdate": !site.NoAutoUpdate, "checkNow": site.UpdateNow, "sys": sysOut}
 		if mid := r.Header.Get("X-Machine"); mid != "" {
 			if mc, ok := s.m.machineByID(machineKey(site.ID, mid)); ok {
 				s.m.machineSeen(mc)
@@ -1226,7 +1226,7 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
 	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name, "org": site.Org, "customer": site.Customer}, "signKeys": s.m.orgSignKeys(site.Org), "hosts": hosts, "version": ver,
-		"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut}
+		"latest": version, "autoUpdate": !site.NoAutoUpdate, "checkNow": site.UpdateNow, "sys": sysOut}
 	if site.UniFi != nil && site.UniFi.On && !site.UniFi.isCloud() {
 		out["unifi"] = site.UniFi // Cloud-Abfrage macht der Server selbst
 	}
