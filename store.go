@@ -125,6 +125,9 @@ func fmtR(r int32) string {
 var flagChars = []byte{'o', 's', 'l'}
 
 func (s *FileStore) Append(host string, sm Sample) {
+	if storeFrozen.Load() {
+		return
+	}
 	day := dayOf(sm.T)
 	line := fmt.Sprintf("%d;%s;%c\n", sm.T, fmtR(sm.R), flagChars[sm.F])
 	s.mu.Lock()
@@ -281,6 +284,9 @@ func minuteAggs(samples []Sample, day string) []Agg {
 
 // Maintenance: alte Tage komprimieren, abgelaufene löschen.
 func (s *FileStore) Maintenance(retentionDays int) {
+	if storeFrozen.Load() {
+		return
+	}
 	s.Flush()
 	root := filepath.Join(s.dir, "samples")
 	hosts, _ := os.ReadDir(root)
@@ -358,6 +364,9 @@ type Event struct {
 }
 
 func (s *FileStore) AppendEvent(e Event) {
+	if storeFrozen.Load() {
+		return
+	}
 	f, err := os.OpenFile(filepath.Join(s.dir, "events.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
@@ -394,6 +403,9 @@ func (s *FileStore) LoadEvents(retentionDays int) []*Event {
 }
 
 func (s *FileStore) RewriteEvents(evs []*Event) {
+	if storeFrozen.Load() {
+		return
+	}
 	tmp := filepath.Join(s.dir, "events.jsonl.tmp")
 	f, err := os.Create(tmp)
 	if err != nil {
@@ -435,6 +447,9 @@ func (s *FileStore) LoadConfig() ([]byte, error) {
 }
 
 func (s *FileStore) SaveConfig(b []byte) error {
+	if storeFrozen.Load() {
+		return nil
+	}
 	p := filepath.Join(s.dir, "config.json")
 	if err := os.WriteFile(p+".tmp", b, 0o600); err != nil {
 		return err
@@ -446,6 +461,9 @@ func (s *FileStore) Kind() string { return "files" }
 
 // DeleteSamples entfernt Messwerte im Zeitraum [from, to) (ms) für die angegebenen Hosts.
 func (s *FileStore) DeleteSamples(hosts []string, from, to int64) {
+	if storeFrozen.Load() {
+		return
+	}
 	s.Close() // offene Tagesdateien schließen, werden beim nächsten Append neu geöffnet
 	now := time.Now()
 	for _, host := range hosts {
@@ -509,6 +527,9 @@ func blobPath(dir, key string) string {
 }
 
 func (s *FileStore) SaveBlob(key string, b []byte) error {
+	if storeFrozen.Load() {
+		return nil
+	}
 	p := blobPath(s.dir, key)
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	if err := os.WriteFile(p+".tmp", b, 0o600); err != nil {
@@ -519,4 +540,9 @@ func (s *FileStore) SaveBlob(key string, b []byte) error {
 
 func (s *FileStore) LoadBlob(key string) ([]byte, error) { return os.ReadFile(blobPath(s.dir, key)) }
 
-func (s *FileStore) DeleteBlob(key string) { os.Remove(blobPath(s.dir, key)) }
+func (s *FileStore) DeleteBlob(key string) {
+	if storeFrozen.Load() {
+		return
+	}
+	os.Remove(blobPath(s.dir, key))
+}

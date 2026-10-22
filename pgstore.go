@@ -226,6 +226,9 @@ func NewPgStore(dsn string) (*PgStore, error) {
 func (s *PgStore) Kind() string { return "postgres" }
 
 func (s *PgStore) Append(host string, sm Sample) {
+	if storeFrozen.Load() {
+		return
+	}
 	k := minKey{host, sm.T - sm.T%60_000}
 	s.mu.Lock()
 	if len(s.raw) < maxPending {
@@ -254,6 +257,9 @@ func (s *PgStore) logErr(what string, err error) {
 
 // Flush schreibt gepufferte Messwerte. Bei Fehlern bleiben sie im Puffer.
 func (s *PgStore) Flush() {
+	if storeFrozen.Load() {
+		return
+	}
 	s.mu.Lock()
 	raw := s.raw
 	mins := s.minutes
@@ -430,6 +436,9 @@ func (s *PgStore) DayAgg(host, day string) []Agg {
 }
 
 func (s *PgStore) Maintenance(retentionDays int) {
+	if storeFrozen.Load() {
+		return
+	}
 	now := time.Now()
 	s.db.Exec(`DELETE FROM pw_if WHERE t < $1`, now.AddDate(0, 0, -ifKeepDays).UnixMilli())
 	rawCut := now.AddDate(0, 0, -rawKeepDays).UnixMilli()
@@ -444,6 +453,9 @@ func (s *PgStore) Maintenance(retentionDays int) {
 }
 
 func (s *PgStore) AppendEvent(e Event) {
+	if storeFrozen.Load() {
+		return
+	}
 	b, _ := json.Marshal(e)
 	_, err := s.db.Exec(`INSERT INTO pw_events (id, start_t, end_t, data) VALUES ($1,$2,$3,$4)
 		ON CONFLICT (id) DO UPDATE SET start_t = EXCLUDED.start_t, end_t = EXCLUDED.end_t, data = EXCLUDED.data`,
@@ -488,11 +500,17 @@ func (s *PgStore) LoadConfig() ([]byte, error) {
 }
 
 func (s *PgStore) SaveConfig(b []byte) error {
+	if storeFrozen.Load() {
+		return nil
+	}
 	_, err := s.db.Exec(`INSERT INTO pw_config (id, data) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`, string(b))
 	return err
 }
 
 func (s *PgStore) DeleteSamples(hosts []string, from, to int64) {
+	if storeFrozen.Load() {
+		return
+	}
 	s.Flush()
 	if len(hosts) == 0 {
 		return
@@ -510,6 +528,9 @@ func (s *PgStore) DeleteSamples(hosts []string, from, to int64) {
 }
 
 func (s *PgStore) DeleteEvents(ids []int64) {
+	if storeFrozen.Load() {
+		return
+	}
 	if len(ids) == 0 {
 		return
 	}
@@ -524,6 +545,9 @@ const ifKeepDays = 30
 
 // AppendIfs speichert je Abfrage eine kompakte Zeile: [[idx, in kbit/s, out kbit/s, fehler, up], …]
 func (s *PgStore) AppendIfs(host string, t int64, pts map[int]ifPoint, info map[int]ifInfo) {
+	if storeFrozen.Load() {
+		return
+	}
 	rows := make([][5]int64, 0, len(pts))
 	for idx, p := range pts {
 		up := int64(0)
@@ -586,6 +610,9 @@ func dbDownMail(err error) {
 
 // SaveBlob/LoadBlob/DeleteBlob: größere Datensätze (z. B. Inventar der Rechner).
 func (s *PgStore) SaveBlob(key string, b []byte) error {
+	if storeFrozen.Load() {
+		return nil
+	}
 	_, err := s.db.Exec(`INSERT INTO pw_blob (key, data) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data`, key, string(b))
 	if err != nil {
 		s.logErr("Inventar speichern", err)
@@ -600,5 +627,8 @@ func (s *PgStore) LoadBlob(key string) ([]byte, error) {
 }
 
 func (s *PgStore) DeleteBlob(key string) {
+	if storeFrozen.Load() {
+		return
+	}
 	s.db.Exec(`DELETE FROM pw_blob WHERE key = $1`, key)
 }

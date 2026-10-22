@@ -26,6 +26,8 @@ type AgentFile struct {
 	Mode string `json:"mode,omitempty"`
 	// true: dieser Agent startet niemals Dienste neu, auch wenn es im Dashboard erlaubt ist
 	NoSelfHeal bool `json:"noSelfHeal,omitempty"`
+	// Ordner für Datenbank-Sicherungen (leer = <Datenordner>/backups)
+	BackupDir string `json:"backupDir,omitempty"`
 }
 
 type agentHost struct {
@@ -60,6 +62,9 @@ type Agent struct {
 	autoUpdate    bool
 	requestExit   func() // Oberfläche beenden (Windows-Tray)
 	lastAutoCheck time.Time
+	// Datenbank-Sicherungen auf diesem Agenten
+	backupOn   bool
+	backupKeep int
 	// Rechner-Überwachung
 	sysOnly bool
 	sysOn   bool
@@ -184,6 +189,7 @@ func runAgent(args []string) {
 	go a.unifiLoop()
 	go a.sendLoop()
 	go a.sysLoop()
+	go a.backupLoop()
 	agentUI(a)
 	a.shutdown()
 }
@@ -273,7 +279,11 @@ func (a *Agent) fetchConfig() bool {
 		UniFi   *UniFiCfg  `json:"unifi"`
 		Latest  string     `json:"latest"`
 		Auto    *bool      `json:"autoUpdate"`
-		Sys     *struct {
+		Backup  *struct {
+			On   bool `json:"on"`
+			Keep int  `json:"keep"`
+		} `json:"backup"`
+		Sys *struct {
 			On       bool     `json:"on"`
 			Services []string `json:"services"`
 			SelfHeal bool     `json:"selfHeal"`
@@ -309,6 +319,10 @@ func (a *Agent) fetchConfig() bool {
 	if cfg.Sys != nil {
 		a.sysSvcs = cfg.Sys.Services
 		a.sysHeal, a.sysRestart = cfg.Sys.SelfHeal && !a.file.NoSelfHeal, cfg.Sys.Restart
+	}
+	a.backupOn, a.backupKeep = cfg.Backup != nil && cfg.Backup.On, 14
+	if cfg.Backup != nil && cfg.Backup.Keep > 0 {
+		a.backupKeep = cfg.Backup.Keep
 	}
 	a.unifi = cfg.UniFi
 	if a.sysOnly {

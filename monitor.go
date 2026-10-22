@@ -73,8 +73,11 @@ type Config struct {
 	Machines      []MachineCfg      `json:"machines,omitempty"`  // überwachte Rechner (Rechner-Überwachung)
 	VapidKey      string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
 	UniFiKeys     map[string]string `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
-	Secret        string            `json:"secret"`
-	Version       int64             `json:"version"`
+	// Datenbank-Sicherungen auf Agenten (Standort → Einstellung / letzter Stand)
+	BackupTargets map[string]*BackupCfg    `json:"backupTargets,omitempty"`
+	BackupStatus  map[string]*BackupStatus `json:"backupStatus,omitempty"`
+	Secret        string                   `json:"secret"`
+	Version       int64                    `json:"version"`
 }
 
 func randHex(n int) string {
@@ -269,6 +272,9 @@ func NewMonitor(store Storage) *Monitor {
 }
 
 func (m *Monitor) saveConfigLocked() {
+	if storeFrozen.Load() {
+		return // Wiederherstellung läuft – nichts mehr überschreiben
+	}
 	m.cfg.Version = time.Now().UnixNano()
 	b, _ := json.MarshalIndent(m.cfg, "", "  ")
 	if err := m.store.SaveConfig(b); err != nil {
@@ -548,6 +554,9 @@ func (m *Monitor) housekeeping() {
 			h.mu.Unlock()
 		}
 		m.checkMachines(nowMs)
+		if now.Second() < 5 {
+			m.checkBackups(now)
+		}
 		// Standorte ohne Meldung → offline
 		for _, s := range sites {
 			m.mu.RLock()

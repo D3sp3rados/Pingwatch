@@ -580,6 +580,18 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
     <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
   </div>
+  <div id="bk-wrap" style="display:none">
+  <h2>Sicherung</h2>
+  <div class="panel">
+    <div class="formrow" style="align-items:center">
+      <a class="btn pri" id="bk-dl" href="/api/admin/backup" download>Jetzt herunterladen</a>
+      <button class="btn" id="bk-restore" type="button">Wiederherstellen …</button>
+      <input type="file" id="bk-file" accept=".gz,.enc,application/gzip,application/octet-stream" style="display:none">
+    </div>
+    <div class="help" id="bk-info" style="border-top:1px solid var(--line)"></div>
+    <div style="overflow-x:auto;border-top:1px solid var(--line)"><table class="tbl" id="bk-tbl"></table></div>
+  </div>
+  </div>
   <h2 class="ed">Daten zurücksetzen</h2>
   <div class="panel ed">
     <div class="formrow">
@@ -1412,13 +1424,14 @@ function renderSettings(){
   $('#sites').innerHTML=sites.length? sites.map(s=>s.kind==='unifi'?cloudCard(s):`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
     <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.unifi&&s.unifi.on?`<dt>UniFi</dt><dd><a href="#" data-ulist="${s.id}">${uSt(s.unifi)}</a>${s.unifi.mode==='cloud'?' <span class="tag">über UniFi-Cloud</span>':''}</dd>`:''}${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)} ${verNewer(st.version,s.version)?`<span class="tag warn">Update auf ${esc(st.version)} verfügbar</span>`:'<span class="tag ok">aktuell</span>'}</dd>`:''}<dt>Rechner</dt><dd>${(()=>{ const mm=(st.machines||[]).filter(m=>m.site===s.id), bad=mm.filter(MBAD).length; return s.sys&&s.sys.on?`<a href="#" data-sys="${s.id}">${mm.length?mm.length+' überwacht'+(bad?` · <b style="color:var(--bad)">${bad} auffällig</b>`:' · alles OK'):'eingeschaltet, warte auf Agent …'}</a>`:`<a href="#" class="ed" data-sys="${s.id}">einrichten</a>`; })()}</dd><dt>Updates</dt><dd><label class="check" style="display:inline-flex"><input type="checkbox" class="ed" data-autoupd="${s.id}"${s.noAutoUpdate?'':' checked'}> automatisch</label>${s.online&&s.version&&verNewer(st.version,s.version)?` <button class="btn sm pri ed" data-updnow="${s.id}">Jetzt aktualisieren</button>`:''}</dd></dl>
     <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a>${agentDlLinks(['win','linux','mac'])}</div>
-    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button><button class="btn sm" data-ulive="${s.id}">UniFi-Livestatus</button><button class="btn sm" data-sysb="${s.id}">💻 Rechner-Überwachung</button></div>
+    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button><button class="btn sm" data-ulive="${s.id}">UniFi-Livestatus</button><button class="btn sm" data-sysb="${s.id}">💻 Rechner-Überwachung</button>${BK.ok&&st.org&&st.org.id==='default'?`<button class="btn sm" data-bksite="${s.id}">💾 Sicherungen${bkTarget(s.id)&&bkTarget(s.id).on?' · an':''}</button>`:''}</div>
     <div class="row ed" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
   $$('#sites [data-scan]').forEach(b=>b.onclick=()=>openImport(b.dataset.scan,'scan'));
   $$('#sites [data-unifi]').forEach(b=>b.onclick=()=>openImport(b.dataset.unifi,'unifi'));
   $$('#sites [data-ulive]').forEach(b=>b.onclick=()=>openULive(b.dataset.ulive));
   $$('#sites [data-sys]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openSys(a.dataset.sys); });
   $$('#sites [data-sysb]').forEach(b=>b.onclick=()=>openSys(b.dataset.sysb));
+  $$('#sites [data-bksite]').forEach(b=>b.onclick=()=>bkSiteDialog(b.dataset.bksite));
   $$('#sites [data-ulist]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openULive(a.dataset.ulist); });
   $$('#sites [data-autoupd]').forEach(c=>c.onchange=async()=>{ try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:c.dataset.autoupd,setAutoUpdate:c.checked})}); toast(c.checked?'Automatische Updates an':'Automatische Updates aus'); refreshState(); }catch(e){ uiAlert(e.message); } });
   $$('#sites [data-updnow]').forEach(b=>b.onclick=async()=>{ b.disabled=true; b.textContent='Wird aktualisiert …';
@@ -1445,6 +1458,7 @@ function renderSettings(){
   loadUsers(); loadAlerts(); loadMaint(); loadStatusPage(); renderGroups(); if(!UC.loaded) ucLoad();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
+  $('#bk-wrap').style.display=sup?'':'none'; if(sup&&!BK.loading&&Date.now()-BK.at>60000) bkLoad();
   if(!sup){ $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
@@ -1954,6 +1968,40 @@ function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.
 }
 $('#b-sites').oninput=()=>{ $('#b-sites').dataset.touched='1'; renderBilling(); };
 
+
+/* Betreiber: Sicherung und Wiederherstellung */
+const BK={ok:false,at:0,loading:false,data:null};
+function bkTarget(id){ return BK.data&&(BK.data.targets||[]).find(t=>t.site===id); }
+function fmtSize(n){ if(!n) return '–'; const u=['B','KB','MB','GB']; let i=0; while(n>=1024&&i<3){ n/=1024; i++; } return (i?n.toFixed(1).replace('.',','):n)+' '+u[i]; }
+async function bkLoad(){ BK.loading=true; try{ BK.data=await api('/api/admin/backup/targets'); BK.ok=true; BK.at=Date.now(); bkRender(); }catch(e){ BK.ok=false; } BK.loading=false; }
+function bkRender(){ const d=BK.data; if(!d) return;
+  $('#bk-info').innerHTML=(d.encrypted?'🔒 Sicherungen werden mit <b>BACKUP_KEY</b> verschlüsselt (AES-256). Ohne diesen Schlüssel lassen sie sich nicht wiederherstellen – gut aufbewahren.'
+    :'⚠️ <b>Die Sicherung enthält Passwort-Hashes, Zugangs-Tokens und Schlüssel.</b> Sicher aufbewahren – oder in rstcloud die Variable <b>BACKUP_KEY</b> setzen, dann wird sie verschlüsselt.')
+    +'<br>Enthalten: komplette Konfiguration (Kunden, Benutzer, Hosts, Standorte, Alarmwege …), Ereignisse, Messwert-Verlauf und Inventar. Automatische Sicherungen holt sich ein Agent jede Nacht zwischen 3 und 4 Uhr (Home-Assistant-Add-on: landen auch in den HA-Backups).';
+  const ts=d.targets||[];
+  const stat=t=>{ const s=t.status; if(!t.on) return '<span class="muted">aus</span>'; if(!s||!s.at) return '<span class="muted">wartet auf die erste Sicherung</span>';
+    if(s.ok) return `<span style="color:var(--ok)">✔ ${fmtDT(s.lastOk,false)}</span> · ${fmtSize(s.size)}${s.count?` · ${s.count} vorhanden`:''}`;
+    return `<span style="color:var(--bad)">✖ ${esc(s.err||'Fehler')}</span>${s.lastOk?`<br><span class="muted">zuletzt erfolgreich ${fmtDT(s.lastOk,false)}</span>`:''}`; };
+  $('#bk-tbl').innerHTML=ts.length?'<tr><th>Standort (Agent)</th><th>Sicherungen hier</th><th>Aufbewahren</th><th>Letzte Sicherung</th></tr>'+ts.map(t=>`<tr><td><b>${esc(t.name)}</b>${t.version?` <span class="tag">${esc(t.version)}</span>`:''}${t.online?'':' <span class="tag">offline</span>'}${t.on&&t.version&&verNewer('1.5.0',t.version)?' <span class="tag warn">Agent ab 1.5.0 nötig</span>':''}</td>
+    <td><label class="check"><input type="checkbox" data-bkon="${t.site}"${t.on?' checked':''}> speichern</label></td>
+    <td><input type="number" min="1" max="365" value="${t.keep}" data-bkkeep="${t.site}" style="width:70px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg)"> Stück</td>
+    <td>${stat(t)}</td></tr>`).join(''):'<tr><td class="empty">Noch kein eigener Standort mit Agent – z. B. den Raspberry Pi als Standort anlegen, dann kann er die Sicherungen speichern.</td></tr>';
+  const save=async(site,on,keep)=>{ try{ BK.data=await api('/api/admin/backup/targets',{method:'POST',body:JSON.stringify({site,on,keep:+keep||14})}); toast(on?'Sicherungen auf diesem Standort an':'Sicherungen hier aus'); bkRender(); }catch(e){ uiAlert(e.message); } };
+  $$('#bk-tbl [data-bkon]').forEach(c=>c.onchange=()=>save(c.dataset.bkon,c.checked,$(`#bk-tbl [data-bkkeep="${c.dataset.bkon}"]`).value));
+  $$('#bk-tbl [data-bkkeep]').forEach(i=>i.onchange=()=>{ const t=bkTarget(i.dataset.bkkeep); save(i.dataset.bkkeep,!!(t&&t.on),i.value); }); }
+async function bkSiteDialog(site){ if(!BK.data) await bkLoad(); const t=bkTarget(site)||{on:false,keep:14};
+  const v=await uiPrompt(`Datenbank-Sicherungen auf „${siteName(site)}“ speichern?\n\nDer Agent holt jede Nacht zwischen 3 und 4 Uhr eine komplette Sicherung und legt sie in seinem Datenordner unter „backups“ ab (Home-Assistant-Add-on: landet auch in den HA-Backups).\n\nWie viele Sicherungen aufbewahren? (0 = aus)`, t.on?t.keep:14);
+  if(v===null) return; const n=parseInt(v,10); if(isNaN(n)||n<0){ uiAlert('Bitte eine Zahl eingeben.'); return; }
+  try{ BK.data=await api('/api/admin/backup/targets',{method:'POST',body:JSON.stringify({site,on:n>0,keep:n||t.keep||14})}); toast(n>0?`Sicherungen an – ${n} werden aufbewahrt`:'Sicherungen hier aus'); bkRender(); renderSettings(); }catch(e){ uiAlert(e.message); } }
+$('#bk-restore').onclick=()=>{ $('#bk-file').value=''; $('#bk-file').click(); };
+$('#bk-file').onchange=async()=>{ const f=$('#bk-file').files[0]; if(!f) return;
+  toast('Sicherung wird geprüft …');
+  let sum; try{ const r=await fetch('/api/admin/restore?dryRun=1',{method:'POST',body:f}); if(!r.ok) throw new Error(await r.text()); sum=(await r.json()).summary; }catch(e){ uiAlert('Diese Datei lässt sich nicht wiederherstellen:\n'+e.message); return; }
+  const txt=`Sicherung, Stand ${fmtDT(sum.at,false)} (PingWacht ${sum.app}, ${fmtSize(sum.size)}${sum.encrypted?', verschlüsselt':''}):\n• ${sum.orgs} Kunden, ${sum.users} Benutzer\n• ${sum.sites} Standorte, ${sum.hosts} Hosts, ${sum.machines} Rechner\n• ${sum.events} Ereignisse${sum.note?'\n\n'+sum.note:''}\n\n⚠️ Der aktuelle Stand wird vollständig ersetzt. Alles, was seit der Sicherung passiert ist, geht verloren. PingWacht startet danach neu.\n\nZum Bestätigen WIEDERHERSTELLEN eingeben:`;
+  const c=await uiPrompt(txt,''); if(c===null) return; if(c.trim()!=='WIEDERHERSTELLEN'){ uiAlert('Abgebrochen – es wurde nichts geändert.'); return; }
+  try{ const r=await fetch('/api/admin/restore?confirm=WIEDERHERSTELLEN',{method:'POST',body:f}); if(!r.ok) throw new Error(await r.text());
+    await uiAlert('Wiederherstellung erfolgreich. PingWacht startet jetzt neu – die Seite lädt in einigen Sekunden neu.'); setTimeout(()=>location.reload(),8000);
+  }catch(e){ uiAlert(e.message); } };
 /* Betreiber: Kunden */
 async function openOrgUsers(orgId){ const o=ORGS.find(x=>x.id===orgId)||{name:''}; let us=[];
   try{ us=await api('/api/admin/users?org='+encodeURIComponent(orgId)); }catch(e){ uiAlert(e.message); return; }

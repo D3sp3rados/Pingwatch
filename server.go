@@ -253,6 +253,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/sys", s.handleAgentSys)
 	mux.HandleFunc("/api/agent/inventory", s.handleAgentInventory)
 	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
+	mux.HandleFunc("/api/agent/backup", s.handleAgentBackup)
 
 	// geschützt
 	protect := func(h http.HandlerFunc) http.HandlerFunc {
@@ -284,6 +285,9 @@ func (s *Server) routes() http.Handler {
 		})
 	}
 	s.registerTenantRoutes(mux, protect, super)
+	mux.HandleFunc("/api/admin/backup", super(s.handleAdminBackup))
+	mux.HandleFunc("/api/admin/restore", super(s.handleAdminRestore))
+	mux.HandleFunc("/api/admin/backup/targets", super(s.handleBackupTargets))
 	mux.HandleFunc("/", protect(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -1151,6 +1155,9 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 		"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut}
 	if site.UniFi != nil && site.UniFi.On && !site.UniFi.isCloud() {
 		out["unifi"] = site.UniFi // Cloud-Abfrage macht der Server selbst
+	}
+	if b := s.m.backupTarget(site); b != nil {
+		out["backup"] = map[string]any{"on": true, "keep": b.keep()}
 	}
 	if jb := takeJobs(site.ID); len(jb) > 0 {
 		out["jobs"] = jb
