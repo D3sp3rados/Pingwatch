@@ -54,6 +54,7 @@ type User struct {
 	Super     bool         `json:"super,omitempty"`   // Betreiber-Admin (nur Benutzer der Betreiber-Org)
 	Expires   int64        `json:"expires,omitempty"` // Zugang gültig bis (ms), 0 = unbegrenzt
 	Notify    *NotifyPrefs `json:"notify,omitempty"`
+	TempPW    bool         `json:"tempPw,omitempty"` // vorläufiges Passwort, muss noch geändert werden
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.

@@ -941,6 +941,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		for i := range s.m.cfg.Users {
 			if s.m.cfg.Users[i].ID == p.User.ID {
 				s.m.cfg.Users[i].PassHash = h
+				s.m.cfg.Users[i].TempPW = false
 			}
 		}
 		s.m.saveConfigLocked()

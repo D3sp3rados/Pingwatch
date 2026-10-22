@@ -67,6 +67,9 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 		me["email"] = p.User.Email
 		me["name"] = p.User.Name
 		me["id"] = p.User.ID
+		if u := s.m.userByID(p.User.ID); u != nil && u.TempPW {
+			me["tempPw"] = true
+		}
 	} else {
 		me["email"] = "admin"
 		me["name"] = "Betreiber"
@@ -171,7 +174,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 				temp = pw
 			}
 			u := User{ID: randHex(6), Email: email, Name: strings.TrimSpace(req.Name), Org: p.Org, Role: req.Role,
-				PassHash: hashPassword(pw), Created: time.Now().UnixMilli()}
+				PassHash: hashPassword(pw), Created: time.Now().UnixMilli(), TempPW: temp != ""}
 			if req.Super != nil && p.Super && p.Org == defaultOrgID {
 				u.Super = *req.Super
 			}
@@ -202,6 +205,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 				if req.ResetPassword {
 					temp = tempPassword()
 					u.PassHash = hashPassword(temp)
+					u.TempPW = true
 				}
 				if req.Super != nil && p.Super && p.Org == defaultOrgID && (p.User == nil || p.User.ID != u.ID) {
 					u.Super = *req.Super
@@ -424,7 +428,7 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 				}
 				temp = tempPassword()
 				m.cfg.Users = append(m.cfg.Users, User{ID: randHex(6), Email: e, Name: req.OwnerName, Org: o.ID, Role: "owner",
-					PassHash: hashPassword(temp), Created: o.Created})
+					PassHash: hashPassword(temp), Created: o.Created, TempPW: true})
 				if o.Email == "" {
 					o.Email = e
 				}

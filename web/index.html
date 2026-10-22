@@ -244,6 +244,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   .dlg-b{grid-template-columns:1fr}
   .hide-m{display:none}
 }
+.pw-banner{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.pw-banner a{color:#991b1b;font-weight:700;margin-left:6px}@media (prefers-color-scheme:dark){.pw-banner{background:#3b0d0d;color:#fecaca;border-color:#7f1d1d}.pw-banner a{color:#fecaca}}
 </style>
 </head>
 <body>
@@ -266,6 +267,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
 <main>
 <div id="mute-banner"></div>
+<div id="pw-banner"></div>
 <section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button></div><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></section>
 
 <section id="v-host">
@@ -597,6 +599,14 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
     </div>
     <div class="dlg-err" id="li-err"></div>
     <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Schließen</button><button class="btn pri" type="button" id="li-go" disabled>Importieren</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-pw">
+  <form method="dialog">
+    <div class="dlg-h">Bitte Passwort ändern</div>
+    <div class="dlg-b" style="display:block"><p style="margin:0 0 8px">Sie sind mit einem <b>vorläufigen Passwort</b> angemeldet. Bitte legen Sie jetzt ein eigenes Passwort fest.</p><p class="muted" style="margin:0;font-size:13px">Als „Altes Passwort“ geben Sie das vorläufige Passwort aus der E-Mail ein.</p></div>
+    <div class="dlg-f"><button class="btn" value="later" formnovalidate>Später</button><button class="btn pri" value="now">Jetzt ändern</button></div>
   </form>
 </dialog>
 
@@ -1144,7 +1154,7 @@ function renderSettings(){
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
-$('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
+$('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); refreshState(); }catch(e){ alert(e.message); } };
 
 /* Übersicht: Gruppen oder Standorte */
 function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
@@ -1324,6 +1334,15 @@ function renderMutes(){ const ms=(S.state&&S.state.mutes)||[]; const el=$('#mute
   if(!ms.length){ el.innerHTML=''; return; }
   el.innerHTML='<div class="mute-banner">'+ms.map(m=>`<span>${m.all?'<b>🔕 Alle Meldungen stumm</b>':esc(m.name)+(m.hosts>1?` (${m.hosts} Hosts)`:'')} ${m.forever?'– dauerhaft':'bis '+fmtDT(m.end,false)} <button class="btn sm ed" data-unmute="${m.id}">Wieder einschalten</button></span>`).join('<span class="muted">·</span>')+'</div>';
   $$('#mute-banner [data-unmute]').forEach(b=>b.onclick=async()=>{ await api('/api/maint?id='+b.dataset.unmute,{method:'DELETE'}); toast('Meldungen wieder an'); refreshState(); }); }
+/* Vorläufiges Passwort: Hinweis-Dialog einmal je Sitzung + roter Balken bis zur Änderung */
+function goPw(){ location.hash='#/settings'; setTimeout(()=>{ const r=$('#g-pw'); if(r){ r.scrollIntoView({behavior:'smooth',block:'center'}); $('#g-old').focus(); } },250); }
+function renderTempPw(){ const me=(S.state&&S.state.me)||{}; const el=$('#pw-banner');
+  if(!me.tempPw){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="pw-banner">⚠️ <b>Achtung:</b> Sie nutzen noch das vorläufige Passwort. <a href="#/settings" id="pw-go">Hier ändern →</a></div>';
+  $('#pw-go').onclick=e=>{ e.preventDefault(); goPw(); };
+  let shown=false; try{ shown=sessionStorage.getItem('pw_temp_shown')==='1'; }catch(e){}
+  if(!shown && !$('#dlg-pw').open){ try{ sessionStorage.setItem('pw_temp_shown','1'); }catch(e){} $('#dlg-pw').showModal(); } }
+$('#dlg-pw').addEventListener('close',()=>{ if($('#dlg-pw').returnValue==='now') goPw(); });
 
 /* Liste importieren */
 const lidlg=$('#dlg-limport'); let LI={rows:[]};
@@ -1762,7 +1781,7 @@ function route(){
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderAI();
+  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderAI();
   if(S.view==='billing') renderBilling();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();
