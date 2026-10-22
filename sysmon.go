@@ -131,6 +131,8 @@ type MachineCfg struct {
 	Created int64  `json:"created"`
 	// eigene Dienste-Liste für diesen Rechner (nil = Liste des Standorts)
 	Services *[]string `json:"services,omitempty"`
+	// Meldung, wenn der Rechner sich nicht meldet: "" = automatisch (Server ja, Arbeitsplatz nein), "on", "off"
+	OffAlert string `json:"offAlert,omitempty"`
 }
 
 // ---------- Messwerte (Agent → Server) ----------
@@ -375,7 +377,7 @@ func (m *Monitor) machineSeen(mc MachineCfg) {
 		if ce.Notified && !ce.Maint {
 			m.notify(notice{"syson", "m:" + mc.ID, "🟢 Rechner wieder erreichbar: " + mc.Name,
 				m.sysInfo(mc, fmt.Sprintf("Hat sich %s nicht gemeldet (%s – %s)", fmtDurShort(ce.End-ce.Start),
-					time.UnixMilli(ce.Start).Format("15:04"), time.UnixMilli(ce.End).Format("15:04"))), mc.Org})
+					time.UnixMilli(ce.Start).Format("15:04"), time.UnixMilli(ce.End).Format("15:04"))), mc.Org, ""})
 		}
 	}
 }
@@ -556,7 +558,7 @@ func (m *Monitor) ingestSys(mc MachineCfg, c SysCfg, samples []sysSample) {
 				if cd.ev == nil && s.T-cd.since >= ck.hold {
 					cd.ev = m.newMachineEvent(mc, ck.label+" · "+name, cd.since, maint)
 					if !maint && ck.push {
-						notes = append(notes, notice{"syswarn", "m:" + mc.ID, ck.title, m.sysInfo(mc, ck.body), mc.Org})
+						notes = append(notes, notice{"syswarn", "m:" + mc.ID, ck.title, m.sysInfo(mc, ck.body), mc.Org, ""})
 					} else {
 						m.evMu.Lock()
 						cd.ev.Notified = false
@@ -570,7 +572,7 @@ func (m *Monitor) ingestSys(mc MachineCfg, c SysCfg, samples []sysSample) {
 					cd.ev = nil
 					if ce.Notified && ck.ok != "" {
 						notes = append(notes, notice{"sysok", "m:" + mc.ID, ck.ok,
-							m.sysInfo(mc, "War "+fmtDurShort(ce.End-ce.Start)+" auffällig."), mc.Org})
+							m.sysInfo(mc, "War "+fmtDurShort(ce.End-ce.Start)+" auffällig."), mc.Org, ""})
 					}
 				}
 			}
@@ -599,7 +601,7 @@ func (m *Monitor) ingestSys(mc MachineCfg, c SysCfg, samples []sysSample) {
 						why = " Fehler: " + h.Err
 					}
 					notes = append(notes, notice{"syswarn", "m:" + mc.ID, "🔴 Neustart fehlgeschlagen: " + svc + " (" + name + ")",
-						m.sysInfo(mc, fmt.Sprintf("Der Dienst „%s“ ist gestoppt, %d automatische Neustarts sind fehlgeschlagen.%s Bitte selbst prüfen.", svc, h.Try, why)), mc.Org})
+						m.sysInfo(mc, fmt.Sprintf("Der Dienst „%s“ ist gestoppt, %d automatische Neustarts sind fehlgeschlagen.%s Bitte selbst prüfen.", svc, h.Try, why)), mc.Org, ""})
 				}
 			default:
 				e := m.newMachineEvent(mc, fmt.Sprintf("Dienst %s: Neustart-Versuch %d fehlgeschlagen", svc, h.Try)+" · "+name, h.T, maint)
@@ -620,7 +622,7 @@ func (m *Monitor) ingestSys(mc MachineCfg, c SysCfg, samples []sysSample) {
 				m.closeSiteEvent(m.newMachineEvent(mc, "Neustart ausstehend · "+name, sm.rebootAt, maint), s.T)
 				if !maint {
 					notes = append(notes, notice{"syswarn", "m:" + mc.ID, "🟠 Neustart ausstehend: " + name,
-						m.sysInfo(mc, fmt.Sprintf("Der Rechner wartet seit über %d Tagen auf einen Neustart (z. B. nach Updates).", c.RebootDays)), mc.Org})
+						m.sysInfo(mc, fmt.Sprintf("Der Rechner wartet seit über %d Tagen auf einen Neustart (z. B. nach Updates).", c.RebootDays)), mc.Org, ""})
 				}
 			}
 		case 0:
@@ -699,7 +701,8 @@ func (m *Monitor) checkMachines(nowMs int64) {
 			sm.seen = serverStart.UnixMilli()
 		}
 		var start *Event
-		if sm.seen > 0 && nowMs-sm.seen > 5*60000 && sm.offEv == nil {
+		alert := mc.wantsOffAlert(sm.cur)
+		if sm.seen > 0 && nowMs-sm.seen > 5*60000 && sm.offEv == nil && alert {
 			maint := m.machineInMaint(mc, time.UnixMilli(nowMs))
 			sm.offEv = m.newMachineEvent(mc, "Rechner meldet sich nicht · "+mc.Name, sm.seen, maint)
 			start = sm.offEv
@@ -708,7 +711,7 @@ func (m *Monitor) checkMachines(nowMs int64) {
 		sm.mu.Unlock()
 		if start != nil && !start.Maint {
 			m.notify(notice{"sysoff", "m:" + mc.ID, "⚪️ Rechner meldet sich nicht: " + mc.Name,
-				m.sysInfo(mc, "Seit "+time.UnixMilli(seen).Format("15:04")+" keine Meldung (ausgeschaltet, kein Netz oder Agent beendet?)"), mc.Org})
+				m.sysInfo(mc, "Seit "+time.UnixMilli(seen).Format("15:04")+" keine Meldung (ausgeschaltet, kein Netz oder Agent beendet?)"), mc.Org, ""})
 		}
 	}
 }
@@ -781,6 +784,8 @@ func (m *Monitor) machineView(mc MachineCfg, siteOn bool) machineView {
 		}
 	}
 	switch {
+	case !v.Online && !mc.wantsOffAlert(r):
+		v.Status = "sleep" // Arbeitsplatz ausgeschaltet – kein Problem
 	case sm.offEv != nil || !v.Online:
 		v.Status = "off"
 	case bad:
@@ -877,6 +882,7 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 		Group *string `json:"group"`
 		// Dienste: "site" = Liste des Standorts, "own" = eigene Liste (Services)
 		SvcMode  string   `json:"svcMode"`
+		OffAlert *string  `json:"offAlert"` // "", "on", "off"
 		Services []string `json:"services"`
 	}
 	if r.Method == http.MethodPost {
@@ -918,6 +924,9 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 				if n := strings.TrimSpace(*body.Name); n != "" && len(n) <= 80 {
 					x.Name = n
 				}
+			}
+			if body.OffAlert != nil && (*body.OffAlert == "" || *body.OffAlert == "on" || *body.OffAlert == "off") {
+				x.OffAlert = *body.OffAlert
 			}
 			switch body.SvcMode {
 			case "site":
@@ -1009,4 +1018,21 @@ func (m *Monitor) machineOnline(mc MachineCfg) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	return sm.seen > 0 && time.Now().UnixMilli()-sm.seen < 3*60000
+}
+
+// isServerOS: Windows Server oder Linux (meist Server) – Mac und Windows-Clients nicht.
+func isServerOS(os string) bool {
+	l := strings.ToLower(os)
+	return strings.Contains(l, "server") || (l != "" && !strings.Contains(l, "windows") && !strings.Contains(l, "mac"))
+}
+
+// wantsOffAlert: Meldung, wenn sich der Rechner nicht meldet?
+func (mc MachineCfg) wantsOffAlert(cur *sysReport) bool {
+	switch mc.OffAlert {
+	case "on":
+		return true
+	case "off":
+		return false
+	}
+	return cur == nil || isServerOS(cur.OS)
 }

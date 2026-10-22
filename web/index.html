@@ -400,6 +400,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="dot" id="m-dot"></span>
     <h1 id="m-name"></h1>
     <span class="muted" id="m-sub"></span>
+    <select class="ed" id="m-off" title="Meldung, wenn sich der Rechner nicht meldet" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"><option value="">🔔 Aus-Meldung: automatisch</option><option value="on">🔔 Aus-Meldung: immer</option><option value="off">🔕 Aus-Meldung: nie</option></select>
     <button class="btn sm ed" id="m-upd" style="margin-left:auto;display:none">⬆️ Updates</button>
     <button class="btn sm ed" id="m-script" style="display:none">▶ Script</button>
     <button class="btn sm ed" id="m-reboot" style="display:none">🔄 Neu starten</button>
@@ -1039,9 +1040,14 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
           <label class="check"><input type="checkbox" name="spike"> Latenzspitzen</label>
           <label class="check" id="af-repf"><input type="checkbox" name="report"> Monatsbericht (PDF, am 1.)</label>
         </div><small class="muted">Paketverlust und Spitzen höchstens alle 10 Minuten je Host.</small></div>
-      <div class="full" id="af-groupsf"><b style="font-size:13px">Kunden</b> <span class="muted" style="font-size:12px">(nur Meldungen dieser Kunden; keiner ausgewählt = alle)</span>
+      <div class="full muted" style="font-size:12.5px">Auswahl unten: nichts angehakt = alle Meldungen. Sonst nur Meldungen der angehakten Kunden, Gruppen, Rechner und Hosts.</div>
+      <div class="full" id="af-custf"><b style="font-size:13px">Kunden</b> <span class="muted" style="font-size:12px">(alles an ihren Standorten: Hosts, Rechner, UniFi, Agent offline)</span>
+        <div id="af-custs" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
+      <div class="full" id="af-groupsf"><b style="font-size:13px">Gruppen</b>
         <div id="af-groups" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
-      <div class="full"><b style="font-size:13px">Hosts</b> <span class="muted" style="font-size:12px">(keiner ausgewählt = alle)</span>
+      <div class="full" id="af-machf"><b style="font-size:13px">Rechner</b>
+        <div id="af-machs" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
+      <div class="full"><b style="font-size:13px">Hosts</b>
         <div id="af-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:140px;overflow:auto"></div></div>
       <label class="field full">Wann senden<select name="escalate"><option value="0">Sofort</option><option value="5">Eskalation: nach 5 Minuten</option><option value="10">Eskalation: nach 10 Minuten</option><option value="15">Eskalation: nach 15 Minuten</option><option value="30">Eskalation: nach 30 Minuten</option><option value="60">Eskalation: nach 60 Minuten</option></select><small>Eskalation: nur Ausfälle, die dann noch bestehen und von niemandem quittiert wurden (z. B. an Chef oder Bereitschaft).</small></label>
       <label class="check full"><input type="checkbox" name="disabled"> Pausiert</label>
@@ -1149,7 +1155,7 @@ function pct(l,n,dec){ if(!n) return '–'; const v=l*100/n; return v.toLocaleSt
 function agg(a){ return a&&a!==0? {n:a[0],lost:a[1],spk:a[2],avg:a[3],min:a[4],max:a[5]} : {n:0,lost:0,spk:0,avg:-1,min:-1,max:-1}; }
 async function api(p,opt){ const r=await fetch(p,opt); if(r.status===401){location.href='/login';throw new Error('401');} if(!r.ok){throw new Error((await r.text())||r.statusText);} const ct=r.headers.get('content-type')||''; return ct.includes('json')? r.json() : r.text(); }
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200);}
-const MSTATUS={ok:['OK','--ok'],warn:['Warnung','--warn'],bad:['Problem','--bad'],off:['Meldet sich nicht','--bad'],unknown:['Warte auf Daten','--off'],disabled:['Überwachung aus','--off']};
+const MSTATUS={sleep:['Ausgeschaltet','--off'],ok:['OK','--ok'],warn:['Warnung','--warn'],bad:['Problem','--bad'],off:['Meldet sich nicht','--bad'],unknown:['Warte auf Daten','--off'],disabled:['Überwachung aus','--off']};
 const MBAD=m=>['bad','warn','off'].includes(m.status);
 const fmtBytes=b=>{ if(!b) return '0 GB'; const g=b/1073741824; return g>=1024?(g/1024).toLocaleString('de-DE',{maximumFractionDigits:1})+' TB':g>=100?Math.round(g)+' GB':g.toLocaleString('de-DE',{maximumFractionDigits:1})+' GB'; };
 const STATUS={ok:['OK','--ok'],spike:['Latenzspitze','--warn'],loss:['Paketverlust','--loss'],down:['Keine Antwort','--bad'],stale:['Keine Daten','--off'],siteoff:['Standort offline','--off'],paused:['Pausiert','--off'],unknown:['Warte auf Daten','--off']};
@@ -2105,7 +2111,7 @@ async function loadAlerts(force){ if(!force&&AL&&Date.now()-alAt<15000) return r
 function renderAlerts(){ if(!AL) return; const cs=AL.channels||[];
   const ev=c=>c.escalate?`<span class="tag warn">Eskalation nach ${c.escalate} min</span>`:[c.outage&&'Ausfall',c.offline&&'Standort',c.loss&&'Verlust',c.spike&&'Spitzen',c.report&&'Bericht'].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join(' ');
   const stat=c=>c.disabled?'<span class="tag">pausiert</span>':c.lastErr&&c.errAt>(c.lastOK||0)?`<span class="tag bad" title="${esc(c.lastErr)}">Fehler</span> <span class="muted" style="font-size:12px">${esc(c.lastErr.slice(0,60))}</span>`:c.lastOK?`<span class="tag ok">zuletzt ${fmtDT(c.lastOK,false)}</span>`:'<span class="muted">–</span>';
-  const gname=id=>((S.state&&S.state.groups)||[]).find(g=>g.id===id); const kund=c=>(c.groups||[]).map(id=>gname(id)).filter(Boolean).map(g=>`<span class="tag">👥 ${esc(g.name)}</span>`).join(' ');
+  const gname=id=>((S.state&&S.state.groups)||[]).find(g=>g.id===id); const kund=c=>(c.customers||[]).map(id=>((S.state&&S.state.customers)||[]).find(x=>x.id===id)).filter(Boolean).map(x=>`<span class="tag">🏢 ${esc(x.name)}</span>`).join(' ')+' '+(c.groups||[]).map(id=>gname(id)).filter(Boolean).map(g=>`<span class="tag">📁 ${esc(g.name)}</span>`).join(' ')+((c.machines||[]).length?` <span class="tag">💻 ${c.machines.length} Rechner</span>`:'')+((c.hosts||[]).length?` <span class="tag">${c.hosts.length} Hosts</span>`:'');
   const tgt=c=>c.type==='email'?esc(c.target):c.type==='telegram'?'Chat '+esc(c.target):esc(c.target.replace(/^https:\/\/([^/]+).*/,'$1'));
   const sig=JSON.stringify(AL); if($('#al-tbl').dataset.sig===sig) return; $('#al-tbl').dataset.sig=sig;
   $('#al-tbl').innerHTML=!AL.allowed&&!cs.length?`<tr><td class="empty">Alarme per E-Mail, Teams, Telegram und Webhook gibt es ab dem Paket <b>Basis</b>. <a href="#/billing">Paket ansehen →</a></td></tr>`:
@@ -2140,6 +2146,10 @@ function openAlert(id){ const c=id&&AL.channels.find(x=>x.id===id);
   const gsel=new Set(c&&c.groups||[]), gs=S.state.groups||[];
   $('#af-groupsf').style.display=gs.length?'':'none';
   $('#af-groups').innerHTML=gs.map(g=>`<label class="check"><input type="checkbox" value="${g.id}"${gsel.has(g.id)?' checked':''}> ${esc(g.name)}</label>`).join('');
+  const csel=new Set(c&&c.customers||[]), cs=S.state.customers||[]; $('#af-custf').style.display=cs.length?'':'none';
+  $('#af-custs').innerHTML=cs.map(x=>`<label class="check"><input type="checkbox" value="${x.id}"${csel.has(x.id)?' checked':''}> ${esc(x.name)}</label>`).join('');
+  const msel=new Set(c&&c.machines||[]), ms=S.state.machines||[]; $('#af-machf').style.display=ms.length?'':'none';
+  $('#af-machs').innerHTML=ms.map(x=>`<label class="check"><input type="checkbox" value="${esc(x.id)}"${msel.has(x.id)?' checked':''}> ${esc(x.name)} <span class="muted">${esc(siteName(x.site))}</span></label>`).join('');
   $('#af-del').style.display=c?'':'none'; syncAlertForm(); adlg.showModal(); }
 af.type.onchange=syncAlertForm;
 $('#add-alert').onclick=()=>openAlert();
@@ -2153,7 +2163,7 @@ $('#af-tgfind').onclick=async()=>{ $('#af-tgres').textContent='suche …';
 af.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:af.dataset.id,type:af.type.value,name:af.name.value.trim(),target:af.target.value.trim(),secret:af.secret.value.trim(),
     outage:af.outage.checked,offline:af.offline.checked,loss:af.loss.checked,spike:af.spike.checked,report:af.report.checked&&af.type.value==='email',disabled:af.disabled.checked,escalate:+af.escalate.value,
-    hosts:$$('#af-hosts input:checked').map(i=>i.value), groups:$$('#af-groups input:checked').map(i=>i.value)};
+    hosts:$$('#af-hosts input:checked').map(i=>i.value), groups:$$('#af-groups input:checked').map(i=>i.value), customers:$$('#af-custs input:checked').map(i=>i.value), machines:$$('#af-machs input:checked').map(i=>i.value)};
   try{ const r=await api('/api/alerts',{method:'POST',body:JSON.stringify(body)}); adlg.close(); await loadAlerts(true);
     if(!body.id&&await uiConfirm('Gespeichert. Jetzt eine Testnachricht senden?')){ try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:r.id})}); toast('Testnachricht gesendet'); }catch(err){ uiAlert('Test fehlgeschlagen: '+err.message); } loadAlerts(true); }
   }catch(err){ $('#af-err').textContent=err.message; } });
@@ -2537,6 +2547,7 @@ function renderMachine(){ const d=MD.data||machineOf(MD.id); if(!d){ $('#m-name'
   const m=machineOf(MD.id)||d, r=(MD.data&&MD.data.cur)||m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
   $('#m-dot').style.background=`var(${col})`; $('#m-name').textContent='💻 '+m.name;
   $('#m-svcsrc').textContent=m.services?'eigene Liste für diesen Rechner':'wie Standort';
+  { const sel=$('#m-off'), srv=/server/i.test(r.os||'')||(r.os&&!/windows|mac/i.test(r.os)); sel.options[0].textContent='🔔 Aus-Meldung: automatisch ('+(srv?'Server → ja':'Arbeitsplatz → nein')+')'; if(document.activeElement!==sel) sel.value=m.offAlert||''; }
   { const so=S.state.sites.find(x=>x.id===m.site), ok=siteActOK(so); $('#m-upd').style.display=ok?'':'none'; $('#m-reboot').style.display=ok?'':'none'; $('#m-script').style.display=ok?'':'none'; $('#m-mute').style.marginLeft=ok?'0':'auto';
     const acts=MD.acts||[]; $('#m-actw').style.display=ok||acts.length?'':'none'; const t=$('#m-acts'); t.innerHTML=actRows(acts,false); bindActRows(t,acts); }
   $('#m-sub').textContent=[r.os,m.host&&m.host!==m.name?m.host:'',siteName(m.site),m.sysOnly?'Agent „nur Rechner“':'Standort-Agent',m.at?'Stand '+fmtTime(m.at,false):''].filter(Boolean).join(' · ');
@@ -2610,8 +2621,10 @@ function renderHealList(){ const svcs=syf.services.value.split('\n').map(x=>x.tr
 syf.services.addEventListener('input',renderHealList); syf.selfHeal.addEventListener('change',renderHealList);
 function renderSysMachines(){ const st=S.state, ms=((st&&st.machines)||[]).filter(m=>m.site===SY.site), gs=(st&&st.groups)||[];
   $('#sy-machines').innerHTML=ms.length?ms.map(m=>`<div class="mrow"><span class="dot" style="background:var(${(MSTATUS[m.status]||MSTATUS.unknown)[1]})"></span><b title="${esc(m.host||'')}">${esc(m.name)}</b><span class="muted" style="font-size:12px">${m.sysOnly?'nur Rechner':'Standort-Agent'}</span>
+    <select class="ed" data-moff="${esc(m.id)}" title="Meldung, wenn der Rechner aus ist"><option value="">Aus-Meldung: auto</option><option value="on"${m.offAlert==='on'?' selected':''}>Aus-Meldung: immer</option><option value="off"${m.offAlert==='off'?' selected':''}>Aus-Meldung: nie</option></select>
     <select class="ed" data-mgrp="${esc(m.id)}"><option value="">Ohne Gruppe</option>${gs.map(g=>`<option value="${esc(g.id)}"${g.id===m.group?' selected':''}>${esc(g.name)}</option>`).join('')}</select>
     <button type="button" class="btn sm ed" data-mren="${esc(m.id)}">Umbenennen</button><button type="button" class="btn sm danger ed" data-mdel="${esc(m.id)}">Entfernen</button></div>`).join(''):'<div class="muted" style="font-size:13px">Noch keine Rechner gemeldet. Nach dem Einschalten meldet sich der Rechner mit dem Agent innerhalb einer Minute.</div>';
+  $$('#sy-machines [data-moff]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:sel.dataset.moff,offAlert:sel.value})}); toast('Gespeichert'); await refreshState(); }catch(e){ uiAlert(e.message); } });
   $$('#sy-machines [data-mgrp]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:sel.dataset.mgrp,group:sel.value})}); toast('Gruppe gespeichert'); await refreshState(); }catch(e){ uiAlert(e.message); } });
   $$('#sy-machines [data-mren]').forEach(b=>b.onclick=async()=>{ const m=machineOf(b.dataset.mren); const n=await uiPrompt('Neuer Name:',m?m.name:''); if(!n) return; try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:b.dataset.mren,name:n})}); await refreshState(); renderSysMachines(); }catch(e){ uiAlert(e.message); } });
   $$('#sy-machines [data-mdel]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Rechner entfernen? Solange dort der Agent läuft, erscheint er wieder.')) return; try{ await api('/api/machine?id='+encodeURIComponent(b.dataset.mdel),{method:'DELETE'}); await refreshState(); renderSysMachines(); }catch(e){ uiAlert(e.message); } }); }
@@ -2696,6 +2709,7 @@ sc2f.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='o
   try{ await api('/api/scripts',{method:'POST',body:JSON.stringify({id:SCR?SCR.id:'',name:sc2f.name.value,lang:sc2f.lang.value,timeout:+sc2f.timeout.value||300,desc:sc2f.desc.value,body:sc2f.body.value,check:sc2f.check.checked,code:sc2f.code.value})}); sc2dlg.close(); toast('Script gespeichert'); loadUpdates(); }catch(err){ $('#sc2-err').textContent=err.message; } });
 $('#sc2-del').onclick=async()=>{ if(!SCR) return; const c=await uiPrompt('Script „'+SCR.name+'“ löschen? Zur Bestätigung den Zwei-Faktor-Code eingeben:'); if(!c) return; try{ await api('/api/scripts?id='+SCR.id+'&code='+encodeURIComponent(c),{method:'DELETE'}); sc2dlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
 function actionOptsTxt(cat,rb){ return (cat==='all'?'alle Updates':'Sicherheitsupdates')+' · '+(rb==='ifneeded'?'Neustart wenn nötig':'kein Neustart'); }
+$('#m-off').onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:MD.id,offAlert:$('#m-off').value})}); toast('Gespeichert'); await refreshState(); renderMachine(); }catch(e){ uiAlert(e.message); } };
 $('#m-svcedit').onclick=()=>{ const m=machineOf(MD.id); if(!m) return; const so=S.state.sites.find(x=>x.id===m.site)||{}, ss=(so.sys&&so.sys.services)||[], f=$('#ms-form');
   $('#ms-title').textContent='Dienste · '+m.name; $('#ms-site').textContent=ss.length?'('+ss.join(', ')+')':'(Standort überwacht keine Dienste)'; $('#ms-err').textContent='';
   const own=!!m.services; f.mode.value=own?'own':'site'; f.services.value=(own?m.services:ss).join('\n'); f.services.disabled=!own;

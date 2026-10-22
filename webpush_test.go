@@ -100,7 +100,7 @@ func TestWebPush(t *testing.T) {
 	}
 	go s.m.pushLoop()
 	// Ausfall über pushLoop, danach Abo abgelaufen → Gerät wird entfernt
-	s.m.notify(notice{"outage", "h1", "🔴 Router antwortet nicht", "x", "default"})
+	s.m.notify(notice{"outage", "h1", "🔴 Router antwortet nicht", "x", "default", ""})
 	time.Sleep(300 * time.Millisecond)
 	mu.Lock()
 	n := len(got)
@@ -109,7 +109,7 @@ func TestWebPush(t *testing.T) {
 	if n != 2 {
 		t.Fatal("Ausfall nicht per Web-Push gesendet", n)
 	}
-	s.m.notify(notice{"outage", "h1", "nochmal", "x", "default"})
+	s.m.notify(notice{"outage", "h1", "nochmal", "x", "default", ""})
 	time.Sleep(300 * time.Millisecond)
 	s.m.mu.RLock()
 	left := len(s.m.cfg.Devices)

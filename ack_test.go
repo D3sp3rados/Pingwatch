@@ -48,8 +48,8 @@ func TestAckAndEscalation(t *testing.T) {
 	if code != 200 || !strings.Contains(body, "Techniker") {
 		t.Fatal(code, body)
 	}
-	s.m.dispatchAlerts(notice{"outage", h1.ID, "Router aus", "x", "default"})
-	s.m.dispatchAlerts(notice{"outage", h2.ID, "NAS aus", "x", "default"})
+	s.m.dispatchAlerts(notice{"outage", h1.ID, "Router aus", "x", "default", ""})
+	s.m.dispatchAlerts(notice{"outage", h2.ID, "NAS aus", "x", "default", ""})
 	time.Sleep(200 * time.Millisecond)
 	mu.Lock()
 	n := len(got)
@@ -58,8 +58,8 @@ func TestAckAndEscalation(t *testing.T) {
 	if n != 1 || !strings.Contains(joined, "Router") || !strings.Contains(joined, "nicht quittiert") {
 		t.Fatalf("Eskalation: %s", joined)
 	}
-	s.m.dispatchAlerts(notice{"recovered", h1.ID, "Router wieder da", "x", "default"})
-	s.m.dispatchAlerts(notice{"recovered", h2.ID, "NAS wieder da", "x", "default"})
+	s.m.dispatchAlerts(notice{"recovered", h1.ID, "Router wieder da", "x", "default", ""})
+	s.m.dispatchAlerts(notice{"recovered", h2.ID, "NAS wieder da", "x", "default", ""})
 	time.Sleep(100 * time.Millisecond)
 	mu.Lock()
 	defer mu.Unlock()

@@ -277,6 +277,27 @@ func TestSysIngest(t *testing.T) {
 	sm3.mu.Lock()
 	sm3.seen = now - 10*60000
 	sm3.mu.Unlock()
+	// Arbeitsplatz (kein Server-Betriebssystem) meldet „aus“ standardmäßig nicht
+	sm3.mu.Lock()
+	sm3.cur.OS = "Windows 11 Pro"
+	sm3.at = now - 10*60000
+	sm3.mu.Unlock()
+	m.checkMachines(now)
+	if n := drainNotices(m); len(n) != 0 {
+		t.Fatalf("Arbeitsplatz aus gemeldet: %+v", n)
+	}
+	if v := m.machineView(m3, true); v.Status != "sleep" {
+		t.Fatalf("Arbeitsplatz aus: %s", v.Status)
+	}
+	// … außer es ist ausdrücklich eingeschaltet
+	m.mu.Lock()
+	for i := range m.cfg.Machines {
+		if m.cfg.Machines[i].ID == m3.ID {
+			m.cfg.Machines[i].OffAlert = "on"
+		}
+	}
+	m.mu.Unlock()
+	m3, _ = m.machineByID(m3.ID)
 	m.checkMachines(now)
 	n = drainNotices(m)
 	if len(n) != 1 || n[0].kind != "sysoff" {

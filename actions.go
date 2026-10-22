@@ -226,7 +226,7 @@ func (m *Monitor) actionJobDone(jobID, kind, errText string, raw json.RawMessage
 	if mc, ok := m.machineByID(cp.Machine); ok {
 		body = m.sysInfo(mc, cp.Result)
 	}
-	m.notify(notice{"action", "m:" + cp.Machine, title, body, cp.Org})
+	m.notify(notice{"action", "m:" + cp.Machine, title, body, cp.Org, ""})
 }
 
 // scriptChecks: letzter Zustand je Script-Prüfung und Rechner (true = fehlgeschlagen).
@@ -247,7 +247,7 @@ func (m *Monitor) scriptCheckNote(a ActionLog, bad bool, why string) {
 			return
 		}
 	}
-	m.notify(notice{"syswarn", "m:" + a.Machine, title, body, a.Org})
+	m.notify(notice{"syswarn", "m:" + a.Machine, title, body, a.Org, ""})
 }
 
 // actionJobStarted: Agent hat den Auftrag abgeholt.

@@ -26,44 +26,91 @@ import (
 
 // Channel ist ein Alarmweg einer Organisation: E-Mail, Microsoft Teams, Telegram oder Webhook.
 type Channel struct {
-	ID       string   `json:"id"`
-	Org      string   `json:"org"`
-	Type     string   `json:"type"` // email, teams, telegram, webhook
-	Name     string   `json:"name"`
-	Target   string   `json:"target"`           // E-Mail-Adressen (Komma), Webhook-URL oder Telegram-Chat-ID
-	Secret   string   `json:"secret,omitempty"` // Telegram-Bot-Token (optional) bzw. Webhook-Signaturschlüssel
-	Outage   bool     `json:"outage"`
-	Loss     bool     `json:"loss"`
-	Spike    bool     `json:"spike"`
-	Offline  bool     `json:"offline"`
-	Report   bool     `json:"report"`           // Monatsbericht (nur E-Mail)
-	Hosts    []string `json:"hosts"`            // leer = alle
-	Groups   []string `json:"groups,omitempty"` // Kunden (Gruppen) – zusätzlich zu Hosts; leer = alle
-	Disabled bool     `json:"disabled,omitempty"`
-	Escalate int      `json:"escalate,omitempty"` // Minuten: nur Ausfälle, die so lange offen und nicht quittiert sind
-	Created  int64    `json:"created"`
+	ID        string   `json:"id"`
+	Org       string   `json:"org"`
+	Type      string   `json:"type"` // email, teams, telegram, webhook
+	Name      string   `json:"name"`
+	Target    string   `json:"target"`           // E-Mail-Adressen (Komma), Webhook-URL oder Telegram-Chat-ID
+	Secret    string   `json:"secret,omitempty"` // Telegram-Bot-Token (optional) bzw. Webhook-Signaturschlüssel
+	Outage    bool     `json:"outage"`
+	Loss      bool     `json:"loss"`
+	Spike     bool     `json:"spike"`
+	Offline   bool     `json:"offline"`
+	Report    bool     `json:"report"`              // Monatsbericht (nur E-Mail)
+	Hosts     []string `json:"hosts"`               // leer = alle
+	Groups    []string `json:"groups,omitempty"`    // Kunden (Gruppen) – zusätzlich zu Hosts; leer = alle
+	Machines  []string `json:"machines,omitempty"`  // Rechner (IDs) – zusätzlich; leer = alle
+	Customers []string `json:"customers,omitempty"` // Kunden (ordnen Standorte) – zusätzlich; leer = alle
+	Disabled  bool     `json:"disabled,omitempty"`
+	Escalate  int      `json:"escalate,omitempty"` // Minuten: nur Ausfälle, die so lange offen und nicht quittiert sind
+	Created   int64    `json:"created"`
 }
 
-func (c Channel) wants(n notice) bool { return c.wantsIn(n, "") }
+func (c Channel) wants(n notice) bool { return c.wantsIn(n, "", "") }
 
-// wantsIn prüft zusätzlich die Kunden-Auswahl (group = Gruppe des Hosts der Meldung).
-func (c Channel) wantsIn(n notice, group string) bool {
+func strIn(l []string, v string) bool {
+	for _, x := range l {
+		if x == v && v != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// wantsIn prüft Art der Meldung und Auswahl (Hosts, Gruppen, Rechner, Kunden).
+// group = Gruppe des Hosts/Rechners, cust = Kunde des Standorts der Meldung.
+// Ohne jede Auswahl gehen alle Meldungen raus.
+func (c Channel) wantsIn(n notice, group, cust string) bool {
 	if c.Disabled {
 		return false
 	}
-	if len(c.Groups) > 0 && n.hostID != "" {
-		for _, g := range c.Groups {
-			if g == group && group != "" {
-				d := Device{Outage: c.Outage, Loss: c.Loss, Spike: c.Spike, Offline: c.Offline}
-				return d.wants(n)
+	if !(Device{Outage: c.Outage, Loss: c.Loss, Spike: c.Spike, Offline: c.Offline}).wants(n) {
+		return false
+	}
+	if len(c.Hosts)+len(c.Groups)+len(c.Machines)+len(c.Customers) == 0 {
+		return true
+	}
+	if strIn(c.Customers, cust) || strIn(c.Groups, group) {
+		return true
+	}
+	switch {
+	case strings.HasPrefix(n.hostID, "m:"):
+		// Rechner: gewählt – oder (wie bisher) keine Rechner-/Kunden-/Gruppen-Auswahl, nur Hosts
+		return strIn(c.Machines, n.hostID[2:]) || len(c.Machines)+len(c.Customers)+len(c.Groups) == 0
+	case n.hostID != "":
+		return strIn(c.Hosts, n.hostID)
+	default:
+		// Standort-Meldungen (Agent offline, UniFi): wie bisher, außer es sind Kunden oder Rechner gewählt
+		return len(c.Customers)+len(c.Machines) == 0
+	}
+}
+
+// noticeCustomerLocked: Kunde zum Standort einer Meldung (über Host, Rechner oder Standort).
+func (m *Monitor) noticeCustomerLocked(n notice) string {
+	site := n.site
+	switch {
+	case strings.HasPrefix(n.hostID, "m:"):
+		for _, mc := range m.cfg.Machines {
+			if mc.ID == n.hostID[2:] {
+				site = mc.Site
 			}
 		}
-		if len(c.Hosts) == 0 {
-			return false // Host gehört zu keinem gewählten Kunden
+	case n.hostID != "":
+		for _, h := range m.cfg.Hosts {
+			if h.ID == n.hostID {
+				site = h.Site
+			}
 		}
 	}
-	d := Device{Outage: c.Outage, Loss: c.Loss, Spike: c.Spike, Offline: c.Offline, Hosts: c.Hosts}
-	return d.wants(n)
+	if site == "" {
+		return ""
+	}
+	for _, sc := range m.cfg.Sites {
+		if sc.ID == site {
+			return sc.Customer
+		}
+	}
+	return ""
 }
 
 type chanStatus struct {
@@ -109,9 +156,9 @@ func (m *Monitor) dispatchAlerts(n notice) {
 	}
 	m.mu.RLock()
 	var chans []Channel
-	group := m.hostGroupLocked(n.hostID)
+	group, cust := m.hostGroupLocked(n.hostID), m.noticeCustomerLocked(n)
 	for _, c := range m.cfg.Channels {
-		if c.Org == n.org && c.wantsIn(n, group) {
+		if c.Org == n.org && c.wantsIn(n, group, cust) {
 			chans = append(chans, c)
 		}
 	}
@@ -705,7 +752,7 @@ func (s *Server) handleAlertTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := s.m.orgByID(c.Org)
-	err := sendAlert(*c, notice{"test", "", "✅ PingWacht-Test", "Dieser Alarmweg funktioniert. Ab jetzt kommen hier die Meldungen an.", c.Org}, time.Now(), o.Name)
+	err := sendAlert(*c, notice{"test", "", "✅ PingWacht-Test", "Dieser Alarmweg funktioniert. Ab jetzt kommen hier die Meldungen an.", c.Org, ""}, time.Now(), o.Name)
 	setChanStatus(c.ID, err)
 	if err != nil {
 		http.Error(w, err.Error(), 502)

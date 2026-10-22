@@ -187,7 +187,7 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 					cp := m.closeSiteEvent(e, bootAt)
 					if !inMaint {
 						notes = append(notes, notice{"reboot", "", "🔄 UniFi: " + devLabel(d) + " neu gestartet",
-							fmt.Sprintf("Neustart um %s (%s)", time.UnixMilli(bootAt).Format("15:04"), site.Name) + unifiVia(site), site.Org})
+							fmt.Sprintf("Neustart um %s (%s)", time.UnixMilli(bootAt).Format("15:04"), site.Name) + unifiVia(site), site.Org, site.ID})
 					}
 					_ = cp
 				}
@@ -205,13 +205,13 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 					e := m.newDevEvent(site, "wan", devLabel(d)+" · "+w.Name, key, nowMs, inMaint)
 					st.wanOpen[wk] = e
 					if !inMaint {
-						notes = append(notes, notice{"wandown", "", "🔴 " + w.Name + " offline: " + devLabel(d), "Leitung " + w.Name + " ist getrennt (" + site.Name + ")" + unifiVia(site), site.Org})
+						notes = append(notes, notice{"wandown", "", "🔴 " + w.Name + " offline: " + devLabel(d), "Leitung " + w.Name + " ist getrennt (" + site.Name + ")" + unifiVia(site), site.Org, site.ID})
 					}
 				case w.Up && st.wanOpen[wk] != nil:
 					ce := m.closeSiteEvent(st.wanOpen[wk], nowMs)
 					delete(st.wanOpen, wk)
 					if ce.Notified {
-						notes = append(notes, notice{"wanup", "", "🟢 " + w.Name + " wieder online: " + devLabel(d), "War " + fmtDurShort(ce.End-ce.Start) + " getrennt" + unifiVia(site), site.Org})
+						notes = append(notes, notice{"wanup", "", "🟢 " + w.Name + " wieder online: " + devLabel(d), "War " + fmtDurShort(ce.End-ce.Start) + " getrennt" + unifiVia(site), site.Org, site.ID})
 					}
 				}
 				if w.Latency > 0 {
@@ -327,14 +327,14 @@ func (m *Monitor) unifiNotify(site SiteCfg, starts, ends []Event, errText string
 				body = "Die UniFi-Konsole ist über die UniFi-Cloud nicht erreichbar (Internet beim Kunden weg?): " + errText
 			}
 		}
-		m.notify(notice{"devoff", "", "🔴 UniFi: " + e.HostName + " offline", body + unifiVia(site), site.Org})
+		m.notify(notice{"devoff", "", "🔴 UniFi: " + e.HostName + " offline", body + unifiVia(site), site.Org, site.ID})
 	}
 	for _, e := range ends {
 		if !e.Notified {
 			continue
 		}
 		m.notify(notice{"devon", "", "🟢 UniFi: " + e.HostName + " wieder online",
-			fmt.Sprintf("War %s offline (%s)", fmtDurShort(e.End-e.Start), site.Name) + unifiVia(site), site.Org})
+			fmt.Sprintf("War %s offline (%s)", fmtDurShort(e.End-e.Start), site.Name) + unifiVia(site), site.Org, site.ID})
 	}
 }
 

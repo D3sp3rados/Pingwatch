@@ -193,6 +193,6 @@ func (m *Monitor) checkCerts() {
 		if m.inMaint(cfg.Org, cfg.ID, now) {
 			continue
 		}
-		m.notify(notice{"cert", cfg.ID, "🔐 Zertifikat " + cfg.Name, body, cfg.Org})
+		m.notify(notice{"cert", cfg.ID, "🔐 Zertifikat " + cfg.Name, body, cfg.Org, ""})
 	}
 }

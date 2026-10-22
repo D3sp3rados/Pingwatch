@@ -167,12 +167,12 @@ func (m *Monitor) ingestIfs(h *Host, t int64, ifs []ifSample, errText string) {
 	}
 	for _, e := range starts {
 		if !e.Maint {
-			m.notify(notice{"portdown", cfg.ID, "🔴 Port down: " + e.HostName, "Schnittstelle meldet „down“ seit " + time.UnixMilli(e.Start).Format("15:04"), cfg.Org})
+			m.notify(notice{"portdown", cfg.ID, "🔴 Port down: " + e.HostName, "Schnittstelle meldet „down“ seit " + time.UnixMilli(e.Start).Format("15:04"), cfg.Org, ""})
 		}
 	}
 	for _, e := range ends {
 		if e.Notified {
-			m.notify(notice{"portup", cfg.ID, "🟢 Port wieder up: " + e.HostName, "War " + fmtDurShort(e.End-e.Start) + " down", cfg.Org})
+			m.notify(notice{"portup", cfg.ID, "🟢 Port wieder up: " + e.HostName, "War " + fmtDurShort(e.End-e.Start) + " down", cfg.Org, ""})
 		}
 	}
 }

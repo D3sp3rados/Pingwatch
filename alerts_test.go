@@ -104,7 +104,7 @@ func TestAlertsAndReport(t *testing.T) {
 		t.Fatalf("E-Mail normalisiert: %q", lst.Channels[0].Target)
 	}
 
-	s.m.dispatchAlerts(notice{"outage", "h1", "🔴 Router antwortet nicht", "Seit 10:00 keine Antwort", cr.ID})
+	s.m.dispatchAlerts(notice{"outage", "h1", "🔴 Router antwortet nicht", "Seit 10:00 keine Antwort", cr.ID, ""})
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		mu.Lock()
@@ -137,8 +137,8 @@ func TestAlertsAndReport(t *testing.T) {
 
 	// Paketverlust nur an Telegram (abonniert), Drosselung 10 min
 	delete(got, "/bot123:ABC/sendMessage")
-	s.m.dispatchAlerts(notice{"loss", "h1", "Verlust", "x", cr.ID})
-	s.m.dispatchAlerts(notice{"loss", "h1", "Verlust", "x", cr.ID})
+	s.m.dispatchAlerts(notice{"loss", "h1", "Verlust", "x", cr.ID, ""})
+	s.m.dispatchAlerts(notice{"loss", "h1", "Verlust", "x", cr.ID, ""})
 	time.Sleep(300 * time.Millisecond)
 	mu.Lock()
 	if _, ok := got["/bot123:ABC/sendMessage"]; !ok {

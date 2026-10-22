@@ -48,6 +48,7 @@ type notice struct {
 	title  string
 	body   string
 	org    string
+	site   string // Standort bei Meldungen ohne Host (Agent offline, UniFi) – für Kunden-Filter
 }
 
 // Pusher versendet Benachrichtigungen über Apple Push Notification service (APNs).
@@ -439,10 +440,10 @@ func (m *Monitor) notifyEventStart(e Event) {
 	switch e.Type {
 	case "outage":
 		m.notify(notice{"outage", e.HostID, "🔴 " + e.HostName + " antwortet nicht",
-			m.withInfo(e.HostID, e.Site, "Seit "+at+" keine Antwort"), e.Org})
+			m.withInfo(e.HostID, e.Site, "Seit "+at+" keine Antwort"), e.Org, e.Site})
 	case "offline":
 		m.notify(notice{"offline", "", "⚪️ Agent " + e.HostName + " nicht erreichbar",
-			fmt.Sprintf("Der Agent meldet sich seit %s nicht mehr (PC aus, kein Internet oder Dienst gestoppt?).\n%d Hosts dieses Standorts werden solange nicht geprüft.", at, m.siteHostCount(e.Site)), e.Org})
+			fmt.Sprintf("Der Agent meldet sich seit %s nicht mehr (PC aus, kein Internet oder Dienst gestoppt?).\n%d Hosts dieses Standorts werden solange nicht geprüft.", at, m.siteHostCount(e.Site)), e.Org, e.Site})
 	}
 }
 
@@ -457,20 +458,20 @@ func (m *Monitor) notifyEventEnd(e Event) {
 			return
 		}
 		m.notify(notice{"recovered", e.HostID, "🟢 " + e.HostName + " wieder erreichbar",
-			m.withInfo(e.HostID, e.Site, fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur)), e.Org})
+			m.withInfo(e.HostID, e.Site, fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur)), e.Org, e.Site})
 	case "loss":
 		m.notify(notice{"loss", e.HostID, "🟠 Paketverlust bei " + e.HostName,
-			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d Pings verloren um %s", e.Count, time.UnixMilli(e.Start).Format("15:04"))), e.Org})
+			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d Pings verloren um %s", e.Count, time.UnixMilli(e.Start).Format("15:04"))), e.Org, e.Site})
 	case "spike":
 		avg := int64(0)
 		if e.Count > 0 {
 			avg = e.Sum / int64(e.Count)
 		}
 		m.notify(notice{"spike", e.HostID, "🟡 Hohe Antwortzeit bei " + e.HostName,
-			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04"))), e.Org})
+			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04"))), e.Org, e.Site})
 	case "offline":
 		m.notify(notice{"online", "", "🟢 Agent " + e.HostName + " wieder online",
-			fmt.Sprintf("Der Agent war %s nicht erreichbar, die Prüfungen laufen wieder.", dur), e.Org})
+			fmt.Sprintf("Der Agent war %s nicht erreichbar, die Prüfungen laufen wieder.", dur), e.Org, e.Site})
 	}
 }
 

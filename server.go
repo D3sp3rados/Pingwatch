@@ -1546,7 +1546,7 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 	s.m.mu.RUnlock()
 	ok, errs := 0, []string{}
 	for _, d := range devs {
-		n := notice{"test", "", "PingWacht", "Testbenachrichtigung – Push funktioniert ✅", ""}
+		n := notice{"test", "", "PingWacht", "Testbenachrichtigung – Push funktioniert ✅", "", ""}
 		var err error
 		switch {
 		case d.Kind == "web":

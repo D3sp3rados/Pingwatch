@@ -49,15 +49,31 @@ func TestNotifyPrefs(t *testing.T) {
 func TestChannelGroups(t *testing.T) {
 	c := Channel{Outage: true, Groups: []string{"oli"}}
 	n := notice{kind: "outage", hostID: "h1"}
-	if !c.wantsIn(n, "oli") || c.wantsIn(n, "andere") || c.wantsIn(n, "") {
+	if !c.wantsIn(n, "oli", "") || c.wantsIn(n, "andere", "") || c.wantsIn(n, "", "") {
 		t.Fatal("Kundenfilter falsch")
 	}
 	c.Hosts = []string{"h1"}
-	if !c.wantsIn(n, "andere") {
+	if !c.wantsIn(n, "andere", "") {
 		t.Fatal("einzeln gewählter Host muss trotzdem melden")
 	}
-	if !(Channel{Outage: true}).wantsIn(n, "x") {
+	if !(Channel{Outage: true}).wantsIn(n, "x", "") {
 		t.Fatal("ohne Filter = alle")
+	}
+	// Kunden und Rechner
+	k := Channel{Outage: true, Offline: true, Customers: []string{"kiga"}}
+	if !k.wantsIn(notice{kind: "devoff", site: "s1"}, "", "kiga") || k.wantsIn(notice{kind: "devoff", site: "s2"}, "", "maier") {
+		t.Fatal("UniFi-Meldung nach Kunde")
+	}
+	if !k.wantsIn(notice{kind: "sysoff", hostID: "m:s1:pc"}, "", "kiga") || k.wantsIn(notice{kind: "sysoff", hostID: "m:s2:pc"}, "", "") {
+		t.Fatal("Rechner nach Kunde")
+	}
+	r := Channel{Outage: true, Machines: []string{"s1:srv"}}
+	if !r.wantsIn(notice{kind: "syswarn", hostID: "m:s1:srv"}, "", "") || r.wantsIn(notice{kind: "syswarn", hostID: "m:s1:pc"}, "", "") || r.wantsIn(notice{kind: "outage", hostID: "h1"}, "", "") {
+		t.Fatal("Rechner-Auswahl")
+	}
+	old := Channel{Outage: true, Offline: true, Hosts: []string{"h1"}}
+	if !old.wantsIn(notice{kind: "sysoff", hostID: "m:x"}, "", "") || !old.wantsIn(notice{kind: "offline"}, "", "") {
+		t.Fatal("alte Alarmwege mit Host-Auswahl ändern ihr Verhalten")
 	}
 }
 

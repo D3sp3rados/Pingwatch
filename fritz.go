@@ -422,7 +422,7 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 				m.closeSiteEvent(m.newHostEvent(hc, "reboot", name+" (Fritzbox)", at, maint), at)
 				if !maint && recent {
 					notes = append(notes, notice{"reboot", hc.ID, "🔄 Fritzbox neu gestartet: " + name,
-						m.withInfo(hc.ID, hc.Site, "Neustart um "+hhmm(at)+" (Stromausfall, Update oder manuell?)"), hc.Org})
+						m.withInfo(hc.ID, hc.Site, "Neustart um "+hhmm(at)+" (Stromausfall, Update oder manuell?)"), hc.Org, ""})
 				}
 			}
 			// Neueinwahl: Verbindungsdauer springt zurück
@@ -435,7 +435,7 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 					ce := m.closeSiteEvent(e, at)
 					if !maint && recent {
 						notes = append(notes, notice{"wanup", hc.ID, "🟢 Internet wieder verbunden: " + name,
-							m.withInfo(hc.ID, hc.Site, fmt.Sprintf("War ca. %s getrennt (%s – %s)", fmtDurShort(ce.End-ce.Start), hhmm(ce.Start), hhmm(ce.End))), hc.Org})
+							m.withInfo(hc.ID, hc.Site, fmt.Sprintf("War ca. %s getrennt (%s – %s)", fmtDurShort(ce.End-ce.Start), hhmm(ce.Start), hhmm(ce.End))), hc.Org, ""})
 					}
 				} else {
 					m.closeSiteEvent(m.newHostEvent(hc, "wan", name+" · Neueinwahl", at, maint), at) // kurz – nur als Ereignis, keine Meldung
@@ -457,7 +457,7 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 				if !ce.Maint && recent {
 					title := "🟢 Internet wieder verbunden: " + name
 					notes = append(notes, notice{"wanup", hc.ID, title,
-						m.withInfo(hc.ID, hc.Site, fmt.Sprintf("War %s getrennt (%s – %s)", fmtDurShort(ce.End-ce.Start), hhmm(ce.Start), hhmm(ce.End))), hc.Org})
+						m.withInfo(hc.ID, hc.Site, fmt.Sprintf("War %s getrennt (%s – %s)", fmtDurShort(ce.End-ce.Start), hhmm(ce.Start), hhmm(ce.End))), hc.Org, ""})
 				}
 			}
 			fh.connSince = s.T - cur.ConnUptime*1000
@@ -479,7 +479,7 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 						why += ", Leitung: " + cur.Link
 					}
 					notes = append(notes, notice{"wandown", hc.ID, "🔴 Internet getrennt: " + name,
-						m.withInfo(hc.ID, hc.Site, "Seit "+hhmm(fh.badSince)+" keine Internetverbindung. "+why), hc.Org})
+						m.withInfo(hc.ID, hc.Site, "Seit "+hhmm(fh.badSince)+" keine Internetverbindung. "+why), hc.Org, ""})
 				} else {
 					m.evMu.Lock()
 					e.Notified = false
