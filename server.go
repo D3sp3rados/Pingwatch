@@ -205,7 +205,7 @@ func (s *Server) routes() http.Handler {
 	static := http.FileServer(http.FS(sub))
 
 	// öffentlich
-	for _, p := range []string{"/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-512.png", "/favicon.ico"} {
+	for _, p := range []string{"/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png", "/icon-512.png", "/icon-maskable.png", "/favicon.ico"} {
 		mux.Handle(p, static)
 	}
 	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {

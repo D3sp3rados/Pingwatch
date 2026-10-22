@@ -412,7 +412,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <p class="muted" style="font-size:12.5px" id="push-info"></p>
 
   <div class="panel help" style="margin-top:12px">
-    <b style="color:var(--fg)">Als App auf den Home-Bildschirm</b><br>
+    <b style="color:var(--fg)">Als App auf den Home-Bildschirm</b> <button class="btn sm pri" id="install-app" style="display:none">📲 Jetzt als App installieren</button><br>
     <b>Android:</b> Seite in Chrome öffnen → Menü ⋮ → <b>Zum Startbildschirm hinzufügen</b> (bzw. „App installieren“).<br>
     <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWatch vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWatch-App aus TestFlight nutzen.
   </div>
@@ -1132,6 +1132,12 @@ $('#sp-slug').oninput=spURL;
 $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-slug').value.trim().toLowerCase(),title:$('#sp-title').value.trim(),note:$('#sp-note').value.trim(),hosts:$$('#sp-hosts input:checked').map(i=>i.value)};
   try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ alert(e.message); } };
 
+/* Als App installieren (Android/Chrome) */
+let installEvt=null;
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; const b=$('#install-app'); if(b) b.style.display=''; });
+window.addEventListener('appinstalled',()=>{ installEvt=null; const b=$('#install-app'); if(b) b.style.display='none'; toast('PingWatch ist installiert'); });
+
 /* Meine Benachrichtigungen */
 const MN={v:null};
 async function mnLoad(){ try{ MN.v=await api('/api/me/notify'); }catch(e){ MN.v=null; } mnRender(); }
@@ -1156,6 +1162,7 @@ $('#mn-mailto').onchange=()=>mnSave({mailTo:$('#mn-mailto').value});
 $$('#my-notify [data-pause]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pause; const d=new Date(); d.setDate(d.getDate()+n); d.setHours(7,0,0,0); mnSave({pauseUntil:d.getTime()}); });
 $('#mn-pset').onclick=()=>{ const v=$('#mn-pdate').value; if(!v) return; const d=new Date(v+'T23:59:59'); mnSave({pauseUntil:d.getTime()}); };
 $('#mn-poff').onclick=()=>mnSave({pauseUntil:0});
+$('#install-app').onclick=async()=>{ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt=null; $('#install-app').style.display='none'; };
 
 /* Web-Push */
 const WP={sub:null,checked:false};
