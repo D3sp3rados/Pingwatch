@@ -74,12 +74,14 @@ type Agent struct {
 	sysErr  string
 	machine string
 	// Selbstheilung (nur wenn am Standort erlaubt und nicht in agent.json abgeschaltet)
-	sysHeal    bool
-	sysActions bool // Updates/Neustart erlaubt (Dashboard und agent.json)
-	sysRestart []string
-	invMu      sync.Mutex
-	invBusy    bool
-	invAt      time.Time
+	sysHeal                   bool
+	sysActions                bool // Updates/Neustart erlaubt (Dashboard und agent.json)
+	siteID, siteOrg, siteCust string
+	trust                     trustStore // gemerkte Signaturschlüssel des Kontos
+	sysRestart                []string
+	invMu                     sync.Mutex
+	invBusy                   bool
+	invAt                     time.Time
 }
 
 const maxBuffer = 2_000_000
@@ -275,16 +277,19 @@ func (a *Agent) fetchConfig() bool {
 	}
 	var cfg struct {
 		Site struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Org      string `json:"org"`
+			Customer string `json:"customer"`
 		} `json:"site"`
-		Hosts   []HostCfg  `json:"hosts"`
-		Version int64      `json:"version"`
-		Jobs    []agentJob `json:"jobs"`
-		UniFi   *UniFiCfg  `json:"unifi"`
-		Latest  string     `json:"latest"`
-		Auto    *bool      `json:"autoUpdate"`
-		Backup  *struct {
+		SignKeys []SignKey  `json:"signKeys"`
+		Hosts    []HostCfg  `json:"hosts"`
+		Version  int64      `json:"version"`
+		Jobs     []agentJob `json:"jobs"`
+		UniFi    *UniFiCfg  `json:"unifi"`
+		Latest   string     `json:"latest"`
+		Auto     *bool      `json:"autoUpdate"`
+		Backup   *struct {
 			On   bool `json:"on"`
 			Keep int  `json:"keep"`
 		} `json:"backup"`
@@ -318,6 +323,8 @@ func (a *Agent) fetchConfig() bool {
 	a.setServer(true, "")
 	a.mu.Lock()
 	a.siteName = cfg.Site.Name
+	a.siteID, a.siteOrg, a.siteCust = cfg.Site.ID, cfg.Site.Org, cfg.Site.Customer
+	a.trust.learn(a.dataDir, cfg.Site.Org, cfg.SignKeys)
 	if a.sysOnly {
 		a.siteName += " (nur Rechner)"
 	}

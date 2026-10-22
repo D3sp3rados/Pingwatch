@@ -106,7 +106,7 @@ var datenschutzTmpl = template.Must(template.New("d").Parse(legalHead + `
 <p>Sie haben das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch (Art. 21 DSGVO). Wenden Sie sich dazu an <a href="mailto:{{.L.Email}}">{{.L.Email}}</a>. Sie können sich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren, z. B. bei: {{.L.Authority}}.</p>
 
 <h2>12. Sicherheit</h2>
-<p>Alle Verbindungen sind TLS-verschlüsselt. Passwörter werden nur als Hash gespeichert, Agenten melden sich mit einem eigenen Schlüssel je Standort an, Agent-Updates werden über eine Prüfsumme abgesichert.</p>
+<p>Alle Verbindungen sind TLS-verschlüsselt. Passwörter werden nur als Hash gespeichert, Anmeldungen nach mehreren Fehlversuchen gesperrt und auf Wunsch mit einem Zwei-Faktor-Code abgesichert. Agenten melden sich mit einem eigenen Schlüssel je Standort an, Agent-Updates werden über eine Prüfsumme abgesichert. Aktionen auf Rechnern können zusätzlich im Browser unterschrieben werden; der Agent führt dann nur unterschriebene Aufträge aus.</p>
 
 <p class="mut">Stand: {{.L.Updated}}</p>
 ` + legalFoot))

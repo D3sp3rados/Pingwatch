@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,6 +30,9 @@ type UpdatePlan struct {
 	By       string `json:"by,omitempty"`
 	LastRun  int64  `json:"lastRun,omitempty"`
 	Created  int64  `json:"created"`
+	SP       string `json:"sp,omitempty"`  // unterschriebener Text
+	Sig      string `json:"sig,omitempty"` // Signatur
+	Kid      string `json:"kid,omitempty"` // Schlüssel
 }
 
 // GET /api/updateplans · POST {plan…, code} · DELETE ?id=
@@ -53,7 +57,8 @@ func (s *Server) handleUpdatePlans(w http.ResponseWriter, r *http.Request) {
 		}
 		var req struct {
 			UpdatePlan
-			Code string `json:"code"`
+			Code    string `json:"code"`
+			Preview bool   `json:"preview"`
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -107,6 +112,30 @@ func (s *Server) handleUpdatePlans(w http.ResponseWriter, r *http.Request) {
 		if !m.planTargetOK(p.Org, x.Scope, x.Target) {
 			http.Error(w, "Ziel unbekannt", 400)
 			return
+		}
+		shash := ""
+		if x.Kind == "script" {
+			m.mu.RLock()
+			if sc := m.scriptLocked(p.Org, x.ScriptID); sc != nil {
+				shash = scriptHash(sc.Body)
+			}
+			m.mu.RUnlock()
+		}
+		keys := m.orgSignKeys(p.Org)
+		payload := planPayload(p.Org, x, shash)
+		if req.Preview {
+			writeJSON(w, map[string]any{"payload": payload, "signed": len(keys) > 0})
+			return
+		}
+		x.SP = ""
+		if len(keys) > 0 {
+			if !verifyWithKeys(keys, x.Kid, payload, x.Sig) {
+				http.Error(w, "Signatur fehlt oder ist ungültig – bitte in einem Browser mit Signaturschlüssel dieses Kontos speichern", 400)
+				return
+			}
+			x.SP = payload
+		} else {
+			x.Sig, x.Kid = "", ""
 		}
 		sub, sec, _ := m.totpOf(p)
 		if sec == "" {
@@ -215,6 +244,7 @@ type actReq struct {
 	Script                           *Script // bei Kind "script"
 	Quiet                            bool    // regelmäßige Script-Prüfung: nur Fehler protokollieren
 	Plan                             string  // Name des Plans (für Meldungen)
+	SP, Sig, Kid                     string  // unterschriebener Text, Signatur, Schlüssel (signierte Aufträge)
 }
 
 // jobMeta: Angaben zu Aufträgen, die (noch) keinen Protokolleintrag haben.
@@ -228,6 +258,9 @@ func (m *Monitor) queueActionsLocked(q actReq, targets []MachineCfg, now int64) 
 	jobs.Lock()
 	for _, mc := range targets {
 		j := agentJob{ID: randHex(8), Kind: q.Kind, Params: map[string]string{"machine": mc.ID, "cat": q.Cat, "reboot": q.Reboot}}
+		if q.SP != "" {
+			j.Params["sp"], j.Params["sig"], j.Params["kid"] = q.SP, q.Sig, q.Kid
+		}
 		if q.Script != nil {
 			j.Params["script"], j.Params["lang"], j.Params["timeout"] = q.Script.Body, q.Script.Lang, strconv.Itoa(q.Script.Timeout)
 			j.Params["sid"], j.Params["sname"] = q.Script.ID, q.Script.Name
@@ -329,17 +362,42 @@ func (m *Monitor) runDuePlans(now time.Time) {
 		if len(targets) == 0 {
 			continue
 		}
-		q := actReq{Org: x.Org, By: "Plan „" + x.Name + "“", Kind: "winupdate", Cat: x.Cat, Reboot: x.Reboot, Opts: actionOpts(x.Cat, x.Reboot), Plan: x.Name}
+		// Konto mit Signaturschlüsseln: nur gültig unterschriebene Pläne (z. B. nach Script-Änderung neu speichern)
+		shash := ""
+		if x.Kind == "script" {
+			if sc := m.scriptLocked(x.Org, x.ScriptID); sc != nil {
+				shash = scriptHash(sc.Body)
+			}
+		}
+		if hasKeys := m.orgHasKeysLocked(x.Org); hasKeys && (x.SP == "" || x.SP != planPayload(x.Org, *x, shash)) {
+			if !planWarned[x.ID] {
+				planWarned[x.ID] = true
+				log.Printf("Plan %s (%s) nicht gültig unterschrieben – übersprungen", x.Name, x.Org)
+			}
+			continue
+		}
+		q := actReq{Org: x.Org, By: "Plan „" + x.Name + "“", Kind: "winupdate", Cat: x.Cat, Reboot: x.Reboot, Opts: actionOpts(x.Cat, x.Reboot), Plan: x.Name, SP: x.SP, Sig: x.Sig, Kid: x.Kid}
 		if x.Kind == "script" {
 			sc := m.scriptLocked(x.Org, x.ScriptID)
 			if sc == nil {
 				continue
 			}
-			q = actReq{Org: x.Org, By: q.By, Kind: "script", Opts: "Script „" + sc.Name + "“", Script: sc, Quiet: x.Every > 0, Plan: x.Name}
+			q = actReq{Org: x.Org, By: q.By, Kind: "script", Cat: x.Cat, Reboot: x.Reboot, Opts: "Script „" + sc.Name + "“", Script: sc, Quiet: x.Every > 0, Plan: x.Name, SP: x.SP, Sig: x.Sig, Kid: x.Kid}
 		}
 		m.queueActionsLocked(q, targets, now.UnixMilli())
 	}
 	if changed {
 		m.saveConfigLocked()
 	}
+}
+
+var planWarned = map[string]bool{}
+
+func (m *Monitor) orgHasKeysLocked(org string) bool {
+	for _, o := range m.cfg.Orgs {
+		if o.ID == org {
+			return len(o.SignKeys) > 0
+		}
+	}
+	return false
 }

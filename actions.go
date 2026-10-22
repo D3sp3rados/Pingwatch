@@ -77,7 +77,12 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Nur Inhaber und Admins dürfen Updates und Neustarts auslösen", 403)
 		return
 	}
-	var req struct{ Kind, Scope, ID, Cat, Reboot, Code, Script string }
+	var req struct {
+		Kind, Scope, ID, Cat, Reboot, Code, Script string
+		Preview                                    bool   // nur den zu unterschreibenden Text liefern
+		TS                                         int64  `json:"ts"`
+		Nonce, Sig, Kid                            string // Signatur (wenn das Konto Schlüssel hat)
+	}
 	if !readJSON(w, r, &req) {
 		return
 	}
@@ -101,6 +106,31 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Keine Rechner – Updates und Neustarts sind für diesen Standort nicht erlaubt (Rechner-Überwachung → „Updates und Neustarts erlauben“)", 400)
 		return
 	}
+	shash := ""
+	if req.Kind == "script" {
+		m.mu.RLock()
+		sc := m.scriptLocked(p.Org, req.Script)
+		m.mu.RUnlock()
+		if sc == nil {
+			http.Error(w, "Script unbekannt", 400)
+			return
+		}
+		shash = scriptHash(sc.Body)
+	}
+	keys := m.orgSignKeys(p.Org)
+	if req.Preview {
+		ts, nonce := time.Now().UnixMilli(), randHex(8)
+		writeJSON(w, map[string]any{"payload": actPayload(p.Org, req.Kind, req.Scope, req.ID, req.Cat, req.Reboot, shash, ts, nonce), "ts": ts, "nonce": nonce, "signed": len(keys) > 0})
+		return
+	}
+	sp := ""
+	if len(keys) > 0 {
+		sp = actPayload(p.Org, req.Kind, req.Scope, req.ID, req.Cat, req.Reboot, shash, req.TS, req.Nonce)
+		if time.Since(time.UnixMilli(req.TS)) > 15*time.Minute || !verifyWithKeys(keys, req.Kid, sp, req.Sig) {
+			http.Error(w, "Signatur fehlt oder ist ungültig – bitte in einem Browser mit Signaturschlüssel dieses Kontos auslösen", 400)
+			return
+		}
+	}
 	sub, sec, _ := m.totpOf(p)
 	if sec == "" {
 		http.Error(w, "Bitte zuerst unter Einstellungen → Mein Konto die Zwei-Faktor-Anmeldung einrichten", 412)
@@ -119,7 +149,7 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		opts = actionOpts(req.Cat, req.Reboot)
 	}
 	m.mu.Lock()
-	q := actReq{Org: p.Org, By: by, Kind: req.Kind, Cat: req.Cat, Reboot: req.Reboot, Opts: opts}
+	q := actReq{Org: p.Org, By: by, Kind: req.Kind, Cat: req.Cat, Reboot: req.Reboot, Opts: opts, SP: sp, Sig: req.Sig, Kid: req.Kid}
 	if req.Kind == "script" {
 		q.Script = m.scriptLocked(p.Org, req.Script)
 		if q.Script == nil {

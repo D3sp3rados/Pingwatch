@@ -46,6 +46,8 @@ type Org struct {
 	StripeItem     string `json:"stripeItem,omitempty"`
 	// einmalige Zustimmung beim ersten Einschalten von Updates/Neustarts/Scripts
 	ActionsConsent *Consent `json:"actionsConsent,omitempty"`
+	// Schlüssel zum Unterschreiben von Aufträgen (öffentlicher Teil; der private bleibt im Browser)
+	SignKeys []SignKey `json:"signKeys,omitempty"`
 }
 
 type User struct {

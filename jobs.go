@@ -315,6 +315,9 @@ func (a *Agent) runJob(j agentJob) {
 		a.mu.Lock()
 		allowed := a.sysActions
 		a.mu.Unlock()
+		if err = a.verifyJob(j); err != nil {
+			break
+		}
 		switch {
 		case a.file.NoActions:
 			err = errors.New("auf diesem Rechner abgeschaltet (\"noActions\" in der agent.json)")
