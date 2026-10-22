@@ -90,12 +90,12 @@ func rebootPending() int { return -1 }
 
 func antivirus() *sysAV { return nil }
 
-func pendingUpdates() (int, bool) {
+func pendingUpdates() (int, int, bool) {
 	b, err := runCmd(180*time.Second, "softwareupdate", "-l")
 	if err != nil && len(b) == 0 {
-		return -1, false
+		return -1, 0, false
 	}
-	return parseSoftwareUpdate(b), true
+	return parseSoftwareUpdate(b), 0, true
 }
 
 func restartService(string) error {

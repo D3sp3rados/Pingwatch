@@ -203,41 +203,16 @@ func antivirus() *sysAV {
 	return parseAVJSON(b)
 }
 
-const psUpdates = `try{$s=New-Object -ComObject Microsoft.Update.Session; $r=$s.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='Software'"); $r.Updates.Count}catch{-1}`
+// psUpdates: alle nicht installierten, nicht ausgeblendeten Updates wie in „Windows Update“
+// (Software und Treiber), Ausgabe „gesamt;davon Treiber“.
+const psUpdates = `try{$s=New-Object -ComObject Microsoft.Update.Session; $r=$s.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0"); $d=0; foreach($u in $r.Updates){ if($u.Type -eq 2){$d++} }; "$($r.Updates.Count);$d"}catch{-1}`
 
-func pendingUpdates() (int, bool) {
+func pendingUpdates() (int, int, bool) {
 	b, err := runPS(5*time.Minute, psUpdates)
 	if err != nil && len(b) == 0 {
-		return -1, false
+		return -1, 0, false
 	}
-	n := -1
-	for _, line := range strings.Split(string(b), "\n") {
-		if v := strings.TrimSpace(line); v != "" {
-			if x, e := atoiSafe(v); e {
-				n = x
-			}
-		}
-	}
-	return n, n >= 0
-}
-
-func atoiSafe(s string) (int, bool) {
-	n := 0
-	neg := strings.HasPrefix(s, "-")
-	s = strings.TrimPrefix(s, "-")
-	if s == "" {
-		return 0, false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, false
-		}
-		n = n*10 + int(c-'0')
-	}
-	if neg {
-		n = -n
-	}
-	return n, true
+	return parseWinUpdates(string(b))
 }
 
 var (

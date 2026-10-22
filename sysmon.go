@@ -165,10 +165,11 @@ type sysReport struct {
 	MemUsed  uint64    `json:"memU,omitempty"`
 	Disks    []sysDisk `json:"disks,omitempty"`
 	Svcs     []sysSvc  `json:"svcs,omitempty"`
-	EvCrit   int       `json:"evC"`   // kritische Ereignisse letzte 60 min, -1 = unbekannt
-	EvErr    int       `json:"evE"`   // Fehler letzte 60 min, -1 = unbekannt
-	Updates  int       `json:"upd"`   // ausstehende Updates, -1 = unbekannt
-	UpdAt    int64     `json:"updAt"` // Zeitpunkt der Update-Prüfung (ms)
+	EvCrit   int       `json:"evC"`              // kritische Ereignisse letzte 60 min, -1 = unbekannt
+	EvErr    int       `json:"evE"`              // Fehler letzte 60 min, -1 = unbekannt
+	Updates  int       `json:"upd"`              // ausstehende Updates, -1 = unbekannt
+	UpdDrv   int       `json:"updDrv,omitempty"` // davon Treiber (Windows)
+	UpdAt    int64     `json:"updAt"`            // Zeitpunkt der Update-Prüfung (ms)
 	AV       *sysAV    `json:"av,omitempty"`
 	Reboot   int       `json:"reboot"` // Neustart ausstehend: 1 ja, 0 nein, -1 unbekannt
 	Ver      string    `json:"ver,omitempty"`

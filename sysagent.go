@@ -77,6 +77,7 @@ func sysMachineID(dataDir string) string {
 type sysSlow struct {
 	evCrit, evErr int
 	updates       int
+	updDrv        int
 	updAt         int64
 	av            *sysAV
 	reboot        int
@@ -145,17 +146,17 @@ func (c *sysCollector) collect(services []string) *sysReport {
 		c.slow.av = av
 		c.mu.Unlock()
 	})
-	c.due("updates", 6*time.Hour, func() {
-		n, ok := pendingUpdates()
+	c.due("updates", 2*time.Hour, func() {
+		n, drv, ok := pendingUpdates()
 		c.mu.Lock()
 		if ok {
-			c.slow.updates, c.slow.updAt = n, time.Now().UnixMilli()
+			c.slow.updates, c.slow.updDrv, c.slow.updAt = n, drv, time.Now().UnixMilli()
 		}
 		c.mu.Unlock()
 	})
 	c.mu.Lock()
 	r.EvCrit, r.EvErr = c.slow.evCrit, c.slow.evErr
-	r.Updates, r.UpdAt = c.slow.updates, c.slow.updAt
+	r.Updates, r.UpdDrv, r.UpdAt = c.slow.updates, c.slow.updDrv, c.slow.updAt
 	r.AV, r.Reboot = c.slow.av, c.slow.reboot
 	c.mu.Unlock()
 	return r
@@ -915,4 +916,44 @@ func runCmdCombined(timeout time.Duration, name string, args ...string) ([]byte,
 	cmd := exec.CommandContext(ctx, name, args...)
 	hideWindow(cmd)
 	return cmd.CombinedOutput()
+}
+
+// parseWinUpdates: „6;2“ (gesamt;davon Treiber) bzw. ältere Ausgabe „6“.
+func parseWinUpdates(out string) (int, int, bool) {
+	for _, line := range strings.Split(out, "\n") {
+		v := strings.TrimSpace(line)
+		if v == "" {
+			continue
+		}
+		a, b, _ := strings.Cut(v, ";")
+		n, ok := atoiSafe(strings.TrimSpace(a))
+		if !ok || n < 0 {
+			continue
+		}
+		d, _ := atoiSafe(strings.TrimSpace(b))
+		if d > n {
+			d = n
+		}
+		return n, d, true
+	}
+	return -1, 0, false
+}
+
+func atoiSafe(s string) (int, bool) {
+	n := 0
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	if s == "" {
+		return 0, false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		n = n*10 + int(c-'0')
+	}
+	if neg {
+		n = -n
+	}
+	return n, true
 }

@@ -133,23 +133,23 @@ func rebootPending() int {
 
 func antivirus() *sysAV { return nil }
 
-func pendingUpdates() (int, bool) {
+func pendingUpdates() (int, int, bool) {
 	if _, err := os.Stat("/usr/lib/update-notifier/apt-check"); err == nil {
 		// apt-check schreibt das Ergebnis nach stderr
 		out, err := runCmdStderr(120*time.Second, "/usr/lib/update-notifier/apt-check")
 		if err == nil {
 			if n, ok := parseAptCheck(out); ok {
-				return n, true
+				return n, 0, true
 			}
 		}
 	}
 	if _, err := os.Stat("/usr/bin/apt"); err == nil {
 		b, err := runCmd(120*time.Second, "apt", "list", "--upgradable")
 		if err == nil {
-			return parseAptList(b), true
+			return parseAptList(b), 0, true
 		}
 	}
-	return -1, false
+	return -1, 0, false
 }
 
 // restartService startet einen systemd-Dienst neu (nur für freigegebene Dienste, siehe selfHealer).
