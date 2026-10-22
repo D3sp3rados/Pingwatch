@@ -89,6 +89,7 @@ func runServer(args []string) {
 	}
 	go m.pushLoop()
 	go m.reportLoop()
+	go m.unifiCloudLoop()
 	if simMode {
 		go m.simMachines()
 	}
@@ -292,6 +293,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
+	mux.HandleFunc("/api/unifi/cloud", protect(s.handleUniFiCloudKey))
+	mux.HandleFunc("/api/unifi/consoles", protect(s.handleUniFiConsoles))
+	mux.HandleFunc("/api/unifi/test", protect(s.handleUniFiCloudTest))
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
 	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
 	mux.HandleFunc("/api/machine", protect(s.handleMachine))
@@ -388,7 +392,19 @@ func (m *Monitor) siteOnline(id string) (bool, *siteState) {
 	}
 	m.mu.RLock()
 	st := m.sites[id]
+	cloudOnly := false
+	for _, sc := range m.cfg.Sites {
+		if sc.ID == id && sc.Kind == siteKindUniFi {
+			cloudOnly = true
+		}
+	}
 	m.mu.RUnlock()
+	if cloudOnly { // ohne Agent: „online“ = Konsole über die UniFi-Cloud erreichbar
+		unifiLiveState.Lock()
+		defer unifiLiveState.Unlock()
+		us := unifiLiveState.bySite[id]
+		return us != nil && us.Err == "" && time.Now().UnixMilli()-us.At < 3*60_000, st
+	}
 	if st == nil {
 		return false, nil
 	}
@@ -498,7 +514,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
-		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate}, Online: on, Hosts: cnt[sc.ID]}
+		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind}, Online: on, Hosts: cnt[sc.ID]}
 		if sc.Sys != nil {
 			sy := sc.Sys.eff()
 			v.Sys = &sy
@@ -824,9 +840,16 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusPaymentRequired)
 			return
 		}
-		if hc.Site != "" && hc.Site != "cloud" && s.siteFor(r, hc.Site) == nil {
-			http.Error(w, "unbekannter Standort", 400)
-			return
+		if hc.Site != "" && hc.Site != "cloud" {
+			st := s.siteFor(r, hc.Site)
+			if st == nil {
+				http.Error(w, "unbekannter Standort", 400)
+				return
+			}
+			if st.Kind == siteKindUniFi {
+				http.Error(w, "Dieser Standort hat keinen Agenten (nur UniFi über die Cloud) – Hosts bitte über „Cloud“ oder einen Standort mit Agent prüfen", 400)
+				return
+			}
 		}
 		if o := s.m.orgByID(p.Org); o != nil {
 			if mi := planByID(o.Plan).MinInterval; hc.IntervalMs < mi {
@@ -903,7 +926,7 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unbekannter Standort", 404)
 			return
 		}
-		writeJSON(w, s.m.UpsertSite(sc))
+		writeJSON(w, sanitizeSite(s.m.UpsertSite(sc)))
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		if s.siteFor(r, id) == nil {
@@ -918,7 +941,7 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 		out := []SiteCfg{}
 		for _, sc := range s.m.cfg.Sites {
 			if sc.Org == p.Org {
-				out = append(out, sc)
+				out = append(out, sanitizeSite(sc))
 			}
 		}
 		writeJSON(w, out)
@@ -1111,8 +1134,8 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	s.m.mu.RUnlock()
 	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver,
 		"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut}
-	if site.UniFi != nil && site.UniFi.On {
-		out["unifi"] = site.UniFi
+	if site.UniFi != nil && site.UniFi.On && !site.UniFi.isCloud() {
+		out["unifi"] = site.UniFi // Cloud-Abfrage macht der Server selbst
 	}
 	if jb := takeJobs(site.ID); len(jb) > 0 {
 		out["jobs"] = jb

@@ -537,6 +537,7 @@ func (s *Server) deleteOrg(id string) {
 		}
 	}
 	m.cfg.Requests = keepR
+	delete(m.cfg.UniFiKeys, id)
 	keepM := m.cfg.Machines[:0]
 	for _, x := range m.cfg.Machines {
 		if x.Org != id {

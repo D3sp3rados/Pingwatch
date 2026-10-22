@@ -8,13 +8,18 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Zugriff auf die UniFi-Konsole (läuft im Agenten vor Ort).
+// Zugriff auf die UniFi-Konsole: lokal im Agenten vor Ort (https://<konsole>) oder zentral im Server
+// über den Cloud-Proxy von Ubiquiti (https://api.ui.com/v1/connector/consoles/<id>). Beide Wege nutzen
+// dieselben Pfade (/proxy/network/integration/v1 …) und denselben Code.
 
 type unifiWAN struct {
 	Name    string  `json:"name"`              // WAN, WAN2 …
@@ -54,6 +59,8 @@ type unifiDevice struct {
 type unifiAPI struct {
 	base, key string
 	cl        *http.Client
+	cloud     bool // über den Cloud-Proxy von Ubiquiti (Server) statt lokal (Agent)
+	noPing    bool // eigener Ping nicht möglich (Server erreicht das Kundennetz nicht)
 }
 
 func newUniFiAPI(base, key string) *unifiAPI {
@@ -63,17 +70,89 @@ func newUniFiAPI(base, key string) *unifiAPI {
 	}}}
 }
 
-func (u *unifiAPI) raw(path string) (int, []byte, error) {
-	req, _ := http.NewRequest("GET", u.base+path, nil)
-	req.Header.Set("X-API-KEY", u.key)
-	req.Header.Set("Accept", "application/json")
-	resp, err := u.cl.Do(req)
-	if err != nil {
-		return 0, nil, fmt.Errorf("UniFi-Konsole nicht erreichbar: %v", shortErr(err))
+// unifiCloudBase: Site-Manager-/Connector-API von Ubiquiti (für Tests per UNIFI_CLOUD_BASE änderbar).
+var unifiCloudBase = func() string {
+	if b := strings.TrimRight(strings.TrimSpace(os.Getenv("UNIFI_CLOUD_BASE")), "/"); b != "" {
+		return b
 	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	return resp.StatusCode, b, nil
+	return "https://api.ui.com"
+}()
+
+var unifiCloudClient = &http.Client{Timeout: 30 * time.Second} // normale Zertifikatsprüfung
+
+// newUniFiCloudAPI: Zugriff auf eine Konsole über den Cloud-Proxy (ohne Agent vor Ort).
+func newUniFiCloudAPI(consoleID, key string) *unifiAPI {
+	return &unifiAPI{base: unifiCloudBase + "/v1/connector/consoles/" + url.PathEscape(strings.TrimSpace(consoleID)),
+		key: strings.TrimSpace(key), cl: unifiCloudClient, cloud: true, noPing: true}
+}
+
+// raw: GET mit API-Schlüssel; bei 429 (zu viele Anfragen) einmal nach Retry-After (max. 10 s) wiederholen.
+func (u *unifiAPI) raw(path string) (int, []byte, error) {
+	for try := 0; ; try++ {
+		req, _ := http.NewRequest("GET", u.base+path, nil)
+		req.Header.Set("X-API-KEY", u.key)
+		req.Header.Set("Accept", "application/json")
+		resp, err := u.cl.Do(req)
+		if err != nil {
+			if u.cloud {
+				return 0, nil, fmt.Errorf("UniFi-Cloud nicht erreichbar: %v", shortErr(err))
+			}
+			return 0, nil, fmt.Errorf("UniFi-Konsole nicht erreichbar: %v", shortErr(err))
+		}
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		resp.Body.Close()
+		if resp.StatusCode == 429 {
+			ra := retryAfter(resp.Header.Get("Retry-After"))
+			if try == 0 && ra <= 10*time.Second {
+				time.Sleep(ra)
+				continue
+			}
+			return resp.StatusCode, b, &unifiRateErr{retry: ra}
+		}
+		return resp.StatusCode, b, nil
+	}
+}
+
+// unifiRateErr: Ubiquiti drosselt (HTTP 429) – der Server-Poller setzt dann aus.
+type unifiRateErr struct{ retry time.Duration }
+
+func (e *unifiRateErr) Error() string {
+	return "UniFi-Cloud: zu viele Anfragen (HTTP 429) – neuer Versuch in " + fmtDurShort(e.retry.Milliseconds())
+}
+
+func retryAfter(h string) time.Duration {
+	if n, err := strconv.Atoi(strings.TrimSpace(h)); err == nil && n > 0 {
+		return time.Duration(n) * time.Second
+	}
+	return 5 * time.Second
+}
+
+// httpErr: verständliche Meldung zu einem HTTP-Status (lokal bzw. über die Cloud).
+func (u *unifiAPI) httpErr(code int) error {
+	switch {
+	case code == 401:
+		if u.cloud {
+			return errors.New("UniFi-Cloud-Key ungültig (HTTP 401) – bitte in unifi.ui.com einen neuen API-Key erstellen")
+		}
+		return errors.New("API-Schlüssel abgelehnt")
+	case code == 403:
+		if u.cloud {
+			return errors.New("Keine Rechte für diese Konsole (HTTP 403) – der Key gehört zu einem Konto ohne Zugriff darauf")
+		}
+		return errors.New("API-Schlüssel abgelehnt")
+	case code == 404:
+		if u.cloud {
+			return errors.New("Konsole über die UniFi-Cloud nicht erreichbar (HTTP 404) – nötig sind Konsole ab Firmware 5.0.3 und UniFi Network ab 9.3")
+		}
+		return errors.New("Integration-API nicht gefunden – bitte UniFi Network auf die aktuelle Version bringen")
+	case code == 429:
+		return errors.New("UniFi-Cloud: zu viele Anfragen (HTTP 429) – bitte später erneut versuchen")
+	case code == 502 || code == 503 || code == 504:
+		if u.cloud {
+			return fmt.Errorf("Konsole antwortet nicht über die UniFi-Cloud (HTTP %d) – offline oder ohne Internet?", code)
+		}
+	}
+	return fmt.Errorf("UniFi: HTTP %d", code)
 }
 
 func (u *unifiAPI) get(path string, v any) error {
@@ -81,13 +160,8 @@ func (u *unifiAPI) get(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	switch {
-	case code == 401 || code == 403:
-		return errors.New("API-Schlüssel abgelehnt")
-	case code == 404:
-		return errors.New("Integration-API nicht gefunden – bitte UniFi Network auf die aktuelle Version bringen")
-	case code >= 300:
-		return fmt.Errorf("UniFi: HTTP %d", code)
+	if code >= 300 {
+		return u.httpErr(code)
 	}
 	return json.Unmarshal(b, v)
 }
@@ -107,7 +181,10 @@ func fnum(v any) float64 {
 
 // unifiFetch holt die Geräte; all = auch Geräte ohne IP plus Statistiken, Ping und WAN (Livestatus).
 func unifiFetch(base, key, siteFilter string, all bool) ([]unifiDevice, error) {
-	u := newUniFiAPI(base, key)
+	return newUniFiAPI(base, key).fetch(siteFilter, all)
+}
+
+func (u *unifiAPI) fetch(siteFilter string, all bool) ([]unifiDevice, error) {
 	var sites struct {
 		Data []struct {
 			ID                string `json:"id"`
@@ -187,7 +264,9 @@ func (u *unifiAPI) enrich(siteID string, devs []unifiDevice) {
 					}
 				}
 			}
-			d.Ping = pingDevice(d.IP)
+			if !u.noPing {
+				d.Ping = pingDevice(d.IP)
+			}
 		}()
 	}
 	wg.Wait()

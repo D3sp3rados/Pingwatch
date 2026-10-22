@@ -48,7 +48,9 @@ type SiteCfg struct {
 	Name  string    `json:"name"`
 	Token string    `json:"token"`
 	Org   string    `json:"org,omitempty"`
-	UniFi *UniFiCfg `json:"unifi,omitempty"` // UniFi-Livestatus über den Agenten
+	UniFi *UniFiCfg `json:"unifi,omitempty"` // UniFi-Livestatus über den Agenten oder die UniFi-Cloud
+	// "unifi" = Standort ohne Agent, nur UniFi über die Cloud
+	Kind string `json:"kind,omitempty"`
 	// Agent nicht automatisch aktualisieren
 	NoAutoUpdate bool  `json:"noAutoUpdate,omitempty"`
 	SetAuto      *bool `json:"setAutoUpdate,omitempty"` // nur API-Eingabe
@@ -57,21 +59,22 @@ type SiteCfg struct {
 }
 
 type Config struct {
-	Hosts         []HostCfg        `json:"hosts"`
-	Sites         []SiteCfg        `json:"sites"`
-	RetentionDays int              `json:"retentionDays"`
-	PassHash      string           `json:"passHash"`
-	Devices       []Device         `json:"devices"`
-	Orgs          []Org            `json:"orgs"`
-	Users         []User           `json:"users"`
-	Channels      []Channel        `json:"channels"`
-	Maints        []Maint          `json:"maints"`
-	Groups        []Group          `json:"groups"`
-	Requests      []FeatureRequest `json:"requests,omitempty"` // Änderungswünsche aus dem KI-Assistenten
-	Machines      []MachineCfg     `json:"machines,omitempty"` // überwachte Rechner (Rechner-Überwachung)
-	VapidKey      string           `json:"vapidKey,omitempty"` // Web-Push-Schlüssel (privat)
-	Secret        string           `json:"secret"`
-	Version       int64            `json:"version"`
+	Hosts         []HostCfg         `json:"hosts"`
+	Sites         []SiteCfg         `json:"sites"`
+	RetentionDays int               `json:"retentionDays"`
+	PassHash      string            `json:"passHash"`
+	Devices       []Device          `json:"devices"`
+	Orgs          []Org             `json:"orgs"`
+	Users         []User            `json:"users"`
+	Channels      []Channel         `json:"channels"`
+	Maints        []Maint           `json:"maints"`
+	Groups        []Group           `json:"groups"`
+	Requests      []FeatureRequest  `json:"requests,omitempty"`  // Änderungswünsche aus dem KI-Assistenten
+	Machines      []MachineCfg      `json:"machines,omitempty"`  // überwachte Rechner (Rechner-Überwachung)
+	VapidKey      string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
+	UniFiKeys     map[string]string `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
+	Secret        string            `json:"secret"`
+	Version       int64             `json:"version"`
 }
 
 func randHex(n int) string {
@@ -722,6 +725,9 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 	if s.ID == "" {
 		s.ID = randHex(4)
 		s.Token = randHex(24)
+		if s.Kind != siteKindUniFi {
+			s.Kind = ""
+		}
 		if s.Sys != nil {
 			sc := *s.Sys
 			sc.norm()
@@ -791,6 +797,17 @@ func (m *Monitor) DeleteSite(id string) {
 			m.closeAll(h)
 		}
 	}
+}
+
+func (m *Monitor) siteByID(id string) (SiteCfg, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, sc := range m.cfg.Sites {
+		if sc.ID == id {
+			return sc, true
+		}
+	}
+	return SiteCfg{}, false
 }
 
 func (m *Monitor) siteByToken(tok string) (SiteCfg, bool) {

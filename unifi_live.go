@@ -20,6 +20,11 @@ type UniFiCfg struct {
 	URL  string `json:"url"`
 	Key  string `json:"key,omitempty"`
 	Site string `json:"site,omitempty"` // UniFi-Site (leer = alle)
+	// Quelle: "" = lokal über den Agenten, "cloud" = zentral über den Cloud-Proxy von Ubiquiti
+	Mode        string `json:"mode,omitempty"`
+	Console     string `json:"console,omitempty"`     // Konsolen-ID (Site Manager)
+	ConsoleName string `json:"consoleName,omitempty"` // Anzeige
+	KeySet      bool   `json:"keySet,omitempty"`      // nur Ausgabe: Key am Standort hinterlegt
 }
 
 type unifiSiteState struct {
@@ -129,7 +134,7 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 					cp := m.closeSiteEvent(e, bootAt)
 					if !inMaint {
 						notes = append(notes, notice{"reboot", "", "🔄 UniFi: " + devLabel(d) + " neu gestartet",
-							fmt.Sprintf("Neustart um %s (%s)", time.UnixMilli(bootAt).Format("15:04"), site.Name), site.Org})
+							fmt.Sprintf("Neustart um %s (%s)", time.UnixMilli(bootAt).Format("15:04"), site.Name) + unifiVia(site), site.Org})
 					}
 					_ = cp
 				}
@@ -147,13 +152,13 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 					e := m.newDevEvent(site, "wan", devLabel(d)+" · "+w.Name, key, nowMs, inMaint)
 					st.wanOpen[wk] = e
 					if !inMaint {
-						notes = append(notes, notice{"wandown", "", "🔴 " + w.Name + " offline: " + devLabel(d), "Leitung " + w.Name + " ist getrennt (" + site.Name + ")", site.Org})
+						notes = append(notes, notice{"wandown", "", "🔴 " + w.Name + " offline: " + devLabel(d), "Leitung " + w.Name + " ist getrennt (" + site.Name + ")" + unifiVia(site), site.Org})
 					}
 				case w.Up && st.wanOpen[wk] != nil:
 					ce := m.closeSiteEvent(st.wanOpen[wk], nowMs)
 					delete(st.wanOpen, wk)
 					if ce.Notified {
-						notes = append(notes, notice{"wanup", "", "🟢 " + w.Name + " wieder online: " + devLabel(d), "War " + fmtDurShort(ce.End-ce.Start) + " getrennt", site.Org})
+						notes = append(notes, notice{"wanup", "", "🟢 " + w.Name + " wieder online: " + devLabel(d), "War " + fmtDurShort(ce.End-ce.Start) + " getrennt" + unifiVia(site), site.Org})
 					}
 				}
 				if w.Latency > 0 {
@@ -249,6 +254,14 @@ func (m *Monitor) closeSiteEvent(e *Event, at int64) Event {
 	return cp
 }
 
+// unifiVia: Herkunft der Prüfung im Meldungstext (nur bei der Cloud-Abfrage, Agent-Texte bleiben wie bisher).
+func unifiVia(site SiteCfg) string {
+	if site.UniFi.isCloud() {
+		return "\nGeprüft von: UniFi-Cloud"
+	}
+	return ""
+}
+
 func (m *Monitor) unifiNotify(site SiteCfg, starts, ends []Event, errText string) {
 	for _, e := range starts {
 		if e.Maint {
@@ -257,15 +270,18 @@ func (m *Monitor) unifiNotify(site SiteCfg, starts, ends []Event, errText string
 		body := "Gerät meldet sich nicht mehr bei der UniFi-Konsole (" + site.Name + ")"
 		if errText != "" {
 			body = "Der Agent erreicht die UniFi-Konsole nicht: " + errText
+			if site.UniFi.isCloud() {
+				body = "Die UniFi-Konsole ist über die UniFi-Cloud nicht erreichbar (Internet beim Kunden weg?): " + errText
+			}
 		}
-		m.notify(notice{"devoff", "", "🔴 UniFi: " + e.HostName + " offline", body, site.Org})
+		m.notify(notice{"devoff", "", "🔴 UniFi: " + e.HostName + " offline", body + unifiVia(site), site.Org})
 	}
 	for _, e := range ends {
 		if !e.Notified {
 			continue
 		}
 		m.notify(notice{"devon", "", "🟢 UniFi: " + e.HostName + " wieder online",
-			fmt.Sprintf("War %s offline (%s)", fmtDurShort(e.End-e.Start), site.Name), site.Org})
+			fmt.Sprintf("War %s offline (%s)", fmtDurShort(e.End-e.Start), site.Name) + unifiVia(site), site.Org})
 	}
 }
 
@@ -286,7 +302,7 @@ func (s *Server) handleAgentUniFi(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ungültig", 400)
 		return
 	}
-	if site.UniFi == nil || !site.UniFi.On {
+	if site.UniFi == nil || !site.UniFi.On || site.UniFi.isCloud() {
 		writeJSON(w, map[string]bool{"ok": true})
 		return
 	}
@@ -308,6 +324,9 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Site, URL, Key, USite string
 		On                    bool
+		Mode                  string // "" lokal (Agent), "cloud" (UniFi-Cloud)
+		Console, ConsoleName  string
+		ClearKey              bool // eigenen Standort-Key entfernen (dann gilt der Key des Kunden)
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -317,12 +336,20 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Standort unbekannt", 404)
 		return
 	}
+	cloud := req.Mode == unifiModeCloud
+	if site.Kind == siteKindUniFi {
+		cloud = true // Standort ohne Agent: nur Cloud möglich
+	}
 	u := strings.TrimRight(strings.TrimSpace(req.URL), "/")
 	if u != "" && !strings.Contains(u, "://") {
 		u = "https://" + u
 	}
-	if req.On && !strings.HasPrefix(u, "https://") {
+	if req.On && !cloud && !strings.HasPrefix(u, "https://") {
 		http.Error(w, "Adresse der UniFi-Konsole angeben, z. B. https://192.168.1.1", 400)
+		return
+	}
+	if req.On && cloud && strings.TrimSpace(req.Console) == "" {
+		http.Error(w, "Bitte eine Konsole auswählen („Konsolen laden“)", 400)
 		return
 	}
 	m := s.m
@@ -333,19 +360,45 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		key := strings.TrimSpace(req.Key)
-		if key == "" && sc.UniFi != nil {
+		// Key nur weiterverwenden, wenn die Quelle gleich bleibt (lokaler Konsolen-Key ≠ Cloud-Key)
+		if key == "" && !req.ClearKey && sc.UniFi != nil && sc.UniFi.isCloud() == cloud {
 			key = sc.UniFi.Key
 		}
-		if req.On && key == "" {
+		if req.On && key == "" && !cloud {
 			m.mu.Unlock()
 			http.Error(w, "API-Schlüssel fehlt", 400)
 			return
 		}
-		sc.UniFi = &UniFiCfg{On: req.On, URL: u, Key: key, Site: strings.TrimSpace(req.USite)}
+		if req.On && key == "" && cloud && m.cfg.UniFiKeys[sc.Org] == "" {
+			m.mu.Unlock()
+			http.Error(w, "Kein UniFi-Cloud-Key – bitte oben unter „UniFi-Cloud (ohne Agent)“ eintragen oder hier einen Key angeben", 400)
+			return
+		}
+		nc := &UniFiCfg{On: req.On, URL: u, Key: key, Site: strings.TrimSpace(req.USite)}
+		if cloud {
+			nc.Mode, nc.URL = unifiModeCloud, ""
+			nc.Console, nc.ConsoleName = strings.TrimSpace(req.Console), strings.TrimSpace(req.ConsoleName)
+		}
+		if old := sc.UniFi; old != nil && (old.isCloud() != nc.isCloud() || old.Console != nc.Console) {
+			unifiLiveState.Lock()
+			delete(unifiLiveState.bySite, sc.ID) // andere Quelle: Livestatus neu aufbauen
+			unifiLiveState.Unlock()
+		}
+		sc.UniFi = nc
 	}
 	m.cfg.Version++
 	m.saveConfigLocked()
 	m.mu.Unlock()
+	if cloud && req.On {
+		unifiCloudPoll.Lock()
+		delete(unifiCloudPoll.next, site.ID)
+		unifiCloudPoll.Unlock()
+		go func() { // erste Abfrage sofort statt in bis zu einer Minute
+			if sc, ok := m.siteByID(site.ID); ok {
+				m.unifiCloudPollSite(sc)
+			}
+		}()
+	}
 	if !req.On {
 		unifiLiveState.Lock()
 		delete(unifiLiveState.bySite, site.ID)
@@ -355,16 +408,20 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 }
 
 type unifiSummary struct {
-	On      bool        `json:"on"`
-	URL     string      `json:"url,omitempty"`
-	Site    string      `json:"site,omitempty"`
-	At      int64       `json:"at,omitempty"`
-	Err     string      `json:"err,omitempty"`
-	Total   int         `json:"total"`
-	Offline int         `json:"offline"`
-	Boots   int         `json:"boots"`   // Neustarts in 24 h (alle Geräte)
-	WanDown int         `json:"wanDown"` // getrennte WAN-Leitungen
-	Devices []unifiView `json:"devices,omitempty"`
+	On          bool        `json:"on"`
+	Mode        string      `json:"mode,omitempty"` // "cloud" = über die UniFi-Cloud
+	Console     string      `json:"console,omitempty"`
+	ConsoleName string      `json:"consoleName,omitempty"`
+	KeySet      bool        `json:"keySet,omitempty"` // eigener Key am Standort
+	URL         string      `json:"url,omitempty"`
+	Site        string      `json:"site,omitempty"`
+	At          int64       `json:"at,omitempty"`
+	Err         string      `json:"err,omitempty"`
+	Total       int         `json:"total"`
+	Offline     int         `json:"offline"`
+	Boots       int         `json:"boots"`   // Neustarts in 24 h (alle Geräte)
+	WanDown     int         `json:"wanDown"` // getrennte WAN-Leitungen
+	Devices     []unifiView `json:"devices,omitempty"`
 }
 
 type unifiView struct {
@@ -403,6 +460,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 		return v
 	}
 	v.On, v.URL, v.Site = site.UniFi.On, site.UniFi.URL, site.UniFi.Site
+	v.Mode, v.Console, v.ConsoleName, v.KeySet = site.UniFi.Mode, site.UniFi.Console, site.UniFi.ConsoleName, site.UniFi.Key != ""
 	unifiLiveState.Lock()
 	defer unifiLiveState.Unlock()
 	st := unifiLiveState.bySite[site.ID]
