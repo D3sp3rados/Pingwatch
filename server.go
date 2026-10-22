@@ -257,6 +257,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
 	mux.HandleFunc("/dl/", s.handlePublicBinary)
 	mux.HandleFunc("/install.sh", s.handleInstallScript)
+	mux.HandleFunc("/install.ps1", s.handleInstallPS)
 	mux.HandleFunc("/api/agent/backup", s.handleAgentBackup)
 
 	// geschützt

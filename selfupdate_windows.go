@@ -17,6 +17,10 @@ func (a *Agent) applyUpdate(exe, tmp string) error {
 		os.Rename(old, exe)
 		return err
 	}
+	if serviceMode {
+		serviceRestartForUpdate(a)
+		return nil
+	}
 	cmd := exec.Command(exe, os.Args[1:]...)
 	cmd.Env = append(os.Environ(), "PINGWACHT_UPDATED=1")
 	if err := cmd.Start(); err != nil {

@@ -140,7 +140,10 @@ func runAgent(args []string) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		log.Printf("Agent nach Update gestartet (Version %s)", version)
-	} else if !singleInstance() {
+	} else if !serviceMode && serviceInstalled() && len(fs.Args()) == 0 {
+		showError("PingWacht läuft auf diesem Rechner als Windows-Dienst „PingWacht Agent“ – ein zweiter Agent wird nicht gestartet.")
+		return
+	} else if !serviceMode && !singleInstance() {
 		showError("PingWacht-Agent läuft bereits (siehe Infobereich der Taskleiste).")
 		return
 	}
@@ -195,7 +198,11 @@ func runAgent(args []string) {
 	go a.sendLoop()
 	go a.sysLoop()
 	go a.backupLoop()
-	agentUI(a)
+	if serviceMode {
+		serviceWait(a)
+	} else {
+		agentUI(a)
+	}
 	a.shutdown()
 }
 

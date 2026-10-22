@@ -101,3 +101,39 @@ else
   echo "  $DIR/pingwacht-agent agent -config $DATA/agent.json -data $DATA"
 fi
 `
+
+// handleInstallPS: GET /install.ps1 – Installer für Windows (Dienst „PingWacht Agent“).
+func (s *Server) handleInstallPS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte(strings.ReplaceAll(installPS, "@@SERVER@@", publicBase(r))))
+}
+
+// installPS: in einer PowerShell als Administrator:
+//   & ([scriptblock]::Create((irm https://app.pingwacht.de/install.ps1))) <STANDORT-TOKEN> [-SysOnly]
+const installPS = `param([Parameter(Position=0)][string]$Token, [switch]$SysOnly)
+$ErrorActionPreference = 'Stop'
+$Server = '@@SERVER@@'
+if (-not $Token) { Write-Host "Aufruf: & ([scriptblock]::Create((irm $Server/install.ps1))) <STANDORT-TOKEN> [-SysOnly]" -ForegroundColor Yellow; return }
+$me = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Host 'Bitte PowerShell als Administrator starten (Rechtsklick > Als Administrator ausfuehren).' -ForegroundColor Red; return }
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$tmp = Join-Path $env:TEMP ('pingwacht-' + [guid]::NewGuid().ToString('N').Substring(0,8))
+New-Item -ItemType Directory -Path $tmp | Out-Null
+$exe = Join-Path $tmp 'pingwatch-agent.exe'
+Write-Host 'Lade PingWacht-Agent ...'
+$resp = Invoke-WebRequest -UseBasicParsing -Uri "$Server/dl/pingwatch-agent.exe" -OutFile $exe -PassThru
+$sum = $resp.Headers['X-Sha256']; if ($sum -is [array]) { $sum = $sum[0] }
+if ($sum) { $h = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower(); if ($h -ne $sum.ToLower()) { throw 'Pruefsumme stimmt nicht - Download beschaedigt' } }
+$mode = ''; if ($SysOnly) { $mode = 'sysonly' }
+$cfg = Join-Path $tmp 'agent.json'
+$json = @{ server = $Server; token = $Token; mode = $mode } | ConvertTo-Json
+[IO.File]::WriteAllText($cfg, $json, (New-Object Text.UTF8Encoding $false))
+Write-Host 'Richte Dienst "PingWacht Agent" ein ...'
+$p = Start-Process -FilePath $exe -ArgumentList @('service', 'install', '-config', ('"' + $cfg + '"')) -Wait -PassThru
+$log = Join-Path $env:ProgramData 'PingWacht\install.log'
+Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+if ($p.ExitCode -ne 0) { if (Test-Path $log) { Get-Content $log -Tail 3 }; throw 'Installation fehlgeschlagen' }
+Write-Host 'Fertig: Der Dienst "PingWacht Agent" laeuft - startet automatisch mit Windows (als SYSTEM) und aktualisiert sich selbst.' -ForegroundColor Green
+Write-Host 'Entfernen: "C:\Program Files\PingWacht\pingwatch-agent.exe" service uninstall'
+`

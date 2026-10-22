@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -155,6 +156,9 @@ func copyU16(dst []uint16, s string) {
 }
 
 func agentDataDir() string {
+	if serviceMode {
+		return serviceDataDir()
+	}
 	if d := os.Getenv("LOCALAPPDATA"); d != "" {
 		return filepath.Join(d, "PingWatch")
 	}
@@ -173,6 +177,10 @@ func singleInstance() bool {
 }
 
 func showError(msg string) {
+	if serviceMode {
+		log.Println(msg)
+		return
+	}
 	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(u16(msg))), uintptr(unsafe.Pointer(u16("PingWacht-Agent"))), 0x30)
 }
 

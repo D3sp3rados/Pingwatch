@@ -31,3 +31,13 @@ func TestPublicInstall(t *testing.T) {
 		t.Fatal(b[:200])
 	}
 }
+
+func TestInstallPS(t *testing.T) {
+	s := &Server{}
+	rec := httptest.NewRecorder()
+	s.handleInstallPS(rec, httptest.NewRequest("GET", "/install.ps1", nil))
+	b := rec.Body.String()
+	if !strings.Contains(b, "service', 'install'") || strings.Contains(b, "@@SERVER@@") || !strings.Contains(b, "param(") {
+		t.Fatal(b[:200])
+	}
+}

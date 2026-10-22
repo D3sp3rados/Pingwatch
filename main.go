@@ -6,7 +6,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "1.5.8"
+var version = "1.5.9"
 
 func main() {
 	mode := defaultMode
@@ -16,6 +16,9 @@ func main() {
 		case "server", "agent":
 			mode = args[0]
 			args = args[1:]
+		case "service":
+			runService(args[1:])
+			return
 		case "version", "-v", "--version":
 			fmt.Println("PingWacht", version)
 			return
