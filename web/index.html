@@ -92,6 +92,7 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 #ov.compact .grid{grid-template-columns:1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
 #ov.compact .card{padding:7px 12px;border:0;border-radius:0;border-top:1px solid var(--line);box-shadow:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,240px);align-items:center;column-gap:14px}
 #ov.compact .card:first-child{border-top:0}
+#ov .ov-more{display:block;margin:8px auto 4px}
 #ov.compact .card.down{background:color-mix(in srgb,var(--bad) 9%,var(--panel))}
 #ov.compact .card-h{align-items:center}
 #ov.compact .card-h .dot{margin-top:0}
@@ -866,7 +867,10 @@ function renderOverview(){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const sec of secs){
       const h=document.createElement('div'); h.className='site-h'; h.dataset.sec=sec.key; root.appendChild(h);
-      const g=document.createElement('div'); g.className='grid'; root.appendChild(g);
+      const g=document.createElement('div'); g.className='grid'; g.dataset.sec=sec.key; root.appendChild(g);
+      if(sec.hosts.length){ const mb=document.createElement('button'); mb.className='btn sm ov-more'; mb.dataset.sec=sec.key; mb.style.display='none';
+        mb.onclick=()=>{ const o=ovOpen(); if(o[sec.key]) delete o[sec.key]; else o[sec.key]=1; try{ localStorage.setItem('pw_ovopen',JSON.stringify(o)); }catch(e){} renderOverview(); };
+        root.appendChild(mb); }
       if(sec.site&&sec.site.unifi&&sec.site.unifi.on){ const u=document.createElement('div'); u.className='panel uf'; u.dataset.site=sec.site.id; root.appendChild(u); }
       for(const host of sec.hosts){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div>`;
         c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
@@ -874,6 +878,7 @@ function renderOverview(){
         g.appendChild(c); cards[host.id]=c; }
     }
   }
+  ovFold(root,secs,view);
   for(const sec of secs){ const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
     if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
     else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
@@ -901,6 +906,19 @@ function renderOverview(){
   }
   drawBars();
 }
+/* Übersicht: je Abschnitt zunächst ~2 Zeilen (Liste: 4 Einträge), gestörte Hosts immer zuerst und immer sichtbar */
+function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
+const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
+function ovFold(root,secs,view){ const open=ovOpen();
+  for(const sec of secs){ if(!sec.hosts.length) continue; const g=root.querySelector(`.grid[data-sec="${sec.key}"]`), mb=root.querySelector(`.ov-more[data-sec="${sec.key}"]`); if(!g||!mb) continue;
+    const bad=sec.hosts.filter(OV_BAD), good=sec.hosts.filter(h=>!OV_BAD(h)), order=[...bad,...good];
+    const want=order.map(h=>cards[h.id]).filter(Boolean);
+    if(want.some((c,i)=>g.children[i]!==c)) want.forEach(c=>g.appendChild(c));
+    let cols=1; if(view!=='list'){ cols=(getComputedStyle(g).gridTemplateColumns||'').split(' ').filter(x=>x&&x!=='none').length||1; }
+    const limit=Math.max(view==='list'?4:cols*2, bad.length), n=order.length, isOpen=!!open[sec.key];
+    want.forEach((c,i)=>{ c.style.display=(isOpen||i<limit)?'':'none'; });
+    if(n<=limit){ mb.style.display='none'; } else { mb.style.display=''; mb.textContent=isOpen?'Weniger ▴':`Alle ${n} anzeigen ▾`; }
+  } }
 function drawSpark(c,h){
   const {g,W,H}=setupCanvas(c); const d=h.spark||[]; if(!d.length) return;
   const vals=d.map(v=>v<-1?-v-2:v).filter(v=>v>=0); const mx=Math.max(10,...vals)*1.15;
