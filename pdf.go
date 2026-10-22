@@ -173,7 +173,7 @@ func (d *pdfDoc) Bytes(title string) []byte {
 	obj(fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.Join(kids, " "), n))
 	obj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
 	obj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>")
-	obj(fmt.Sprintf("<< /Title (%s) /Producer (PingWatch) >>", pdfEscape(toWinAnsi(title))))
+	obj(fmt.Sprintf("<< /Title (%s) /Producer (PingWacht) >>", pdfEscape(toWinAnsi(title))))
 	for i, p := range d.pages {
 		obj(fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents %d 0 R >>", d.W, d.H, 7+2*i))
 		var z bytes.Buffer

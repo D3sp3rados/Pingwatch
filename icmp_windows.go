@@ -54,7 +54,7 @@ func icmpPing(ip net.IP, timeout time.Duration) (int32, error) {
 	}
 	defer procIcmpClose.Call(h)
 
-	data := []byte("PingWatch-Probe-PingWatch-Probe!")
+	data := []byte("PingWacht-Probe-PingWacht-Probe!")
 	reply := make([]byte, int(unsafe.Sizeof(icmpEchoReply{}))+len(data)+8+64)
 	addr := binary.LittleEndian.Uint32(ip4)
 	ms := uint32(timeout / time.Millisecond)

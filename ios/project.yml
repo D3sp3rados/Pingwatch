@@ -32,7 +32,7 @@ targets:
     info:
       path: PingWatch/Info.plist
       properties:
-        CFBundleDisplayName: PingWatch
+        CFBundleDisplayName: PingWacht
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
@@ -75,7 +75,7 @@ targets:
     info:
       path: PingWatchWidget/Info.plist
       properties:
-        CFBundleDisplayName: PingWatch
+        CFBundleDisplayName: PingWacht
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

@@ -95,7 +95,7 @@ func TestWebPush(t *testing.T) {
 	var msg map[string]any
 	json.Unmarshal(webpushDecrypt(t, got[0], ua, auth), &msg)
 	mu.Unlock()
-	if msg["title"] != "PingWatch" || !strings.Contains(msg["body"].(string), "funktioniert") {
+	if msg["title"] != "PingWacht" || !strings.Contains(msg["body"].(string), "funktioniert") {
 		t.Fatalf("Inhalt: %v", msg)
 	}
 	go s.m.pushLoop()

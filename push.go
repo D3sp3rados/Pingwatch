@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// Device ist ein registriertes iPhone/iPad der PingWatch-App.
+// Device ist ein registriertes iPhone/iPad der PingWacht-App.
 type Device struct {
 	Token    string   `json:"token"`
 	Org      string   `json:"org,omitempty"`

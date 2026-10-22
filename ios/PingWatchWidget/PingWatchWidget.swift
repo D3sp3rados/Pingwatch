@@ -63,7 +63,7 @@ struct PingWatchWidgetView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "waveform.path.ecg").foregroundStyle(PW.accent)
-                Text("PingWatch").font(.caption.bold())
+                Text("PingWacht").font(.caption.bold())
                 Spacer()
                 StatusDot(color: color, size: 10)
             }
@@ -101,7 +101,7 @@ struct PingWatchWidget: Widget {
         StaticConfiguration(kind: "PingWatchStatus", provider: Provider()) { entry in
             PingWatchWidgetView(entry: entry)
         }
-        .configurationDisplayName("PingWatch")
+        .configurationDisplayName("PingWacht")
         .description("Wie viele Hosts erreichbar sind und welche gerade ausfallen.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

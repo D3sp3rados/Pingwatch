@@ -102,7 +102,7 @@ func runAgent(args []string) {
 		log.SetOutput(io.MultiWriter(lf, os.Stderr))
 	}
 	if !singleInstance() {
-		showError("PingWatch-Agent läuft bereits (siehe Infobereich der Taskleiste).")
+		showError("PingWacht-Agent läuft bereits (siehe Infobereich der Taskleiste).")
 		return
 	}
 	// agent.json per Drag & Drop auf die exe oder als Argument → ins Datenverzeichnis übernehmen
@@ -115,7 +115,7 @@ func runAgent(args []string) {
 	}
 	af, _, err := loadAgentFile(*cfgPath, filepath.Join(exeDir(), "agent.json"), filepath.Join(dataDir, "agent.json"))
 	if err != nil {
-		showError("PingWatch-Agent: " + err.Error() + "\n\nIm Dashboard unter Einstellungen → Standorte die Datei agent.json herunterladen und neben die pingwatch-agent.exe legen (oder auf die exe ziehen).")
+		showError("PingWacht-Agent: " + err.Error() + "\n\nIm Dashboard unter Einstellungen → Standorte die Datei agent.json herunterladen und neben die pingwatch-agent.exe legen (oder auf die exe ziehen).")
 		return
 	}
 	// Kopie im Datenverzeichnis, damit Autostart auch ohne Datei neben der exe klappt
@@ -129,7 +129,7 @@ func runAgent(args []string) {
 		client: &http.Client{Timeout: 25 * time.Second},
 	}
 	a.loadPending()
-	log.Printf("PingWatch-Agent %s, Server %s", version, af.Server)
+	log.Printf("PingWacht-Agent %s, Server %s", version, af.Server)
 	go a.configLoop()
 	go a.unifiLoop()
 	go a.sendLoop()

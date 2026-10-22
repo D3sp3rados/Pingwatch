@@ -324,7 +324,7 @@ struct API {
         }
         struct R: Decodable { let token: String }
         guard let r = try? JSONDecoder().decode(R.self, from: data) else {
-            throw APIError.http(http.statusCode, "Das ist kein PingWatch-Server.")
+            throw APIError.http(http.statusCode, "Das ist kein PingWacht-Server.")
         }
         return Credentials(server: server, token: r.token)
     }

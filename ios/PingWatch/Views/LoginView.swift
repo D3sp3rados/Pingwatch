@@ -17,8 +17,8 @@ struct LoginView: View {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 52, weight: .semibold))
                             .foregroundStyle(PW.accent)
-                        Text("PingWatch").font(.largeTitle.bold())
-                        Text("Mit deinem PingWatch-Server verbinden")
+                        Text("PingWacht").font(.largeTitle.bold())
+                        Text("Mit deinem PingWacht-Server verbinden")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)

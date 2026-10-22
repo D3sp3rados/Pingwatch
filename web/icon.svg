@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" rx="56" fill="#0e172a"/><polyline points="34,138 86.6,138 101.7,153.5 120.5,82.2 139.3,200 154.3,119.4 165.6,138 222,138" fill="none" stroke="#34d399" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/><circle cx="211" cy="55" r="15" fill="#34d399"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs><linearGradient id="sw" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#34d399" stop-opacity="0"/><stop offset="1" stop-color="#34d399" stop-opacity=".55"/></linearGradient></defs>
+<rect width="256" height="256" rx="56" fill="#0e172a"/>
+<circle cx="128" cy="134" r="92" fill="none" stroke="#24465c" stroke-width="7"/>
+<circle cx="128" cy="134" r="56" fill="none" stroke="#24465c" stroke-width="7"/>
+<path d="M128 134 L128 42 A92 92 0 0 1 207.7 88 Z" fill="url(#sw)"/>
+<polyline points="30,134 84,134 99,152 117,92 137,190 152,118 163,134 226,134" fill="none" stroke="#34d399" stroke-width="17" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="190" cy="70" r="14" fill="#34d399"/>
+</svg>

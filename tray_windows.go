@@ -169,7 +169,7 @@ func singleInstance() bool {
 }
 
 func showError(msg string) {
-	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(u16(msg))), uintptr(unsafe.Pointer(u16("PingWatch-Agent"))), 0x30)
+	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(u16(msg))), uintptr(unsafe.Pointer(u16("PingWacht-Agent"))), 0x30)
 }
 
 func openURL(u string) {
@@ -271,7 +271,7 @@ func agentUI(a *Agent) {
 	wc := wndClassEx{lpfnWndProc: syscall.NewCallback(wndProc), hInstance: hInst, lpszClassName: cls}
 	wc.cbSize = uint32(unsafe.Sizeof(wc))
 	pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
-	hwnd, _, _ := pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(cls)), uintptr(unsafe.Pointer(u16("PingWatch"))), 0, 0, 0, 0, 0, 0, 0, hInst, 0)
+	hwnd, _, _ := pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(cls)), uintptr(unsafe.Pointer(u16("PingWacht"))), 0, 0, 0, 0, 0, 0, 0, hInst, 0)
 	t.hwnd = hwnd
 	tm, _, _ := pRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(u16("TaskbarCreated"))))
 	t.taskbarMsg = uint32(tm)
@@ -316,7 +316,7 @@ func (t *tray) addIcon() {
 	t.nid.uCallbackMessage = wmTray
 	t.nid.hIcon = t.icons["grey"]
 	t.curIcon = "grey"
-	copyU16(t.nid.szTip[:], "PingWatch-Agent – verbinde …")
+	copyU16(t.nid.szTip[:], "PingWacht-Agent – verbinde …")
 	pShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&t.nid)))
 	t.refresh()
 }
@@ -327,7 +327,7 @@ func (t *tray) refresh() {
 	var tip string
 	site := st.Site
 	if site == "" {
-		site = "PingWatch"
+		site = "PingWacht"
 	}
 	switch {
 	case !st.ServerOK:

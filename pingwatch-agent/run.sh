@@ -1,5 +1,5 @@
 #!/bin/sh
-# Startet den PingWatch-Agenten. Bei jedem Start wird die aktuelle Agent-Version vom Server geladen.
+# Startet den PingWacht-Agenten. Bei jedem Start wird die aktuelle Agent-Version vom Server geladen.
 set -u
 OPT=/data/options.json
 SERVER=$(jq -r '.server' "$OPT" | sed 's#/*$##')

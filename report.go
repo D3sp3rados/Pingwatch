@@ -140,7 +140,7 @@ func (m *Monitor) buildReport(org string, month time.Time, group string) ([]byte
 
 	footer := func() {
 		p.Line(L, 812, R, 812, 0.5, line)
-		p.Text(L, 825, 8, false, mut, 'l', fmt.Sprintf("PingWatch · %s · erstellt am %s", prov, now.Format("02.01.2006 15:04")))
+		p.Text(L, 825, 8, false, mut, 'l', fmt.Sprintf("PingWacht · %s · erstellt am %s", prov, now.Format("02.01.2006 15:04")))
 		p.Text(R, 825, 8, false, mut, 'r', fmt.Sprintf("Seite %d", p.PageNo()))
 	}
 	y := 0.0
@@ -153,7 +153,7 @@ func (m *Monitor) buildReport(org string, month time.Time, group string) ([]byte
 		}
 		p.Text(L, 52, 22, true, ink, 'l', title)
 		p.Text(L, 72, 12, false, mut, 'l', subject)
-		p.Text(R, 52, 10, true, acc, 'r', "PingWatch")
+		p.Text(R, 52, 10, true, acc, 'r', "PingWacht")
 		p.Text(R, 66, 8, false, mut, 'r', fmt.Sprintf("%s – %s", first.Format("02.01.2006"), last.Format("02.01.2006")))
 		y = 100
 	}
@@ -392,7 +392,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("dl") == "1" {
 		disp = "attachment"
 	}
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="PingWatch-Bericht-%s.pdf"`, disp, month.Format("2006-01")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="PingWacht-Bericht-%s.pdf"`, disp, month.Format("2006-01")))
 	w.Write(pdf)
 }
 
@@ -467,11 +467,11 @@ func (m *Monitor) sendReport(org string, month time.Time, group string) (int, er
 		return 0, err
 	}
 	mn := fmt.Sprintf("%s %d", monthNames[month.Month()-1], month.Year())
-	txt := fmt.Sprintf("Guten Tag,\n\nim Anhang finden Sie den PingWatch-Monatsbericht %s für %s.\n\n%s\n", mn, subject, dashboardURL())
-	htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif">Guten Tag,<br><br>im Anhang finden Sie den PingWatch-Monatsbericht <b>%s</b> für %s.%s</div>`,
+	txt := fmt.Sprintf("Guten Tag,\n\nim Anhang finden Sie den PingWacht-Monatsbericht %s für %s.\n\n%s\n", mn, subject, dashboardURL())
+	htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif">Guten Tag,<br><br>im Anhang finden Sie den PingWacht-Monatsbericht <b>%s</b> für %s.%s</div>`,
 		mn, subject, strings.Replace(linkHTML(dashboardURL()), " · ", "<br><br>", 1))
-	err = sendMail(to, "PingWatch-Monatsbericht "+mn+" – "+subject, txt, htm,
-		&attachment{Name: "PingWatch-Bericht-" + month.Format("2006-01") + ".pdf", Type: "application/pdf", Data: pdf})
+	err = sendMail(to, "PingWacht-Monatsbericht "+mn+" – "+subject, txt, htm,
+		&attachment{Name: "PingWacht-Bericht-" + month.Format("2006-01") + ".pdf", Type: "application/pdf", Data: pdf})
 	return len(to), err
 }
 

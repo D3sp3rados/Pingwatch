@@ -72,7 +72,7 @@ struct OverviewView: View {
                 HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
             }
         }
-        .navigationTitle("PingWatch")
+        .navigationTitle("PingWacht")
         .refreshable { await model.refresh() }
     }
 

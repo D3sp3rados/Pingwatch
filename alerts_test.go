@@ -127,7 +127,7 @@ func TestAlertsAndReport(t *testing.T) {
 	if !bytes.Contains(got["/teams"], []byte("AdaptiveCard")) {
 		t.Fatalf("teams: %s", got["/teams"])
 	}
-	if !strings.HasPrefix(hdrs["/hook"].Get("X-PingWatch-Signature"), "sha256=") || !bytes.Contains(got["/hook"], []byte(`"event":"outage"`)) {
+	if !strings.HasPrefix(hdrs["/hook"].Get("X-PingWacht-Signature"), "sha256=") || !bytes.Contains(got["/hook"], []byte(`"event":"outage"`)) {
 		t.Fatalf("webhook: %s %v", got["/hook"], hdrs["/hook"])
 	}
 	if len(mails) != 1 || len(mailTo[0]) != 2 || !bytes.Contains(mails[0], []byte("Subject: =?utf-8?q?")) {

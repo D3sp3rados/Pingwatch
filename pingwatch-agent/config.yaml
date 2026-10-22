@@ -1,7 +1,7 @@
-name: PingWatch Agent
+name: PingWacht Agent
 version: "1.1.0"
 slug: pingwatch_agent
-description: Agent für PingWatch – pingt Geräte im Heimnetz, fragt SNMP und die UniFi-Konsole ab und meldet alles an das PingWatch-Dashboard.
+description: Agent für PingWacht – pingt Geräte im Heimnetz, fragt SNMP und die UniFi-Konsole ab und meldet alles an das PingWacht-Dashboard.
 url: https://github.com/D3sp3rados/Pingwatch
 arch:
   - aarch64

@@ -320,5 +320,5 @@ h2{font-size:17px;margin:28px 0 10px}.inc{padding:10px 16px;border-top:1px solid
 <h2>Vorfälle der letzten 14 Tage</h2>
 <div class="p">{{range .D.Incidents}}<div class="inc"><b>{{.Name}}</b><span>{{ts .Start}} · {{if .End}}Dauer {{dur .Start .End}}{{else}}seit {{dur .Start .End}} – wird bearbeitet{{end}}</span></div>
 {{else}}<div class="inc"><span>Keine Vorfälle.</span></div>{{end}}</div>
-<div class="f">Stand {{ts .D.Updated}} · aktualisiert sich jede Minute · Überwachung mit PingWatch von <a href="{{.Provider.url}}" rel="noopener">{{.Provider.name}}</a></div>
+<div class="f">Stand {{ts .D.Updated}} · aktualisiert sich jede Minute · Überwachung mit PingWacht von <a href="{{.Provider.url}}" rel="noopener">{{.Provider.name}}</a></div>
 </div></body></html>`))

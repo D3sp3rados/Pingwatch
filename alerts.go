@@ -228,7 +228,7 @@ func kindColor(k string) string {
 func sendAlert(c Channel, n notice, at time.Time, orgName string) error {
 	switch c.Type {
 	case "email":
-		subj := "[PingWatch] " + n.title
+		subj := "[PingWacht] " + n.title
 		txt := n.title + "\n" + n.body + "\n\n" + at.Format("02.01.2006 15:04:05") + " · " + orgName + "\n" + dashboardURL() + "\n"
 		htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px">
 <div style="border-left:4px solid %s;padding:10px 14px;background:#f8fafc">
@@ -276,7 +276,7 @@ func sendAlert(c Channel, n notice, at time.Time, orgName string) error {
 		if c.Secret != "" {
 			mac := hmac.New(sha256.New, []byte(c.Secret))
 			mac.Write(b)
-			hdr["X-PingWatch-Signature"] = "sha256=" + hex.EncodeToString(mac.Sum(nil))
+			hdr["X-PingWacht-Signature"] = "sha256=" + hex.EncodeToString(mac.Sum(nil))
 		}
 		return postRaw(c.Target, b, hdr)
 	}
@@ -285,7 +285,7 @@ func sendAlert(c Channel, n notice, at time.Time, orgName string) error {
 
 func teamsActions() []any {
 	if u := dashboardURL(); u != "" {
-		return []any{map[string]any{"type": "Action.OpenUrl", "title": "PingWatch öffnen", "url": u}}
+		return []any{map[string]any{"type": "Action.OpenUrl", "title": "PingWacht öffnen", "url": u}}
 	}
 	return []any{}
 }
@@ -307,7 +307,7 @@ func linkHTML(u string) string {
 	if u == "" {
 		return ""
 	}
-	return ` · <a href="` + html.EscapeString(u) + `">PingWatch öffnen</a>`
+	return ` · <a href="` + html.EscapeString(u) + `">PingWacht öffnen</a>`
 }
 
 func postJSON(url string, v any, hdr map[string]string) error {
@@ -324,7 +324,7 @@ func postRaw(url string, body []byte, hdr map[string]string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "PingWatch/"+version)
+	req.Header.Set("User-Agent", "PingWacht/"+version)
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
@@ -375,7 +375,7 @@ func sendMail(to []string, subject, text, htmlBody string, att *attachment) erro
 }
 
 func mailFrom() string {
-	return envOr("SMTP_FROM", "PingWatch <pingwatch@"+envOr("SMTP_DOMAIN", "rst.de")+">")
+	return envOr("SMTP_FROM", "PingWacht <pingwatch@"+envOr("SMTP_DOMAIN", "rst.de")+">")
 }
 
 func addrOnly(s string) string {
@@ -690,7 +690,7 @@ func (s *Server) handleAlertTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := s.m.orgByID(c.Org)
-	err := sendAlert(*c, notice{"test", "", "✅ PingWatch-Test", "Dieser Alarmweg funktioniert. Ab jetzt kommen hier die Meldungen an.", c.Org}, time.Now(), o.Name)
+	err := sendAlert(*c, notice{"test", "", "✅ PingWacht-Test", "Dieser Alarmweg funktioniert. Ab jetzt kommen hier die Meldungen an.", c.Org}, time.Now(), o.Name)
 	setChanStatus(c.ID, err)
 	if err != nil {
 		http.Error(w, err.Error(), 502)

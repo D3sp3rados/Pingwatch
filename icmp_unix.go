@@ -60,7 +60,7 @@ func icmpPing(ip net.IP, timeout time.Duration) (int32, error) {
 	binary.BigEndian.PutUint16(pkt[4:], uint16(syscall.Getpid()&0xffff))
 	binary.BigEndian.PutUint16(pkt[6:], seq)
 	copy(pkt[8:], nonce)
-	copy(pkt[16:], []byte("PingWatch-Probe!"))
+	copy(pkt[16:], []byte("PingWacht-Probe!"))
 	binary.BigEndian.PutUint16(pkt[2:], icmpChecksum(pkt))
 
 	sa := &syscall.SockaddrInet4{}

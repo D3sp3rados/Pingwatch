@@ -17,7 +17,7 @@ func main() {
 			mode = args[0]
 			args = args[1:]
 		case "version", "-v", "--version":
-			fmt.Println("PingWatch", version)
+			fmt.Println("PingWacht", version)
 			return
 		}
 	}

@@ -62,7 +62,7 @@ func httpCheck(h HostCfg, timeout time.Duration) (int32, string, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	req.Header.Set("User-Agent", "PingWatch/"+version+" (Verfügbarkeitsprüfung)")
+	req.Header.Set("User-Agent", "PingWacht/"+version+" (Verfügbarkeitsprüfung)")
 	start := time.Now()
 	resp, err := httpCheckClient.Do(req)
 	if err != nil {

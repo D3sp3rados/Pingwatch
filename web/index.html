@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>PingWatch</title>
+<title>PingWacht</title>
 <link rel="icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="PingWatch">
+<meta name="apple-mobile-web-app-title" content="PingWacht">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b1120">
 <style>
@@ -221,7 +221,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <body>
 <div class="conn" id="conn">Keine Verbindung zum Server – Anzeige ist nicht aktuell</div>
 <header class="top"><div class="top-in">
-  <div class="brand"><img src="/icon.svg" alt="">PingWatch</div>
+  <div class="brand"><img src="/icon.svg" alt="">Ping<span style="color:var(--acc)">Wacht</span></div>
   <div class="summary" id="summary"></div>
   <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
   <button class="btn sm ed" id="mute-btn" title="Meldungen pausieren">🔔 Meldungen</button>
@@ -335,7 +335,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <b style="color:var(--fg)">So kommt ein Standort dazu (lokale IPs pingen)</b>
     <ol>
       <li>Standort anlegen, dann <b>agent.json</b> und <b>Windows-Agent</b> herunterladen.</li>
-      <li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\PingWatch</code>) und <b>pingwatch-agent.exe</b> starten.</li>
+      <li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\PingWacht</code>) und <b>pingwatch-agent.exe</b> starten.</li>
       <li>Der Agent erscheint als Symbol im Infobereich der Taskleiste und startet ab jetzt automatisch mit Windows.</li>
       <li>Hosts mit diesem Standort anlegen – der Agent übernimmt sie innerhalb weniger Sekunden.</li>
     </ol>
@@ -425,7 +425,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="check" id="wp-allf" style="display:none"><input type="checkbox" id="wp-all"> Meldungen aller Kunden (Betreiber)</label>
     </div>
     <button class="btn pri" id="wp-on">Benachrichtigungen auf diesem Gerät aktivieren</button> <button class="btn" id="wp-off" style="display:none">Auf diesem Gerät abschalten</button>
-    <p class="muted" style="font-size:12.5px;margin:10px 0 0" id="wp-help">Funktioniert auf Android (Chrome, Firefox, Edge), am PC/Mac und auf dem iPhone, wenn PingWatch als Web-App auf dem Home-Bildschirm liegt (ab iOS 16.4).</p>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0" id="wp-help">Funktioniert auf Android (Chrome, Firefox, Edge), am PC/Mac und auf dem iPhone, wenn PingWacht als Web-App auf dem Home-Bildschirm liegt (ab iOS 16.4).</p>
   </div>
   <div class="panel" style="overflow-x:auto;margin-top:10px"><table class="tbl" id="dev-tbl"></table></div>
   <p class="muted" style="font-size:12.5px" id="push-info"></p>
@@ -433,7 +433,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="panel help" style="margin-top:12px">
     <b style="color:var(--fg)">Als App auf den Home-Bildschirm</b> <button class="btn sm pri" id="install-app" style="display:none">📲 Jetzt als App installieren</button><br>
     <b>Android:</b> Seite in Chrome öffnen → Menü ⋮ → <b>Zum Startbildschirm hinzufügen</b> (bzw. „App installieren“).<br>
-    <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWatch vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWatch-App aus TestFlight nutzen.
+    <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWacht vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWacht-App aus TestFlight nutzen.
   </div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
 </section>
@@ -1059,8 +1059,8 @@ function renderSettings(){
   loadUsers(); loadAlerts(); loadMaint(); loadStatusPage(); renderGroups();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
-  if(!sup){ $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
-  $('#g-info').innerHTML=`PingWatch ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
+  if(!sup){ $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
+  $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
@@ -1200,7 +1200,7 @@ $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-
 let installEvt=null;
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; const b=$('#install-app'); if(b) b.style.display=''; });
-window.addEventListener('appinstalled',()=>{ installEvt=null; const b=$('#install-app'); if(b) b.style.display='none'; toast('PingWatch ist installiert'); });
+window.addEventListener('appinstalled',()=>{ installEvt=null; const b=$('#install-app'); if(b) b.style.display='none'; toast('PingWacht ist installiert'); });
 
 /* Meldungen pausieren / Prüfung pausieren */
 const mudlg=$('#dlg-mute'); const MU={scope:'all',id:'',mode:'mute'};
@@ -1281,7 +1281,7 @@ function wpDeviceName(){ const u=navigator.userAgent; const os=/Android/.test(u)
   const br=/Edg\//.test(u)?'Edge':/Firefox\//.test(u)?'Firefox':/Chrome\//.test(u)?'Chrome':/Safari\//.test(u)?'Safari':'Browser'; return (navigator.standalone||matchMedia('(display-mode: standalone)').matches?'Web-App':br)+' auf '+os; }
 async function wpCheck(){ if(WP.checked||!wpSupported()) return; WP.checked=true; try{ const reg=await navigator.serviceWorker.register('/sw.js'); WP.sub=await reg.pushManager.getSubscription(); }catch(e){} wpRender(); }
 function wpRender(){ if(!$('#wp-box')) return; const me=(S.state&&S.state.me)||{}; $('#wp-allf').style.display=me.super?'':'none';
-  if(!wpSupported()){ const ios=/iPhone|iPad/.test(navigator.userAgent); $('#wp-state').textContent=ios?'Auf dem iPhone geht das nur, wenn PingWatch vom Home-Bildschirm gestartet wird (Teilen → Zum Home-Bildschirm).':'Dieser Browser unterstützt keine Push-Benachrichtigungen.'; $('#wp-on').style.display='none'; $('#wp-prefs').style.display='none'; return; }
+  if(!wpSupported()){ const ios=/iPhone|iPad/.test(navigator.userAgent); $('#wp-state').textContent=ios?'Auf dem iPhone geht das nur, wenn PingWacht vom Home-Bildschirm gestartet wird (Teilen → Zum Home-Bildschirm).':'Dieser Browser unterstützt keine Push-Benachrichtigungen.'; $('#wp-on').style.display='none'; $('#wp-prefs').style.display='none'; return; }
   wpCheck();
   if(Notification.permission==='denied'){ $('#wp-state').innerHTML='<span style="color:var(--bad)">Benachrichtigungen für diese Seite sind im Browser blockiert</span> – in den Website-Einstellungen erlauben.'; $('#wp-on').style.display='none'; return; }
   const on=!!WP.sub; $('#wp-state').innerHTML=on?'<b style="color:var(--ok)">✓ aktiv</b> – '+esc(wpDeviceName()):'aus'; $('#wp-on').textContent=on?'Einstellungen speichern':'Benachrichtigungen auf diesem Gerät aktivieren'; $('#wp-on').style.display=''; $('#wp-off').style.display=on?'':'none'; }
@@ -1350,7 +1350,7 @@ const AHELP={
   email:'Mehrere Adressen mit Komma trennen. Mit „Monatsbericht“ kommt am 1. jedes Monats der PDF-Bericht des Vormonats.',
   teams:'In Teams im gewünschten Kanal: <b>⋯ → Workflows → „Beim Empfang einer Webhook-Anforderung in einem Kanal posten“</b> → Workflow anlegen und die angezeigte URL hier einfügen.',
   telegram:'1. In Telegram <b>@BotFather</b> öffnen → <code>/newbot</code> → Token kopieren (entfällt, wenn der Anbieter-Bot genutzt wird).<br>2. Dem Bot eine Nachricht schreiben oder ihn in die Gruppe aufnehmen.<br>3. „Chat-ID suchen“ klicken.',
-  webhook:'PingWatch sendet bei jeder Meldung ein JSON per POST (<code>event, title, message, host, time</code>). Mit Schlüssel wird signiert: Header <code>X-PingWatch-Signature: sha256=HMAC</code>.'};
+  webhook:'PingWacht sendet bei jeder Meldung ein JSON per POST (<code>event, title, message, host, time</code>). Mit Schlüssel wird signiert: Header <code>X-PingWacht-Signature: sha256=HMAC</code>.'};
 function syncAlertForm(){ const t=af.type.value, c=AL&&AL.channels.find(x=>x.id===af.dataset.id);
   $('#af-tl').textContent={email:'E-Mail-Adressen',teams:'Workflow-URL aus Teams',telegram:'Chat-ID',webhook:'Webhook-URL'}[t];
   af.target.placeholder={email:'technik@firma.de, chef@firma.de',teams:'https://….logic.azure.com/workflows/…',telegram:'z. B. 123456789 oder -100…',webhook:'https://…'}[t];
@@ -1427,7 +1427,7 @@ let TMP={};
 function showTemp(email,pw,mailNow){ TMP={email,pw};
   $('#tp-text').innerHTML=`<table class="tbl" style="font-size:14px"><tr><td class="muted">Anmeldung</td><td>${esc(location.origin)}/login</td></tr><tr><td class="muted">E-Mail</td><td><b>${esc(email)}</b></td></tr><tr><td class="muted">Vorläufiges Passwort</td><td><b class="num" style="font-size:16px;letter-spacing:.03em">${esc(pw)}</b></td></tr></table><p class="muted" style="font-size:12.5px">Das Passwort wird nur jetzt angezeigt. Der Benutzer ändert es nach der ersten Anmeldung unter Einstellungen → Allgemein.</p>`;
   $('#tp-status').textContent=''; $('#tp-mail').disabled=false; $('#dlg-temp').showModal(); if(mailNow) $('#tp-mail').click(); }
-$('#tp-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText(`PingWatch-Zugang\nAnmeldung: ${location.origin}/login\nE-Mail: ${TMP.email}\nPasswort: ${TMP.pw}`); toast('Zugangsdaten kopiert'); };
+$('#tp-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText(`PingWacht-Zugang\nAnmeldung: ${location.origin}/login\nE-Mail: ${TMP.email}\nPasswort: ${TMP.pw}`); toast('Zugangsdaten kopiert'); };
 $('#tp-mail').onclick=async()=>{ $('#tp-mail').disabled=true; $('#tp-status').textContent='sende …';
   try{ await api('/api/users/mail',{method:'POST',body:JSON.stringify({email:TMP.email,password:TMP.pw})}); $('#tp-status').innerHTML='<b style="color:var(--ok)">✓ E-Mail an '+esc(TMP.email)+' gesendet</b>'; }
   catch(e){ $('#tp-status').innerHTML='<span style="color:var(--bad)">'+esc(e.message)+'</span>'; $('#tp-mail').disabled=false; } };

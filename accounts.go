@@ -251,7 +251,7 @@ func (m *Monitor) ownerCountLocked(org string) int {
 // ---------- Registrierung ----------
 
 var signupTmpl = template.Must(template.New("s").Parse(`<!doctype html><html lang="de"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>PingWatch – Konto erstellen</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>PingWacht – Konto erstellen</title>
 <link rel="icon" href="/favicon.ico"><style>
 :root{--bg:#f3f5f9;--card:#fff;--fg:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#059669}
 @media (prefers-color-scheme:dark){:root{--bg:#0b1120;--card:#111a2e;--fg:#e2e8f0;--mut:#8b9ab4;--line:#1e2a44;--acc:#34d399}}
@@ -263,7 +263,7 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 .err{color:#ef4444;font-size:13px;margin:-4px 0 12px}.small{font-size:12px;color:var(--mut);margin-top:14px;text-align:center}a{color:var(--acc)}
 .chk{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--mut);margin:-4px 0 14px}.chk input{width:auto;margin:3px 0 0}
 </style></head><body><form method="post">
-<h1>PingWatch – kostenlos starten</h1><p>Free-Paket: 1 Standort, 5 Hosts. Jederzeit erweiterbar.</p>
+<h1>PingWacht – kostenlos starten</h1><p>Free-Paket: 1 Standort, 5 Hosts. Jederzeit erweiterbar.</p>
 {{if .Err}}<div class="err">{{.Err}}</div>{{end}}
 <label>Firma</label><input name="org" required maxlength="80" value="{{.Org}}">
 <label>Ihr Name</label><input name="name" maxlength="80" value="{{.Name}}">
@@ -668,14 +668,14 @@ func (s *Server) handleUserMail(w http.ResponseWriter, r *http.Request) {
 	if u.Expires > 0 {
 		exp = "\nDer Zugang ist gültig bis " + time.UnixMilli(u.Expires).Format("02.01.2006") + "."
 	}
-	txt := fmt.Sprintf("Guten Tag%s,\n\n%s hat Ihnen einen Zugang zu PingWatch (%s) eingerichtet.\n\nAnmeldung: %s\nE-Mail: %s\nVorläufiges Passwort: %s\nRolle: %s%s\n\nBitte ändern Sie das Passwort nach der ersten Anmeldung unter Einstellungen → Allgemein.\n",
+	txt := fmt.Sprintf("Guten Tag%s,\n\n%s hat Ihnen einen Zugang zu PingWacht (%s) eingerichtet.\n\nAnmeldung: %s\nE-Mail: %s\nVorläufiges Passwort: %s\nRolle: %s%s\n\nBitte ändern Sie das Passwort nach der ersten Anmeldung unter Einstellungen → Allgemein.\n",
 		nameSuffix(u.Name), from, orgName, link, u.Email, req.Password, role, exp)
-	htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px">Guten Tag%s,<br><br>%s hat Ihnen einen Zugang zu <b>PingWatch</b> (%s) eingerichtet.<br><br>
+	htm := fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px">Guten Tag%s,<br><br>%s hat Ihnen einen Zugang zu <b>PingWacht</b> (%s) eingerichtet.<br><br>
 <table style="font-size:14px"><tr><td style="color:#64748b;padding-right:12px">Anmeldung</td><td><a href="%s">%s</a></td></tr><tr><td style="color:#64748b">E-Mail</td><td>%s</td></tr><tr><td style="color:#64748b">Vorläufiges Passwort</td><td><b style="font-family:monospace">%s</b></td></tr><tr><td style="color:#64748b">Rolle</td><td>%s</td></tr></table>%s
 <p>Bitte ändern Sie das Passwort nach der ersten Anmeldung unter <i>Einstellungen → Allgemein</i>.</p></div>`,
 		html.EscapeString(nameSuffix(u.Name)), html.EscapeString(from), html.EscapeString(orgName), link, link, html.EscapeString(u.Email),
 		html.EscapeString(req.Password), role, strings.ReplaceAll(html.EscapeString(exp), "\n", "<br>"))
-	if err := sendMail([]string{u.Email}, "Ihr Zugang zu PingWatch", txt, htm, nil); err != nil {
+	if err := sendMail([]string{u.Email}, "Ihr Zugang zu PingWacht", txt, htm, nil); err != nil {
 		http.Error(w, "E-Mail konnte nicht gesendet werden: "+err.Error(), 502)
 		return
 	}

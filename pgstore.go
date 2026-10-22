@@ -576,9 +576,9 @@ func dbDownMail(err error) {
 	if to == "" || !smtpConfigured() {
 		return
 	}
-	txt := "PingWatch kann seit über 2 Minuten die Datenbank nicht erreichen und zeigt so lange eine Wartungsseite.\n\nFehler: " + err.Error() +
-		"\n\nPingWatch versucht es alle 10 Sekunden weiter und startet automatisch, sobald die Datenbank wieder erreichbar ist."
-	if e := sendMail(splitAddrs(to), "[PingWatch] Datenbank nicht erreichbar", txt, "", nil); e != nil {
+	txt := "PingWacht kann seit über 2 Minuten die Datenbank nicht erreichen und zeigt so lange eine Wartungsseite.\n\nFehler: " + err.Error() +
+		"\n\nPingWacht versucht es alle 10 Sekunden weiter und startet automatisch, sobald die Datenbank wieder erreichbar ist."
+	if e := sendMail(splitAddrs(to), "[PingWacht] Datenbank nicht erreichbar", txt, "", nil); e != nil {
 		log.Printf("Hinweis-Mail Datenbank: %v", e)
 	}
 }
