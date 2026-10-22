@@ -155,6 +155,14 @@ details.inst-more summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .site-h:first-child{margin-top:2px}
 .site-h .muted{font-weight:400;font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.gd-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.gtile{padding:12px 14px;cursor:pointer;transition:border-color .15s}.gtile:hover,.utile:hover{border-color:var(--acc)}
+.gt-h{display:flex;align-items:center;gap:8px}.gt-h b{font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gt-h .chev,.utile .chev{color:var(--mut);font-size:20px;line-height:1}
+.gt-n{font-size:13px;margin-top:8px;line-height:1.6}.gt-p{font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.utile{cursor:pointer}
+.gd-crumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px;margin:2px 0 10px}.gd-crumb a{color:var(--acc);text-decoration:none}.gd-crumb a:hover{text-decoration:underline}
+.gd-cats{flex-wrap:wrap}.gd-val{font-size:13px;margin-top:2px}
 #ov.compact .grid{grid-template-columns:1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
 #ov.compact .card{padding:7px 12px;border:0;border-radius:0;border-top:1px solid var(--line);box-shadow:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,240px);align-items:center;column-gap:14px}
 #ov.compact .card:first-child{border-top:0}
@@ -1478,7 +1486,8 @@ function renderOverview(){
   if(view==='table'){ $('#ovmode').style.display='none'; root.dataset.sig=''; cards={}; renderOvTable(root,st); return; }
   root.dataset.thtml=''; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
   const secs=[], ms=st.machines||[];
-  if(mode==='group'){
+  if(mode==='group'&&gs.length){ const d=groupDrill(root,st,gs,ms); if(!d) return; secs.push(d); }
+  else if(mode==='group'){
     // mehrere Standorte: Gruppen je Standort darunter (klare Trennung), sonst wie bisher
     const used=st.sites.filter(s=>st.hosts.some(h=>h.site===s.id)||ms.some(m=>m.site===s.id)||(s.unifi&&s.unifi.on));
     const multi=used.length>1;
@@ -1494,6 +1503,7 @@ function renderOverview(){
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const sec of secs){
+      if(sec.crumb){ const c=document.createElement('div'); c.className='gd-cr'; root.appendChild(c); c.innerHTML=gdCrumb(['Alle Gruppen','📁 '+esc(sec.crumb)]); gdBindCrumb(c,[()=>ovgSet({g:null,u:null})]); }
       if(sec.div){ const d=document.createElement('div'); d.className='ov-site'; d.dataset.div=sec.div.id; root.appendChild(d); }
       const h=document.createElement('div'); h.className='site-h'; h.dataset.sec=sec.key; root.appendChild(h);
       const g=document.createElement('div'); g.className='grid'; g.dataset.sec=sec.key; root.appendChild(g);
@@ -1505,6 +1515,7 @@ function renderOverview(){
         c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
         const bar=c.querySelector('.bar'); bar.addEventListener('mousemove',e=>barHover(e,host.id)); bar.addEventListener('mouseleave',hideTip); bar.addEventListener('click',e=>barClick(e,host.id));
         g.appendChild(c); cards[host.id]=c; }
+      for(const us of sec.utiles||[]){ const c=document.createElement('div'); c.className='panel card utile'; c.dataset.usite=us.id; g.appendChild(c); }
       for(const mc of sec.machines||[]){ const c=document.createElement('div'); c.className='panel card mcard'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><div class="meters"></div><div class="mtags"></div><div class="mmini"></div><div class="last"></div>`;
         c.onclick=()=>{ location.hash='#/machine/'+mc.id; }; g.appendChild(c); cards['m:'+mc.id]=c; }
     }
@@ -1520,6 +1531,7 @@ function renderOverview(){
       const gm=h.querySelector('[data-gmute]'); if(gm) gm.onclick=e=>{ e.preventDefault(); openMute('group',sec.group.id,sec.group.name); }; }
   }
   for(const sec of secs){ if(!sec.site) continue; const u=root.querySelector(`.uf[data-site="${sec.site.id}"]`); if(u) renderUniFi(u,sec.site); }
+  for(const sec of secs) for(const us of sec.utiles||[]){ const el=root.querySelector(`.utile[data-usite="${us.id}"]`); if(el) gdUTile(el,us); }
   for(const h of st.hosts){ const c=cards[h.id]; if(!c) continue;
     const [lbl,col]=STATUS[h.status]||STATUS.unknown;
     c.classList.toggle('down',h.status==='down');
@@ -1608,6 +1620,76 @@ function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; 
   if(det.dataset.html!==html){ const open=[...det.querySelectorAll('details')].map(d=>d.open); det.innerHTML=html; det.dataset.html=html; det.querySelectorAll('details').forEach((d,i)=>{ if(open[i]) d.open=true; }); }
   const ib=$('#inst-android-btn'); if(ib) ib.onclick=installApp; }
 /* Übersicht: je Abschnitt zunächst ~2 Zeilen (Liste: 4 Einträge), gestörte Hosts immer zuerst und immer sichtbar */
+/* ---------- Gruppen zum Durchklicken: Ordner → Inhalt → UniFi-Bereich ---------- */
+let OVG={g:null,u:null,c:'all'}; try{ Object.assign(OVG,JSON.parse(sessionStorage.getItem('pw_ovg')||'{}')); }catch(e){}
+function ovgSet(o){ Object.assign(OVG,o); try{ sessionStorage.setItem('pw_ovg',JSON.stringify(OVG)); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); window.scrollTo({top:0}); }
+const UOFF=d=>['OFFLINE','CONNECTION_INTERRUPTED','ISOLATED','DISCONNECTED'].includes(d.state);
+function gdFolders(st,gs,ms){ const fs=[], used=new Set();
+  const mk=(key,name,note,hosts,machines)=>{ const sites=[...new Set([...hosts,...machines].map(x=>x.site))].map(id=>st.sites.find(s=>s.id===id)).filter(s=>s&&s.unifi&&s.unifi.on); sites.forEach(s=>used.add(s.id)); return {key,name,note,hosts,machines,usites:sites}; };
+  for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id), mm=ms.filter(m=>m.group===g.id); if(hs.length||mm.length) fs.push(mk('g'+g.id,g.name,g.note||'',hs,mm)); }
+  const rest=st.hosts.filter(h=>!h.group||!gs.some(g=>g.id===h.group)), mrest=ms.filter(m=>!m.group||!gs.some(g=>g.id===m.group));
+  if(rest.length||mrest.length) fs.push(mk('g-','Ohne Gruppe','',rest,mrest));
+  for(const s of st.sites) if(s.unifi&&s.unifi.on&&!used.has(s.id)) fs.push({key:'u:'+s.id,name:'UniFi · '+s.name,note:'',hosts:[],machines:[],usites:[s],uonly:true});
+  return fs; }
+function gdUniStats(s){ const u=s.unifi||{}, devs=u.devices||[], p=(u.protect&&u.protect.devs)||[];
+  const n={gateway:0,switch:0,ap:0,other:0,protect:0,sensor:0}, off={...n}, low=p.filter(protLow).length;
+  for(const d of devs){ n[d.cat]=(n[d.cat]||0)+1; if(UOFF(d)) off[d.cat]=(off[d.cat]||0)+1; }
+  for(const d of p){ const k=d.kind==='sensor'?'sensor':'protect'; n[k]++; if(!protOn(d)) off[k]++; }
+  const offT=Object.values(off).reduce((a,b)=>a+b,0)+(u.err?1:0)+(u.wanDown||0);
+  return {n,off,low,offT,err:u.err}; }
+function gdStatus(f){ let bad=0,warn=0,ok=0,tot=0;
+  for(const h of f.hosts){ if(h.paused) continue; tot++; if(h.status==='down') bad++; else if(h.status==='loss'||h.status==='spike') warn++; else if(h.status==='ok') ok++; }
+  for(const m of f.machines){ tot++; if(m.status==='bad'||m.status==='off') bad++; else if(m.status==='warn') warn++; else if(m.status==='ok') ok++; }
+  for(const s of f.usites){ const x=gdUniStats(s); bad+=x.offT; warn+=x.low; }
+  return {bad,warn,ok,tot,col:bad?'--bad':warn?'--warn':tot&&ok<tot&&!f.usites.length?'--off':'--ok'}; }
+const gdCrumb=parts=>`<div class="gd-crumb">${parts.map((p,i)=>i<parts.length-1?`<a href="#" data-gd="${i}">${p}</a><span class="muted">›</span>`:`<b>${p}</b>`).join('')}</div>`;
+function gdBindCrumb(root,acts){ root.querySelectorAll('[data-gd]').forEach(a=>a.onclick=e=>{ e.preventDefault(); acts[+a.dataset.gd](); }); }
+// Rückgabe: Abschnitt für Ebene 2 (Inhalt einer Gruppe) – oder null, wenn hier fertig gezeichnet wurde.
+function groupDrill(root,st,gs,ms){ const fs=gdFolders(st,gs,ms); let f=OVG.g&&fs.find(x=>x.key===OVG.g);
+  if(OVG.g&&!f){ OVG.g=null; OVG.u=null; }
+  if(f&&f.uonly&&!OVG.u) OVG.u=f.usites[0].id;
+  if(!f){ // Ebene 1: Ordner
+    const html=`<div class="grid gd-grid">`+fs.map(x=>{ const s=gdStatus(x), parts=[];
+      if(x.hosts.length) parts.push(`🌐 ${x.hosts.length} Host${x.hosts.length>1?'s':''}`);
+      if(x.machines.length) parts.push(`💻 ${x.machines.length} Rechner`);
+      let un=0,pn=0,sn=0; for(const u of x.usites){ const q=gdUniStats(u); un+=q.n.gateway+q.n.switch+q.n.ap+q.n.other; pn+=q.n.protect; sn+=q.n.sensor; }
+      if(un) parts.push(`📶 ${un} UniFi`); if(pn) parts.push(`📷 ${pn} Protect`); if(sn) parts.push(`🌡 ${sn} Sensor${sn>1?'en':''}`);
+      const names=[...x.hosts,...x.machines].map(y=>y.name); const prev=names.slice(0,5).join(' · ')+(names.length>5?` · +${names.length-5}`:'');
+      return `<div class="panel gtile" data-gk="${esc(x.key)}"><div class="gt-h"><span class="dot" style="background:var(${s.col})"></span><b>${x.uonly?'📶':'📁'} ${esc(x.name)}</b>${s.bad?`<span class="tag bad">${s.bad} Störung${s.bad>1?'en':''}</span>`:s.warn?`<span class="tag warn">${s.warn} Warnung${s.warn>1?'en':''}</span>`:`<span class="muted" style="font-size:12.5px">alles OK</span>`}<span class="chev">›</span></div>
+        <div class="gt-n">${parts.join('<span class="muted"> · </span>')||'<span class="muted">leer</span>'}</div>${prev?`<div class="gt-p muted">${esc(prev)}</div>`:''}${x.note?`<div class="gt-p muted">${esc(x.note)}</div>`:''}</div>`; }).join('')+'</div>';
+    if(root.dataset.sig!=='gd1'){ root.innerHTML=''; cards={}; root.dataset.sig='gd1'; }
+    if(root.dataset.gh!==html){ root.innerHTML=html; root.dataset.gh=html; root.querySelectorAll('[data-gk]').forEach(t=>t.onclick=()=>ovgSet({g:t.dataset.gk,u:null,c:'all'})); }
+    return null; }
+  const s=OVG.u&&f.usites.find(x=>x.id===OVG.u);
+  if(s){ // Ebene 3: UniFi eines Standorts mit Auswahl
+    const u=s.unifi||{}, devs=u.devices||[], pd=(u.protect&&u.protect.devs)||[], q=gdUniStats(s);
+    const cats=[['all','Alle',devs.length+pd.length],['gateway','Gateway',q.n.gateway],['switch','Switches',q.n.switch],['ap','Access Points',q.n.ap],['other','Sonstige',q.n.other],['protect','📷 Protect',q.n.protect],['sensor','🌡 Sensoren',q.n.sensor]].filter(c=>c[0]==='all'||c[2]);
+    if(!cats.some(c=>c[0]===OVG.c)) OVG.c='all';
+    const offOf=k=>k==='all'?q.offT:q.off[k];
+    const chips=`<div class="seg gd-cats">${cats.map(([k,t,n])=>`<button data-uc="${k}" class="${OVG.c===k?'on':''}">${t} <span class="muted">${n}</span>${offOf(k)?` <span style="color:var(--bad)">●${offOf(k)}</span>`:''}</button>`).join('')}</div>`;
+    const net=devs.filter(d=>OVG.c==='all'||d.cat===OVG.c), prot=pd.filter(d=>OVG.c==='all'||(OVG.c==='sensor'?d.kind==='sensor':OVG.c==='protect'&&d.kind!=='sensor'));
+    const ntile=d=>{ const off=UOFF(d); const m=[esc(d.model),d.ip?esc(d.ip):'',d.pingAvg>=0?`${d.pingAvg.toLocaleString('de-DE',{maximumFractionDigits:1})} ms`:'',d.loss>0?`<span style="color:var(--loss)">${Math.round(d.loss)} % Verlust</span>`:'',off?`<span style="color:var(--bad)">offline seit ${fmtTime(d.since,false)}</span>`:''].filter(Boolean).join(' · ');
+      return `<div class="ud${off?' off':''}" data-ud="${esc(d.mac||d.name)}"><div class="ud-t"><span class="dot" style="background:var(${off?'--bad':d.state==='ONLINE'?'--ok':'--warn'})"></span><b title="${esc(d.name)}">${esc(d.name)}</b><span class="muted" style="font-size:12px">${UCAT[d.cat]||''}</span></div><div class="ud-m">${m}</div><div class="ubar">${(d.bar||[]).map(l=>`<i class="l${l}"></i>`).join('')}</div></div>`; };
+    const ptile=d=>{ const on=protOn(d), low=protLow(d);
+      return `<div class="ud${on?'':' off'}"><div class="ud-t"><span class="dot" style="background:var(${on?(low?'--warn':'--ok'):'--bad'})"></span><b title="${esc(d.name)}">${esc(d.name)}</b><span class="muted" style="font-size:12px">${PKIND[d.kind]||''}</span></div><div class="ud-m">${[esc(d.model||''),on?'online':'<span style="color:var(--bad)">offline</span>',low?'<span style="color:var(--warn)">Akku schwach</span>':''].filter(Boolean).join(' · ')}</div>${protVal(d)?`<div class="gd-val num">${esc(protVal(d))}</div>`:''}</div>`; };
+    const body=(u.err?`<div class="panel" style="padding:10px 12px;color:var(--bad)">UniFi-Konsole nicht erreichbar: ${esc(u.err)}</div>`:'')
+      +(net.length?`<div class="uf-g">${net.map(ntile).join('')}</div>`:'')+(prot.length?`<div class="uf-g" style="margin-top:${net.length?10:0}px">${prot.map(ptile).join('')}</div>`:'')
+      +(!net.length&&!prot.length&&!u.err?'<div class="panel empty">Keine Geräte in dieser Auswahl.</div>':'');
+    const crumbParts=f.uonly?['Alle Gruppen','📶 '+esc(f.name)]:['Alle Gruppen','📁 '+esc(f.name),'📶 UniFi · '+esc(s.name)];
+    const html=gdCrumb(crumbParts)+`<div class="muted" style="font-size:12.5px;margin:-4px 0 8px">${u.at?'Stand '+fmtTime(u.at,false):''}${u.protect?' · Protect '+fmtTime(u.protect.at,false):''}</div>`+chips+`<div style="margin-top:10px">${body}</div>`;
+    if(root.dataset.sig!=='gd3'){ root.innerHTML=''; cards={}; root.dataset.sig='gd3'; }
+    if(root.dataset.gh!==html){ root.innerHTML=html; root.dataset.gh=html;
+      gdBindCrumb(root,f.uonly?[()=>ovgSet({g:null,u:null})]:[()=>ovgSet({g:null,u:null}),()=>ovgSet({u:null})]);
+      root.querySelectorAll('[data-uc]').forEach(b=>b.onclick=()=>ovgSet({c:b.dataset.uc}));
+      root.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud))); }
+    return null; }
+  // Ebene 2: Inhalt der Gruppe (Karten wie gewohnt) + UniFi-Kacheln
+  root.dataset.gh='';
+  return {key:'gd:'+f.key,kind:'group',group:{id:f.key.startsWith('g')&&f.key!=='g-'?f.key.slice(1):'',name:f.name,note:f.note},hosts:f.hosts,machines:f.machines,utiles:f.usites,crumb:f.name}; }
+function gdUTile(el,s){ const q=gdUniStats(s), u=s.unifi||{}, parts=[];
+  for(const [k,t] of [['gateway','Gateway'],['switch','Switches'],['ap','APs'],['other','Sonstige'],['protect','📷 Protect'],['sensor','🌡 Sensoren']]) if(q.n[k]) parts.push(`${t} ${q.n[k]}${q.off[k]?` <b style="color:var(--bad)">(${q.off[k]} offline)</b>`:''}`);
+  const html=`<div class="card-h"><span class="dot" style="background:var(${q.offT?'--bad':q.low?'--warn':'--ok'})"></span><div class="card-t"><b>📶 UniFi · ${esc(s.name)}</b><span>${u.err?'Konsole nicht erreichbar':u.at?'Stand '+fmtTime(u.at,false):'warte auf erste Abfrage …'}</span></div><span class="chev" style="font-size:20px">›</span></div><div class="gt-n" style="margin-top:8px">${parts.join('<span class="muted"> · </span>')||'<span class="muted">keine Geräte</span>'}</div>${q.low?`<div class="gt-p" style="color:var(--warn)">🔋 ${q.low} Akku schwach</div>`:''}`;
+  if(el.dataset.h!==html){ el.innerHTML=html; el.dataset.h=html; } el.onclick=()=>ovgSet({u:s.id,c:'all'}); }
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
 const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
 function ovFold(root,secs,view){ const open=ovOpen();
