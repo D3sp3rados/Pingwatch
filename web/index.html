@@ -73,6 +73,15 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 /* Übersicht */
 .site-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-weight:600}
+.cmdbox{display:flex;gap:8px;align-items:flex-start;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 6px 6px 10px;margin:2px 0}
+.cmdbox pre{flex:1;min-width:0;margin:0;padding:4px 0;white-space:pre-wrap;word-break:break-all;font-size:12.5px;user-select:all}
+.cmdbox .btn{flex:none}
+.inst-steps li{margin:0 0 8px}
+.inst-site{margin:0 0 12px}
+details.inst-more{margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px}
+details.inst-more summary{cursor:pointer;font-weight:600;color:var(--acc)}
+.ov-site{display:flex;align-items:center;gap:8px;margin:30px 0 0;padding:0 0 8px;border-bottom:2px solid var(--line);font-size:18px;font-weight:700}
+#ov>.ov-site:first-child{margin-top:6px}
 .evg{margin-bottom:10px}.evg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;cursor:pointer;font-size:13.5px}
 .evg-h b{font-size:14px}.evg-h .chev{margin-left:auto;color:var(--mut);transition:transform .15s}.evg.open .evg-h .chev{transform:rotate(90deg)}
 .evg-b{display:none;border-top:1px solid var(--line)}.evg.open .evg-b{display:block}.evg-b .ev:first-child{border-top:0}
@@ -966,6 +975,13 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
 <script>
 'use strict';
 /* Eigene Dialoge im PingWacht-Design statt alert/confirm/prompt des Browsers */
+/* Klick neben ein Fenster schließt es – außer Rückfragen/Passwort-Fenster und wenn schon etwas eingegeben wurde */
+(()=>{ const KEEP=new Set(['dlg-ui','dlg-temp','dlg-pw']); const sm=HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal=function(){ this.dataset.dirty=''; return sm.apply(this,arguments); };
+  document.addEventListener('input',e=>{ const d=e.target.closest&&e.target.closest('dialog'); if(d) d.dataset.dirty='1'; },true);
+  const out=(d,e)=>{ const r=d.getBoundingClientRect(); return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom; };
+  let down=null; document.addEventListener('pointerdown',e=>{ down=e.target.tagName==='DIALOG'&&out(e.target,e)?e.target:null; },true);
+  document.addEventListener('click',e=>{ const d=e.target; if(d.tagName!=='DIALOG'||d!==down||!d.open||KEEP.has(d.id)||d.dataset.dirty||!out(d,e)) return; d.close('cancel'); },true); })();
 function uiDialog({title='',text='',input=null,ok='OK',cancel=null,danger=false}){ return new Promise(res=>{
   const d=$('#dlg-ui'); $('#ui-t').textContent=title||'PingWacht'; $('#ui-x').textContent=text||''; const inp=$('#ui-in');
   inp.style.display=input===null?'none':''; inp.value=input===null?'':String(input);
@@ -1045,9 +1061,14 @@ function renderOverview(){
   $('#ovbar').style.display=st.hosts.length>1?'flex':'none'; $('#ovbar').style.flexWrap='wrap'; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
   const secs=[], ms=st.machines||[];
   if(mode==='group'){
-    for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id), mm=ms.filter(m=>m.group===g.id); if(hs.length||mm.length) secs.push({key:'g'+g.id,kind:'group',group:g,hosts:hs,machines:mm}); }
-    const rest=st.hosts.filter(h=>!h.group||!gs.some(g=>g.id===h.group)), mrest=ms.filter(m=>!m.group||!gs.some(g=>g.id===m.group)); if(rest.length||mrest.length) secs.push({key:'g-',kind:'group',group:{name:'Ohne Gruppe'},hosts:rest,machines:mrest});
-    for(const s of st.sites) if(s.unifi&&s.unifi.on) secs.push({key:'u'+s.id,kind:'site',site:s,hosts:[]});
+    // mehrere Standorte: Gruppen je Standort darunter (klare Trennung), sonst wie bisher
+    const used=st.sites.filter(s=>st.hosts.some(h=>h.site===s.id)||ms.some(m=>m.site===s.id)||(s.unifi&&s.unifi.on));
+    const multi=used.length>1;
+    for(const s of multi?used:[null]){ const inS=x=>!s||x.site===s.id, sfx=s?'@'+s.id:''; let first=!!s; const push=o=>{ if(first){ o.div=s; first=false; } secs.push(o); };
+      for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id&&inS(h)), mm=ms.filter(m=>m.group===g.id&&inS(m)); if(hs.length||mm.length) push({key:'g'+g.id+sfx,kind:'group',group:g,hosts:hs,machines:mm}); }
+      const rest=st.hosts.filter(h=>(!h.group||!gs.some(g=>g.id===h.group))&&inS(h)), mrest=ms.filter(m=>(!m.group||!gs.some(g=>g.id===m.group))&&inS(m)); if(rest.length||mrest.length) push({key:'g-'+sfx,kind:'group',group:{name:'Ohne Gruppe'},hosts:rest,machines:mrest});
+      if(s&&s.unifi&&s.unifi.on) push({key:'u'+s.id,kind:'site',site:s,hosts:[]}); }
+    if(!multi) for(const s of st.sites) if(s.unifi&&s.unifi.on) secs.push({key:'u'+s.id,kind:'site',site:s,hosts:[]});
   } else {
     for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id), mm=ms.filter(m=>m.site===s.id); if(hs.length||mm.length||(s.unifi&&s.unifi.on)) secs.push({key:'s'+s.id,kind:'site',site:s,hosts:hs,machines:mm}); }
   }
@@ -1055,6 +1076,7 @@ function renderOverview(){
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const sec of secs){
+      if(sec.div){ const d=document.createElement('div'); d.className='ov-site'; d.dataset.div=sec.div.id; root.appendChild(d); }
       const h=document.createElement('div'); h.className='site-h'; h.dataset.sec=sec.key; root.appendChild(h);
       const g=document.createElement('div'); g.className='grid'; g.dataset.sec=sec.key; root.appendChild(g);
       if(sec.hosts.length||(sec.machines||[]).length){ const mb=document.createElement('button'); mb.className='btn sm ov-more'; mb.dataset.sec=sec.key; mb.style.display='none';
@@ -1070,7 +1092,8 @@ function renderOverview(){
     }
   }
   ovFold(root,secs,view);
-  for(const sec of secs){ const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
+  for(const sec of secs){ if(sec.div){ const d=root.querySelector(`.ov-site[data-div="${sec.div.id}"]`), s=sec.div; if(d) d.innerHTML=`<span class="dot" style="background:var(${s.online?'--ok':'--bad'})"></span>📍 ${esc(s.name)} <span class="muted" style="font-size:13px;font-weight:400">${s.id==='cloud'?'pingt aus dem Rechenzentrum':s.online?'verbunden':'nicht verbunden'}</span>`; }
+    const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
     const mm=sec.machines||[], mInfo=mm.length?` · 💻 ${mm.filter(x=>x.status==='ok').length}/${mm.length} Rechner OK`:'';
     if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':s.kind==='unifi'?(on?'über UniFi-Cloud · Konsole erreichbar':s.unifi&&s.unifi.err?'über UniFi-Cloud · Konsole nicht erreichbar':'über UniFi-Cloud · warte auf Abfrage'):on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}${mInfo}</span>`; }
     else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
@@ -1084,7 +1107,7 @@ function renderOverview(){
     c.classList.toggle('down',h.status==='down');
     c.querySelector('.dot').style.background=`var(${col})`;
     c.querySelector('.card-t b').textContent=h.name;
-    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+(ovMode()==='group'?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'');
+    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+(ovMode()==='group'&&!root.querySelector('.ov-site')?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
     const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
     const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
@@ -1127,6 +1150,9 @@ const AGENT_DL={win:[['pingwatch-agent.exe','Windows-Agent']],linux:[['pingwatch
 function agentDlLinks(keys,pri){ return keys.flatMap(k=>AGENT_DL[k]||[]).map(([f,l])=>`<a class="btn sm${pri?' pri':''}" href="/download/${f}">${l}</a>`).join(''); }
 function detectPlatform(){ const ua=navigator.userAgent||''; if(/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)) return 'ios'; if(/Android/.test(ua)) return 'android'; if(/Windows/.test(ua)) return 'win'; if(/Macintosh|Mac OS X/.test(ua)) return 'mac'; if(/Linux|X11/.test(ua)) return 'linux'; return 'win'; }
 const INST={sel:null};
+function cmdBox(cmd){ return `<div class="cmdbox"><pre>${esc(cmd)}</pre><button class="btn sm" type="button" data-copycmd>Kopieren</button></div>`; }
+document.addEventListener('click',async e=>{ const b=e.target.closest('[data-copycmd]'); if(!b) return; const t=b.parentElement.querySelector('pre').textContent;
+  try{ await navigator.clipboard.writeText(t); b.textContent='✓ Kopiert'; setTimeout(()=>{ b.textContent='Kopieren'; },2000); }catch(err){ const r=document.createRange(); r.selectNodeContents(b.parentElement.querySelector('pre')); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); toast('Befehl markiert – mit Strg+C kopieren'); } });
 function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; const canAgent=me.super||me.role!=='viewer'; const dev=detectPlatform();
   const tiles=[['win','🪟','Windows','Agent',true],['mac','🍎','Mac','Agent',true],['linux','🐧','Linux / Raspberry Pi','Agent · Home Assistant',true],['ios','📱','iPhone / iPad','App',false],['android','🤖','Android','App',false]].filter(t=>canAgent||!t[4]);
   if(!INST.sel||!tiles.some(t=>t[0]===INST.sel)) INST.sel=tiles.some(t=>t[0]===dev)?dev:tiles[0][0];
@@ -1137,26 +1163,29 @@ function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; 
   const siteJson=sites.length?`<div class="row" style="margin:6px 0">${sites.map(x=>`<a class="btn sm" href="/download/agent.json?site=${x.id}">agent.json – ${esc(x.name)}</a>`).join('')}</div>`:`<div class="muted" style="margin:6px 0">Noch kein Standort – zuerst unter <a href="#/settings/sites">Einstellungen → Standorte</a> einen Standort anlegen (z. B. „Büro“).</div>`;
   const step1=`<li><b>Standort wählen</b> und dessen <b>agent.json</b> herunterladen (ein Standort = ein lokales Netz):${siteJson}</li>`;
   const push=`<a href="#/settings/konto">Einstellungen → Mein Konto</a>`;
-  const sysJson=sites.length?`<span class="row" style="display:inline-flex;flex-wrap:wrap">${sites.map(x=>`<a class="btn sm" href="/download/agent.json?site=${x.id}&mode=sysonly">agent.json „nur Rechner“ – ${esc(x.name)}</a>`).join('')}</span>`:'(zuerst einen Standort anlegen)';
   const sysOn=sites.some(x=>x.sys&&x.sys.on);
-  const sysBlock=k=>`<h3 style="margin-top:16px">💻 Weitere Server/PCs überwachen (nur Rechner)</h3><p class="muted" style="margin:0 0 6px;font-size:13px">Misst CPU, Arbeitsspeicher, Laufwerke, Dienste${k==='win'?', Ereignisprotokoll, Windows-Updates, Virenschutz':''} und ausstehende Neustarts – ohne Hosts zu prüfen. Zählt nicht als Standort.</p><ol>
-    <li>${sysOn?'Rechner-Überwachung ist eingeschaltet ✔':`Unter <a href="#/settings/sites">Einstellungen → Standorte</a> beim Standort <b>„💻 Rechner-Überwachung“</b> einschalten (dort auch Dienste und Schwellwerte).`}</li>
-    <li>Diese Datei herunterladen: ${sysJson}</li>
-    ${k==='win'?'<li>Zusammen mit <b>pingwatch-agent.exe</b> auf den Server/PC legen (Dateiname <code>agent.json</code>) und starten – der Agent merkt sich den Modus, startet automatisch mit Windows und aktualisiert sich selbst.</li>':k==='mac'?'<li>Mit dem Mac-Agent in einen Ordner legen und dort starten: <code>./pingwatch-agent-darwin-arm64 agent -config agent.json</code></li>':'<li>Mit dem Linux-Agent auf den Server legen und starten: <code>./pingwatch-agent-linux-amd64 agent -config agent.json</code> (oder mit der normalen agent.json und <code>-sysonly</code>).</li>'}
-    <li>Der Rechner erscheint nach etwa einer Minute in der Übersicht. Name und Gruppe lassen sich unter Standorte → Rechner-Überwachung ändern.</li></ol>
-    ${k==='win'?'':'<p class="muted" style="font-size:12.5px;margin:4px 0 0">Der normale Standort-Agent meldet seinen eigenen Rechner automatisch mit, sobald die Rechner-Überwachung eingeschaltet ist.</p>'}`;
+  const sysHint=sysOn?'':`<p class="muted" style="font-size:12.5px;margin:4px 0 0">Damit Rechner gemeldet werden: unter <a href="#/settings/sites">Einstellungen → Standorte</a> die <b>💻 Rechner-Überwachung</b> einschalten.</p>`;
+  const tok=id=>INST.tok&&INST.tok[id];
+  if(canAgent&&sites.length&&!INST.tokLoading&&sites.some(x=>!tok(x.id))){ INST.tokLoading=true; INST.tok=INST.tok||{};
+    Promise.all(sites.map(x=>fetch('/download/agent.json?site='+encodeURIComponent(x.id)).then(r=>r.ok?r.json():null).then(j=>{ if(j) INST.tok[x.id]=j; }).catch(()=>{}))).then(()=>{ INST.tokLoading=false; INST.tokDone=true; renderInstall(); }); }
+  const oneLiner=(x,sys)=>{ const t=tok(x.id); return t?cmdBox(`curl -fsSL ${t.server}/install.sh | sudo sh -s -- ${t.token}${sys?' --sysonly':''}`):`<div class="muted" style="font-size:13px">${INST.tokDone?'Befehl nicht verfügbar':'lädt …'}</div>`; };
+  const noSite=`<div class="muted" style="margin:6px 0">Zuerst unter <a href="#/settings/sites">Einstellungen → Standorte</a> einen Standort anlegen (z. B. „Büro“).</div>`;
+  const sysJsonBtns=sites.map(x=>`<a class="btn sm" href="/download/agent.json?site=${x.id}&mode=sysonly">agent.json „nur Rechner“${sites.length>1?' – '+esc(x.name):''}</a>`).join('');
   const D={
-    win:`<h3>🪟 Windows-Agent</h3><ol>${step1}<li>Agent herunterladen: <span class="row" style="display:inline-flex">${agentDlLinks(['win'],true)}</span></li><li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\\PingWacht</code>) und <b>pingwatch-agent.exe</b> starten.</li><li>Erscheint „Der Computer wurde durch Windows geschützt“ (SmartScreen): <b>Weitere Informationen → Trotzdem ausführen</b>.</li><li>Der Agent sitzt als Symbol im Infobereich der Taskleiste, startet ab jetzt automatisch mit Windows und aktualisiert sich selbst.</li></ol>${sysBlock('win')}`,
-    mac:`<h3>🍎 Mac-Agent</h3><ol>${step1}<li>Agent herunterladen – <b>Apple</b> für M1/M2/M3…, <b>Intel</b> für ältere Macs: <span class="row" style="display:inline-flex">${agentDlLinks(['mac'],true)}</span></li><li>Beide Dateien in denselben Ordner legen und im Terminal dort starten:<br><code>chmod +x pingwatch-agent-darwin-arm64 &amp;&amp; ./pingwatch-agent-darwin-arm64 agent -config agent.json</code></li><li>Blockiert macOS den Start: in Systemeinstellungen → Datenschutz &amp; Sicherheit <b>„Dennoch öffnen“</b> wählen.</li></ol>${sysBlock('mac')}`,
-    linux:`<h3>🐧 Linux / Raspberry Pi</h3><p style="margin:0 0 6px"><b>Am schnellsten – ein Befehl</b> (Debian, Ubuntu, Raspberry Pi OS …, installiert als Dienst und aktualisiert sich selbst):</p>${sites.length?`<div class="row" style="margin:0 0 6px;flex-wrap:wrap">${sites.map(x=>`<button class="btn sm pri" type="button" data-instcmd="${x.id}">Befehl kopieren – ${esc(x.name)}</button>`).join('')}</div><pre id="inst-cmd" style="display:none;white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;margin:0 0 6px"></pre><p class="muted" style="font-size:12.5px;margin:0 0 12px">Für weitere Server, die nur sich selbst melden sollen: am Ende <code>--sysonly</code> anhängen. Der Befehl enthält den Standort-Token – nicht öffentlich teilen.</p>`:`<div class="muted" style="margin:0 0 12px">Zuerst unter <a href="#/settings/sites">Einstellungen → Standorte</a> einen Standort anlegen.</div>`}<p style="margin:0 0 4px"><b>Oder von Hand:</b></p><ol>${step1}<li>Agent herunterladen – <b>ARM64</b> für Raspberry Pi, <b>x64</b> für normale PCs/Server: <span class="row" style="display:inline-flex">${agentDlLinks(['linux'],true)}</span></li><li>Starten: <code>chmod +x pingwatch-agent-linux-arm64 &amp;&amp; ./pingwatch-agent-linux-arm64 agent -config agent.json</code> (am besten als systemd-Dienst).</li></ol>${sysBlock('linux')}
-      <h3 style="margin-top:14px">🏠 Home Assistant (Add-on)</h3><ol><li>Einstellungen → Add-ons → Add-on-Store → ⋮ → <b>Repositories</b> → <code>https://github.com/D3sp3rados/Pingwatch</code> hinzufügen.</li><li>Add-on <b>„PingWacht Agent“</b> installieren.</li><li>In der Konfiguration das <b>Token</b> aus der agent.json des Standorts eintragen und starten. Bei jedem Start holt sich das Add-on die aktuelle Version.</li></ol>`,
+    win:`<h3>🪟 Windows</h3><ol class="inst-steps">${step1}<li>Agent herunterladen: <span class="row" style="display:inline-flex">${agentDlLinks(['win'],true)}</span></li><li>Beide Dateien in einen Ordner legen (z. B. <code>C:\\PingWacht</code>) und <b>pingwatch-agent.exe</b> starten. Bei SmartScreen: <b>Weitere Informationen → Trotzdem ausführen</b>.</li></ol>
+      <p class="muted" style="font-size:12.5px;margin:2px 0 0">Startet automatisch mit Windows und aktualisiert sich selbst.</p>
+      <h3 style="margin-top:16px">💻 Weitere PCs/Server (nur Rechner)</h3>${sites.length?`<ol class="inst-steps"><li><div class="row" style="flex-wrap:wrap">${sysJsonBtns}</div></li><li>Mit <b>pingwatch-agent.exe</b> in einen Ordner legen (Dateiname <code>agent.json</code>) und starten.</li></ol>${sysHint}`:noSite}`,
+    mac:`<h3>🍎 Mac</h3><ol class="inst-steps">${step1}<li>Agent herunterladen – <b>Apple</b> (M1/M2/M3 …) oder <b>Intel</b>: <span class="row" style="display:inline-flex">${agentDlLinks(['mac'],true)}</span></li><li>Im Terminal im Ordner mit beiden Dateien starten:<div class="muted" style="font-size:12.5px;margin:6px 0 2px">Apple (M1/M2/M3 …)</div>${cmdBox('chmod +x pingwatch-agent-darwin-arm64 && ./pingwatch-agent-darwin-arm64 agent -config agent.json')}<div class="muted" style="font-size:12.5px;margin:6px 0 2px">Intel</div>${cmdBox('chmod +x pingwatch-agent-darwin-amd64 && ./pingwatch-agent-darwin-amd64 agent -config agent.json')}</li><li>Blockiert macOS den Start: Systemeinstellungen → Datenschutz &amp; Sicherheit → <b>„Dennoch öffnen“</b>.</li></ol>`,
+    linux:`<h3>🐧 Linux / Raspberry Pi</h3><p class="muted" style="margin:0 0 8px;font-size:13.5px">Ein Befehl im Terminal – erkennt <b>Raspberry Pi (ARM64)</b> und <b>PC/Server (x64)</b> automatisch, richtet den Dienst ein und aktualisiert sich selbst.</p>
+      ${sites.length?sites.map(x=>`<div class="inst-site">${sites.length>1?`<b>${esc(x.name)}</b>`:''}<div class="muted" style="font-size:12.5px;margin:4px 0 2px">Standort-Agent (prüft die Hosts)</div>${oneLiner(x,false)}<div class="muted" style="font-size:12.5px;margin:8px 0 2px">Weiterer Server – meldet nur sich selbst</div>${oneLiner(x,true)}</div>`).join('')+`<p class="muted" style="font-size:12px;margin:4px 0 0">Die Befehle enthalten den Standort-Token – nicht öffentlich teilen.</p>${sysHint}`:noSite}
+      <details class="inst-more"><summary>Von Hand installieren</summary><ol class="inst-steps">${step1}<li>Agent herunterladen: <span class="row" style="display:inline-flex">${agentDlLinks(['linux'],true)}</span></li><li>Starten:<div class="muted" style="font-size:12.5px;margin:6px 0 2px">Raspberry Pi / ARM64</div>${cmdBox('chmod +x pingwatch-agent-linux-arm64 && ./pingwatch-agent-linux-arm64 agent -config agent.json')}<div class="muted" style="font-size:12.5px;margin:6px 0 2px">PC / Server x64</div>${cmdBox('chmod +x pingwatch-agent-linux-amd64 && ./pingwatch-agent-linux-amd64 agent -config agent.json')}<div class="muted" style="font-size:12.5px;margin:4px 0 0">Nur diesen Rechner melden: <code>-sysonly</code> anhängen.</div></li></ol></details>
+      <details class="inst-more"><summary>🏠 Home Assistant (Add-on)</summary><ol class="inst-steps"><li>Einstellungen → Add-ons → Add-on-Store → ⋮ → <b>Repositories</b>:${cmdBox('https://github.com/D3sp3rados/Pingwatch')}</li><li>Add-on <b>„PingWacht Agent“</b> installieren.</li><li>Das <b>Token</b> aus der agent.json des Standorts eintragen und starten.</li></ol></details>`,
     ios:`<h3>📱 iPhone / iPad</h3><p class="muted" style="margin:0 0 8px">Die App im App Store folgt – in der Testphase gibt es sie über <b>TestFlight</b> (Einladung beim Anbieter anfragen).</p><p style="margin:0 0 4px">Bis dahin als <b>Web-App</b>:</p><ol><li>Diese Seite in <b>Safari</b> öffnen.</li><li>Teilen-Symbol (Quadrat mit Pfeil nach oben) → <b>„Zum Home-Bildschirm“</b>.</li><li>PingWacht vom Home-Bildschirm starten und unter ${push} die <b>Benachrichtigungen aktivieren</b> (ab iOS 16.4).</li></ol>`,
     android:`<h3>🤖 Android</h3>${installEvt?'<p><button class="btn pri install-btn" id="inst-android-btn">📲 PingWacht jetzt installieren</button></p>':''}<ol><li>Diese Seite in <b>Chrome</b> öffnen.</li><li>Menü <b>⋮</b> → <b>„App installieren“</b> (bzw. „Zum Startbildschirm hinzufügen“).</li><li>PingWacht vom Startbildschirm öffnen und unter ${push} die <b>Benachrichtigungen aktivieren</b>.</li></ol>`};
   const uHint=['win','mac','linux'].includes(INST.sel)?`<p class="muted" style="font-size:12.5px;margin:14px 0 0">☁️ <b>UniFi ohne Agent:</b> UniFi-Konsolen lassen sich auch ganz ohne Agent über die UniFi-Cloud überwachen – unter <a href="#/settings/sites">Einstellungen → Standorte → „UniFi-Cloud (ohne Agent)“</a> den UniFi-Cloud-Key eintragen.</p>`:'';
-  $('#inst-detail').innerHTML=(D[INST.sel]||'')+uHint;
-  $$('#inst-detail [data-instcmd]').forEach(b=>b.onclick=async()=>{ try{ const af=await fetch('/download/agent.json?site='+encodeURIComponent(b.dataset.instcmd)).then(r=>{ if(!r.ok) throw new Error('agent.json nicht abrufbar'); return r.json(); });
-    const cmd=`curl -fsSL ${af.server}/install.sh | sudo sh -s -- ${af.token}`; const pre=$('#inst-cmd'); pre.textContent=cmd; pre.style.display='';
-    try{ await navigator.clipboard.writeText(cmd); toast('Befehl kopiert – auf dem Linux-Rechner einfügen'); }catch(e){ toast('Befehl unten markieren und kopieren'); } }catch(e){ uiAlert(e.message); } });
+  const html=(D[INST.sel]||'')+uHint, det=$('#inst-detail');
+  // nur neu zeichnen, wenn sich etwas geändert hat – sonst bleiben aufgeklappte Abschnitte und Markierungen erhalten
+  if(det.dataset.html!==html){ const open=[...det.querySelectorAll('details')].map(d=>d.open); det.innerHTML=html; det.dataset.html=html; det.querySelectorAll('details').forEach((d,i)=>{ if(open[i]) d.open=true; }); }
   const ib=$('#inst-android-btn'); if(ib) ib.onclick=installApp; }
 /* Übersicht: je Abschnitt zunächst ~2 Zeilen (Liste: 4 Einträge), gestörte Hosts immer zuerst und immer sichtbar */
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
@@ -1542,10 +1571,10 @@ async function loadFritz(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S
   $('#fz-sub').style.color=r.err?'var(--bad)':'';
   if(!s){ $('#fz-stats').innerHTML=''; $('#fz-chartbox').style.display='none'; return; }
   const conn=s.conn==='Connected'?['verbunden','--ok']:s.conn?['getrennt ('+s.conn+')','--bad']:['unbekannt',''];
-  $('#fz-stats').innerHTML=st('Internet',conn[0],conn[1])+st('Externe IP',esc(s.extIP||'–'))+st(s.dsl?'Sync Download':'Download',fmtKbit((s.down||0)/1000))+st(s.dsl?'Sync Upload':'Upload',fmtKbit((s.up||0)/1000))
+  $('#fz-stats').innerHTML=st('Internet',conn[0],conn[1])+st('Externe IP',esc(s.extIP||'–'))+(s.down>0?st(s.dsl?'Sync Download':'Leitung Download',fmtKbit(s.down/1000))+st(s.dsl?'Sync Upload':'Leitung Upload',fmtKbit((s.up||0)/1000)):'')
     +st('Verbunden seit',s.conn==='Connected'?fmtUp(s.connUptime):'–')+st('Abbrüche 24 h',r.drops24,r.drops24?'--warn':'')+st('Box-Laufzeit',fmtUp(s.boxUptime),r.boots24?'--warn':'')
     +st('Verfügbarkeit 24 h',r.avail>=0?r.avail.toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'–',r.avail>=0&&r.avail<99.9?'--warn':'')+(s.access?st('Anschluss',esc(s.access.replace('X_AVM-DE_',''))+(s.link&&s.link!=='Up'?' · '+esc(s.link):'')):'');
-  $('#fz-chartbox').style.display=(r.hist||[]).some(p=>p.d>0)?'':'none'; $('#fz-range').textContent=r.maxDown?`· ${fmtKbit(r.minDown)} – ${fmtKbit(r.maxDown)}`:'';
+  $('#fz-chartbox').style.display=(r.hist||[]).some(p=>p.d>(s.dsl?0:1000))?'':'none'; $('#fz-range').textContent=r.maxDown?`· ${fmtKbit(r.minDown)} – ${fmtKbit(r.maxDown)}`:'';
   drawFritzChart(r.hist||[]); }
 function drawFritzChart(pts){ const c=$('#fz-chart'), dpr=devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight; if(!W) return; c.width=W*dpr; c.height=H*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
   const cs=getComputedStyle(document.body), acc=cs.getPropertyValue('--acc').trim(), bad=cs.getPropertyValue('--bad').trim(), mut=cs.getPropertyValue('--mut').trim();

@@ -410,6 +410,7 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 		}
 		fh.err = ""
 		cur, prev, prevT := s.S, fh.cur, fh.curT
+		cur.fixRates()
 		maint := m.inMaint(hc.Org, hc.ID, time.UnixMilli(s.T))
 		recent := s.T >= now-5*60000
 		if prev != nil && prevT > 0 {
@@ -630,4 +631,12 @@ func (s *Server) handleFritz(w http.ResponseWriter, r *http.Request) {
 func publicHost(hc HostCfg) HostCfg {
 	hc.FritzPass = ""
 	return hc
+}
+
+// fixRates: Ohne DSL (Glasfaser, Kabel, LTE) meldet die Fritzbox keine echte Sync-Rate, sondern einen
+// Platzhalter bzw. den Wert aus den Interneteinstellungen (oft 1 Mbit/s) – solche Werte verwerfen.
+func (st *fritzStatus) fixRates() {
+	if st != nil && !st.DSL && st.Down <= 1_000_000 && st.Up <= 1_000_000 {
+		st.Down, st.Up = 0, 0
+	}
 }
