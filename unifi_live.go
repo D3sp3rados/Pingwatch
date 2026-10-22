@@ -651,6 +651,7 @@ func (a *Agent) unifiLoop() {
 					body["protect"] = p
 				} else if perr != nil {
 					log.Printf("UniFi Protect: %v", perr)
+					body["protect"] = &protectSnap{At: time.Now().UnixMilli(), Err: "Protect nicht abfragbar: " + perr.Error()}
 				}
 			}
 			b, _ := json.Marshal(body)

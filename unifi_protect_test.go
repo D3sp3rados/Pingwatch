@@ -47,8 +47,8 @@ func TestProtectFetchAndNotify(t *testing.T) {
 	if sens.Bat != 80 || sens.Temp == nil || *sens.Temp != 23.5 || sens.Open == nil || *sens.Open {
 		t.Fatalf("Sensor: %+v", sens)
 	}
-	// ohne Protect: 404 → nil, nil
-	if p, err := newUniFiAPI(srv.URL+"/x", "k").protect(); p != nil || err != nil {
+	// ohne Protect: 404 → Hinweis ohne Geräte
+	if p, err := newUniFiAPI(srv.URL+"/x", "k").protect(); err != nil || p == nil || len(p.Devs) != 0 || !strings.Contains(p.Err, "404") {
 		t.Fatal(p, err)
 	}
 

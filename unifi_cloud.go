@@ -225,6 +225,7 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 		p, err := newUniFiCloudAPI(s.UniFi.Console, key).protect()
 		if err != nil {
 			log.Printf("UniFi-Cloud %s: Protect: %v", s.Name, err)
+			m.ingestProtect(s, &protectSnap{At: time.Now().UnixMilli(), Err: "Protect nicht abfragbar: " + err.Error()})
 		} else if p != nil {
 			m.ingestProtect(s, p)
 		}

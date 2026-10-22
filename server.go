@@ -343,6 +343,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/settings", protect(s.handleSettings))
 	mux.HandleFunc("/api/reset", protect(s.handleReset))
 	mux.HandleFunc("/api/app/login", s.handleAppLogin)
+	mux.HandleFunc("/api/app/websession", s.handleAppWebSession)
 	mux.HandleFunc("/api/app/device", protect(s.handleDevice))
 	mux.HandleFunc("/api/app/pushtest", protect(s.handlePushTest))
 	mux.HandleFunc("/api/webpush", protect(s.handleWebPush))
@@ -1479,6 +1480,22 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------- iPhone-App ----------
+
+// POST /api/app/websession (Bearer-Token der App) → Sitzungs-Cookie und weiter zum Dashboard.
+// So zeigt die iPhone-App das komplette Web-Dashboard ohne zweite Anmeldung.
+func (s *Server) handleAppWebSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	tok := bearer(r)
+	if tok == "" || s.parseToken(tok) == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	s.setSession(w, r, tok)
+	http.Redirect(w, r, "/#/", http.StatusSeeOther)
+}
 
 func (s *Server) handleAppLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

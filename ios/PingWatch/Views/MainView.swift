@@ -22,6 +22,12 @@ struct MainView: View {
             .tag(1)
 
             NavigationStack {
+                DashboardView()
+            }
+            .tabItem { Label("Dashboard", systemImage: "rectangle.3.group") }
+            .tag(3)
+
+            NavigationStack {
                 SettingsView()
             }
             .tabItem { Label("Einstellungen", systemImage: "gearshape") }

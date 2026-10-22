@@ -133,7 +133,8 @@ func (u *unifiAPI) protect() (*protectSnap, error) {
 		return nil, err
 	}
 	if code == 404 || code == 502 || code == 503 {
-		return nil, nil
+		// kein Protect auf der Konsole (oder Protect-Version ohne Integration-API)
+		return &protectSnap{At: time.Now().UnixMilli(), Err: fmt.Sprintf("UniFi Protect nicht gefunden (HTTP %d) – ist Protect auf der Konsole installiert und aktuell?", code)}, nil
 	}
 	if code != 200 {
 		// z. B. Key ohne Protect-Recht: als Hinweis anzeigen statt still verwerfen
