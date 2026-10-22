@@ -61,6 +61,10 @@ type SiteCfg struct {
 	Number      string  `json:"number,omitempty"`
 	SetCustomer *string `json:"setCustomer,omitempty"` // nur API-Eingabe
 	SetNumber   *string `json:"setNumber,omitempty"`   // nur API-Eingabe
+	// zuletzt gemeldete Agent-Version und Zeitpunkt des letzten Versionswechsels (Update)
+	AgentVer     string `json:"agentVer,omitempty"`
+	AgentUpdated int64  `json:"agentUpdated,omitempty"`
+	AgentPrev    string `json:"agentPrev,omitempty"`
 }
 
 type Config struct {
@@ -652,6 +656,9 @@ func (m *Monitor) siteSeen(id, ip, ver string) {
 	ev := st.offEv
 	st.offEv = nil
 	st.mu.Unlock()
+	if ver != "" {
+		m.noteAgentVersion(id, ver, now)
+	}
 	if ev != nil {
 		m.finishEvent(ev, now)
 	}
@@ -952,3 +959,29 @@ func (m *Monitor) Reset(org, hostID string, from, to int64, samples, events bool
 }
 
 var serverStart = time.Now()
+
+// noteAgentVersion merkt sich, wann der Agent eines Standorts zuletzt die Version gewechselt hat.
+func (m *Monitor) noteAgentVersion(siteID, ver string, now int64) {
+	m.mu.RLock()
+	same := false
+	for _, s := range m.cfg.Sites {
+		if s.ID == siteID {
+			same = s.AgentVer == ver
+		}
+	}
+	m.mu.RUnlock()
+	if same {
+		return
+	}
+	m.mu.Lock()
+	for i := range m.cfg.Sites {
+		if s := &m.cfg.Sites[i]; s.ID == siteID && s.AgentVer != ver {
+			if s.AgentVer != "" {
+				s.AgentPrev, s.AgentUpdated = s.AgentVer, now
+			}
+			s.AgentVer = ver
+		}
+	}
+	m.saveConfigLocked()
+	m.mu.Unlock()
+}

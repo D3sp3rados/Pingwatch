@@ -542,7 +542,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
-		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind, Customer: sc.Customer, Number: sc.Number}, Online: on, Hosts: cnt[sc.ID]}
+		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind, Customer: sc.Customer, Number: sc.Number, AgentUpdated: sc.AgentUpdated, AgentPrev: sc.AgentPrev}, Online: on, Hosts: cnt[sc.ID]}
 		if sc.Sys != nil {
 			sy := sc.Sys.eff()
 			v.Sys = &sy
@@ -962,6 +962,7 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sc.Customer, sc.Number = "", "" // nur über setCustomer/setNumber
+		sc.AgentVer, sc.AgentPrev, sc.AgentUpdated = "", "", 0
 		if sc.ID == "" {
 			if sc.Name == "" {
 				http.Error(w, "Name fehlt", 400)
