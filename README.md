@@ -63,7 +63,7 @@ Dashboard in Safari öffnen → Teilen → **Zum Home-Bildschirm**. Danach start
 
 - **Betreiber** (RST): Anmeldung mit E-Mail `admin` + `ADMIN_PASSWORD` (oder als Betreiber-Benutzer mit eigener E-Mail). Reiter **Kunden**: Kunden anlegen, Paket/Standorte setzen, sperren, löschen, per „Öffnen“ in den Kunden wechseln. Die bisherigen Hosts gehören zur Organisation „RST-Datentechnik“ (Paket Intern, unbegrenzt).
 - **Kunden** melden sich mit E-Mail + Passwort an und sehen nur ihre eigenen Hosts, Standorte, Ereignisse und iPhones. Rollen: Inhaber (inkl. Abo), Admin, Nur lesen.
-- **Pakete** (pro Standort/Monat netto): Free 0 € (1 Standort, 5 Hosts, 7 Tage), Basis 4,90 € (25 Hosts, 90 Tage), Pro 9,90 € (100 Hosts, 1 Jahr, Bericht, Traceroute, Statusseite), Partner 3,90 € (ab 10 Standorten).
+- **Pakete** (pro Standort/Monat netto): Free 0 € (1 Standort, 5 Hosts, 7 Tage), Basis 9,80 € (25 Hosts, 90 Tage), Pro 19,80 € (100 Hosts, 1 Jahr, Bericht, Traceroute, Statusseite), Partner 3,90 € (ab 10 Standorten, nicht öffentlich – nur vom Betreiber zuweisbar).
 
 Umgebungsvariablen (alle optional):
 

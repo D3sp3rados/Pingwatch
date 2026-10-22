@@ -179,18 +179,17 @@ func priceSheet(o *Org) string {
 		}
 		fmt.Fprintf(&b, "- %s: %s%s – %s\n", p.Name, euro(p.PriceCents), extra, p.Text)
 	}
-	b.WriteString("Monatskosten netto nach Anzahl Standorte (Basis / Pro / Partner):\n")
-	bp, pp, pa := planByID("basis"), planByID("pro"), planByID("partner")
+	b.WriteString("Monatskosten netto nach Anzahl Standorte (Basis / Pro):\n")
+	bp, pp := planByID("basis"), planByID("pro")
 	for n := 1; n <= 20; n++ {
 		c1, _ := planPrice(bp, n)
 		c2, _ := planPrice(pp, n)
-		c3, ok := planPrice(pa, n)
-		s3 := "nicht möglich"
-		if ok {
-			s3 = euro(c3)
-		}
-		fmt.Fprintf(&b, "- %d: %s / %s / %s\n", n, euro(c1), euro(c2), s3)
+		fmt.Fprintf(&b, "- %d: %s / %s\n", n, euro(c1), euro(c2))
 	}
+	if o.Plan == "partner" {
+		fmt.Fprintf(&b, "Dieser Kunde hat Partnerkonditionen: %s pro Standort.\n", euro(planByID("partner").PriceCents))
+	}
+	b.WriteString("Für Systemhäuser und Partner gibt es Sonderkonditionen auf Anfrage beim Anbieter – nenne dafür keine Preise.\n")
 	return b.String()
 }
 

@@ -77,13 +77,14 @@ type Plan struct {
 var plans = []Plan{
 	{ID: "free", Name: "Free", PriceCents: 0, MinSites: 0, MaxSites: 1, HostsPerSite: 5, Retention: 7, MinInterval: 5000,
 		Features: []string{"push"}, Public: true, Text: "1 Standort, 5 Hosts, 7 Tage Verlauf, Push aufs iPhone"},
-	{ID: "basis", Name: "Basis", PriceCents: 490, MinSites: 1, HostsPerSite: 25, MachinesPerSite: 5, Retention: 90, MinInterval: 1000,
+	{ID: "basis", Name: "Basis", PriceCents: 980, MinSites: 1, HostsPerSite: 25, MachinesPerSite: 5, Retention: 90, MinInterval: 1000,
 		Features: []string{"push", "alerts", "assistant"}, Public: true, Text: "25 Hosts und 5 überwachte Rechner (mit Inventar) pro Standort, 90 Tage Verlauf, Push, E-Mail, Teams, Telegram, UniFi auch ohne Agent über die UniFi-Cloud, KI-Assistent"},
-	{ID: "pro", Name: "Pro", PriceCents: 990, MinSites: 1, HostsPerSite: 100, MachinesPerSite: 25, Retention: 365, MinInterval: 500,
+	{ID: "pro", Name: "Pro", PriceCents: 1980, MinSites: 1, HostsPerSite: 100, MachinesPerSite: 25, Retention: 365, MinInterval: 500,
 		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks", "assistant", "requests"}, Public: true,
 		Text: "100 Hosts und 25 überwachte Rechner (mit Inventar) pro Standort, 1 Jahr Verlauf, Monatsbericht (PDF), Traceroute, Statusseite, KI-Assistent mit Änderungswünschen"},
 	{ID: "partner", Name: "Partner", PriceCents: 390, MinSites: 10, HostsPerSite: 25, MachinesPerSite: 5, Retention: 90, MinInterval: 1000,
-		Features: []string{"push", "alerts", "report", "assistant"}, Public: true, Text: "Ab 10 Standorten: wie Basis (25 Hosts, 5 Rechner je Standort), inkl. Monatsbericht"},
+		// nicht öffentlich: Partnerkonditionen nur auf Anfrage, vom Betreiber zugewiesen
+		Features: []string{"push", "alerts", "report", "assistant"}, Public: false, Text: "Ab 10 Standorten: wie Basis (25 Hosts, 5 Rechner je Standort), inkl. Monatsbericht"},
 	{ID: "internal", Name: "Intern", PriceCents: 0, HostsPerSite: 0, MachinesPerSite: -1, Retention: 0, MinInterval: 500,
 		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks", "assistant", "requests"}, Text: "Ohne Begrenzung"},
 }

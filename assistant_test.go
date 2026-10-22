@@ -102,7 +102,7 @@ func TestStripAndParse(t *testing.T) {
 	if c, _ := planPrice(planByID("partner"), 9); c != 0 {
 		t.Fatal("Partner unter 10 Standorten")
 	}
-	if c, ok := planPrice(planByID("pro"), 2); !ok || c != 1980 {
+	if c, ok := planPrice(planByID("pro"), 2); !ok || c != 3960 {
 		t.Fatalf("Pro 2 Standorte: %d", c)
 	}
 }
@@ -216,7 +216,7 @@ func TestAssistant(t *testing.T) {
 			t.Fatalf("Prompt enthält %q", bad)
 		}
 	}
-	if !strings.Contains(sys, "Firma: Kunde B") || !strings.Contains(sys, "Paket: Basis") || !strings.Contains(sys, "/no_think") || !strings.Contains(sys, "4,90 €") {
+	if !strings.Contains(sys, "Firma: Kunde B") || !strings.Contains(sys, "Paket: Basis") || !strings.Contains(sys, "/no_think") || !strings.Contains(sys, "9,80 €") || strings.Contains(sys, "3,90 €") {
 		t.Fatalf("Prompt unvollständig:\n%s", sys)
 	}
 	f.mu.Lock()
@@ -379,6 +379,17 @@ func TestLooksLikeWish(t *testing.T) {
 	for _, q := range []string{"Mir fehlt ein CSV-Export", "Ich hätte gern eine Grafik für den Sync", "Könnt ihr Teams-Kanäle pro Kunde einbauen?", "Ja, genau so"} {
 		if !looksLikeWish(q) {
 			t.Errorf("Wunsch nicht erkannt: %q", q)
+		}
+	}
+}
+
+func TestPrices(t *testing.T) {
+	if planByID("basis").PriceCents != 980 || planByID("pro").PriceCents != 1980 || planByID("partner").PriceCents != 390 {
+		t.Fatal("Preise")
+	}
+	for _, p := range publicPlans() {
+		if p.ID == "partner" {
+			t.Fatal("Partner darf nicht öffentlich sein")
 		}
 	}
 }
