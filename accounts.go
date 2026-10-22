@@ -365,6 +365,8 @@ type orgView struct {
 	UsedSites int    `json:"usedSites"`
 	UsedHosts int    `json:"usedHosts"`
 	Users     int    `json:"users"`
+	LastLogin int64  `json:"lastLogin,omitempty"` // letzte Anmeldung eines Benutzers dieses Kunden
+	LastUser  string `json:"lastUser,omitempty"`
 	Owner     string `json:"owner"`
 	PlanName  string `json:"planName"`
 	MRR       int    `json:"mrr"` // Cent pro Monat netto
@@ -386,6 +388,9 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			for _, u := range users {
 				if u.Org == o.ID {
 					v.Users++
+					if u.LastLogin > v.LastLogin {
+						v.LastLogin, v.LastUser = u.LastLogin, u.Email
+					}
 					if u.Role == "owner" && v.Owner == "" {
 						v.Owner = u.Email
 					}
