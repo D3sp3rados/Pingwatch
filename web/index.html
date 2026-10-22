@@ -474,7 +474,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Abrechnung<select name="billing"><option value="invoice">Rechnung (manuell)</option><option value="stripe">Stripe (online)</option><option value="free">Kostenlos</option></select></label>
       <label class="field" id="of-ownerf">E-Mail des Inhabers (bekommt Zugang)<input name="ownerEmail" type="email" placeholder="kunde@firma.de"></label>
       <label class="field" id="of-ownernf">Name des Inhabers<input name="ownerName" maxlength="60"></label>
-      <label class="field">Testzugang bis (leer = unbegrenzt)<input type="date" name="expires"><small>Danach ist keine Anmeldung mehr möglich, die Überwachung läuft weiter.</small></label>
+      <label class="field">Zugang befristet bis (nur für Tester)<input type="date" name="expires"><small>Für normale, zahlende Kunden leer lassen. Mit Datum ist danach keine Anmeldung mehr möglich, die Überwachung läuft weiter.</small></label>
       <label class="check" id="of-disf"><input type="checkbox" name="disabled"> Zugang gesperrt</label>
       <div class="err" id="of-err" style="color:var(--bad);font-size:13px"></div>
     </div>

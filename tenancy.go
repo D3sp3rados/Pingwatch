@@ -518,8 +518,8 @@ func (s *Server) checkLimits(org string, addSites, addHosts int) error {
 
 func providerInfo() map[string]string {
 	return map[string]string{
-		"name":     envOr("PROVIDER_NAME", "Raphael Wagner ICT-Dienstleistungen"),
-		"url":      envOr("PROVIDER_URL", "https://ict-dienstleistungen.de"),
+		"name":     envOr("PROVIDER_NAME", "RST Datentechnik GmbH"),
+		"url":      envOr("PROVIDER_URL", "https://rst.de"),
 		"imprint":  envOr("PROVIDER_IMPRINT_URL", "/impressum"),
 		"privacy":  envOr("PROVIDER_PRIVACY_URL", "/datenschutz"),
 		"terms":    os.Getenv("PROVIDER_TERMS_URL"),
