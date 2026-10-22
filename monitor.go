@@ -77,6 +77,7 @@ type Config struct {
 	Customers     []Customer   `json:"customers,omitempty"` // Kunden je Konto (ordnen Standorte)
 	Actions       []ActionLog  `json:"actions,omitempty"`   // Protokoll: Updates und Neustarts über PingWacht
 	UpdatePlans   []UpdatePlan `json:"updatePlans,omitempty"`
+	Scripts       []Script     `json:"scripts,omitempty"`
 	// Zwei-Faktor-Code des Betreiber-Logins (ADMIN_PASSWORD)
 	AdminTOTP        string            `json:"adminTotp,omitempty"`
 	AdminTOTPPending string            `json:"adminTotpPending,omitempty"`

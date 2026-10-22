@@ -315,6 +315,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/totp", protect(s.handleTOTP))
 	mux.HandleFunc("/api/actions", protect(s.handleActions))
 	mux.HandleFunc("/api/updateplans", protect(s.handleUpdatePlans))
+	mux.HandleFunc("/api/scripts", protect(s.handleScripts))
 	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,7 +24,8 @@ type ActionLog struct {
 	Org     string   `json:"org"`
 	T       int64    `json:"t"`
 	By      string   `json:"by"`
-	Kind    string   `json:"kind"`             // winupdate, reboot
+	Kind    string   `json:"kind"`             // winupdate, reboot, script
+	Script  string   `json:"script,omitempty"` // Script-ID
 	Opts    string   `json:"opts,omitempty"`   // z. B. „Sicherheit · Neustart wenn nötig“
 	Machine string   `json:"machine"`          // Rechner-ID
 	Name    string   `json:"name"`             // Rechnername zum Zeitpunkt
@@ -38,13 +40,15 @@ type ActionLog struct {
 // actionResult: Antwort des Agenten auf winupdate/reboot.
 type actionResult struct {
 	Message string   `json:"message"`
+	Exit    *int     `json:"exit,omitempty"`   // Script: Exit-Code
+	Output  string   `json:"output,omitempty"` // Script: Ausgabe (gekürzt)
 	OK      []string `json:"ok,omitempty"`
 	Fail    []string `json:"fail,omitempty"`
 	Reboot  bool     `json:"reboot,omitempty"`  // Neustart erforderlich
 	Planned string   `json:"planned,omitempty"` // geplanter Neustart, z. B. „in 5 Minuten“
 }
 
-var actionKinds = map[string]string{"winupdate": "Updates installieren", "reboot": "Neustart"}
+var actionKinds = map[string]string{"winupdate": "Updates installieren", "reboot": "Neustart", "script": "Script"}
 
 // POST /api/actions {kind, scope: machine|site|customer, id, cat: security|all, reboot: never|ifneeded|now, code}
 // GET /api/actions?machine= → Protokoll
@@ -73,7 +77,7 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Nur Inhaber und Admins dürfen Updates und Neustarts auslösen", 403)
 		return
 	}
-	var req struct{ Kind, Scope, ID, Cat, Reboot, Code string }
+	var req struct{ Kind, Scope, ID, Cat, Reboot, Code, Script string }
 	if !readJSON(w, r, &req) {
 		return
 	}
@@ -115,7 +119,17 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		opts = actionOpts(req.Cat, req.Reboot)
 	}
 	m.mu.Lock()
-	m.queueActionsLocked(p.Org, by, req.Kind, req.Cat, req.Reboot, opts, targets, time.Now().UnixMilli())
+	q := actReq{Org: p.Org, By: by, Kind: req.Kind, Cat: req.Cat, Reboot: req.Reboot, Opts: opts}
+	if req.Kind == "script" {
+		q.Script = m.scriptLocked(p.Org, req.Script)
+		if q.Script == nil {
+			m.mu.Unlock()
+			http.Error(w, "Script unbekannt", 400)
+			return
+		}
+		q.Opts = "Script „" + q.Script.Name + "“"
+	}
+	m.queueActionsLocked(q, targets, time.Now().UnixMilli())
 	m.saveConfigLocked()
 	m.mu.Unlock()
 	writeJSON(w, map[string]any{"ok": true, "machines": len(targets)})
@@ -127,6 +141,11 @@ func (m *Monitor) actionJobDone(jobID, kind, errText string, raw json.RawMessage
 	if errText == "" {
 		json.Unmarshal(raw, &res)
 	}
+	failed := errText != "" || len(res.Fail) > 0 || (kind == "script" && res.Exit != nil && *res.Exit != 0)
+	jobMeta.Lock()
+	meta, quiet := jobMeta.m[jobID]
+	delete(jobMeta.m, jobID)
+	jobMeta.Unlock()
 	m.mu.Lock()
 	var a *ActionLog
 	for i := range m.cfg.Actions {
@@ -134,34 +153,101 @@ func (m *Monitor) actionJobDone(jobID, kind, errText string, raw json.RawMessage
 			a = &m.cfg.Actions[i]
 		}
 	}
+	org, sid, mid := meta.Org, meta.Script, meta.Machine
+	if a != nil {
+		org, sid, mid = a.Org, a.Script, a.Machine
+	}
+	isCheck := false
+	if kind == "script" {
+		if sc := m.scriptLocked(org, sid); sc != nil {
+			isCheck = sc.Check
+		}
+	}
+	transition, wasBad := false, false
+	if isCheck {
+		key := sid + "|" + mid
+		scriptChecks.Lock()
+		prev, known := scriptChecks.m[key]
+		scriptChecks.m[key] = failed
+		scriptChecks.Unlock()
+		transition, wasBad = (!known && failed) || (known && prev != failed), known && prev
+	}
 	if a == nil {
-		m.mu.Unlock()
-		return
+		if !quiet || !failed {
+			m.mu.Unlock()
+			if quiet && transition && wasBad {
+				m.scriptCheckNote(meta, false, "")
+			}
+			return
+		}
+		// regelmäßige Prüfung fehlgeschlagen → jetzt protokollieren
+		m.cfg.Actions = append(m.cfg.Actions, meta)
+		a = &m.cfg.Actions[len(m.cfg.Actions)-1]
 	}
 	a.Done = time.Now().UnixMilli()
 	if errText != "" {
 		a.Status, a.Result = "error", errText
 	} else {
 		a.Status, a.Result = "done", res.Message
+		if failed && kind == "script" {
+			a.Status = "error"
+		}
 		for _, t := range res.OK {
 			a.Detail = append(a.Detail, "✓ "+t)
 		}
 		for _, t := range res.Fail {
 			a.Detail = append(a.Detail, "✗ "+t)
 		}
+		if res.Output != "" {
+			lines := strings.Split(strings.TrimRight(res.Output, "\r\n"), "\n")
+			if len(lines) > 200 {
+				lines = append(lines[:200], "…")
+			}
+			a.Detail = append(a.Detail, lines...)
+		}
 	}
 	cp := *a
 	m.saveConfigLocked()
 	m.mu.Unlock()
+	if quiet {
+		if transition {
+			m.scriptCheckNote(cp, failed, cp.Result)
+		}
+		return
+	}
 	title := "✅ " + actionKinds[kind] + ": " + cp.Name
-	if cp.Status == "error" || len(res.Fail) > 0 {
+	if failed {
 		title = "⚠️ " + actionKinds[kind] + ": " + cp.Name
+	}
+	if kind == "script" {
+		title += " · " + strings.TrimPrefix(cp.Opts, "Script ")
 	}
 	body := cp.Result
 	if mc, ok := m.machineByID(cp.Machine); ok {
 		body = m.sysInfo(mc, cp.Result)
 	}
 	m.notify(notice{"action", "m:" + cp.Machine, title, body, cp.Org})
+}
+
+// scriptChecks: letzter Zustand je Script-Prüfung und Rechner (true = fehlgeschlagen).
+var scriptChecks = struct {
+	sync.Mutex
+	m map[string]bool
+}{m: map[string]bool{}}
+
+func (m *Monitor) scriptCheckNote(a ActionLog, bad bool, why string) {
+	name := strings.TrimSuffix(strings.TrimPrefix(a.Opts, "Script „"), "“")
+	title, body := "🟢 Prüfung wieder OK: "+name+" ("+a.Name+")", "Das Script meldet wieder Erfolg."
+	if bad {
+		title, body = "🔴 Prüfung fehlgeschlagen: "+name+" ("+a.Name+")", why
+	}
+	if mc, ok := m.machineByID(a.Machine); ok {
+		body = m.sysInfo(mc, body)
+		if m.inMaint(mc.Org, "m:"+mc.ID, time.Now()) || m.inMaintSite(mc.Org, mc.Site, time.Now()) {
+			return
+		}
+	}
+	m.notify(notice{"syswarn", "m:" + a.Machine, title, body, a.Org})
 }
 
 // actionJobStarted: Agent hat den Auftrag abgeholt.

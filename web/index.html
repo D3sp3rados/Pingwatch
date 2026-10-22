@@ -401,6 +401,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <h1 id="m-name"></h1>
     <span class="muted" id="m-sub"></span>
     <button class="btn sm ed" id="m-upd" style="margin-left:auto;display:none">⬆️ Updates</button>
+    <button class="btn sm ed" id="m-script" style="display:none">▶ Script</button>
     <button class="btn sm ed" id="m-reboot" style="display:none">🔄 Neu starten</button>
     <button class="btn sm ed" id="m-mute" style="margin-left:auto">🔕 Stummschalten</button>
     <button class="btn sm ed" id="m-edit">Bearbeiten</button>
@@ -479,7 +480,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a></div>
+  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a></div>
   <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
@@ -533,11 +534,14 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
   </div>
   <div class="setcat" data-cat="updates">
-  <div class="panel" style="padding:12px 14px;border-left:4px solid var(--warn);font-size:13.5px"><b>Testphase:</b> PingWacht kann auf Windows- und Linux-Rechnern Updates suchen und installieren und – wenn nötig – neu starten, sofort oder per Plan. Nur diese festen Aktionen, keine freien Befehle.<br>
+  <div class="panel" style="padding:12px 14px;border-left:4px solid var(--warn);font-size:13.5px"><b>Testphase:</b> PingWacht kann auf Windows- und Linux-Rechnern Updates suchen und installieren, bei Bedarf neu starten und Scripts aus der Script-Bibliothek ausführen – sofort oder per Plan. Frei eingetippte Befehle gibt es nicht.<br>
     Voraussetzungen: am Standort unter <b>💻 Rechner-Überwachung</b> „Updates und Neustarts erlauben“ und die <a href="#/settings/konto">Zwei-Faktor-Anmeldung</a>. Auf einem einzelnen Rechner abschaltbar mit <code>"noActions": true</code> in dessen agent.json. Während Updates mit Neustart sind Meldungen der Rechner 2 Stunden stumm.</div>
-  <h2>Update-Pläne <button class="btn sm pri ed" id="add-uplan">+ Plan</button></h2>
+  <h2>Pläne <button class="btn sm pri ed" id="add-uplan">+ Plan</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="up-tbl"></table></div>
-  <h2>Protokoll <span class="sub muted" style="font-weight:400;font-size:12.5px">Updates und Neustarts – wer, wann, was, Ergebnis</span></h2>
+  <h2>Script-Bibliothek <button class="btn sm pri ed" id="add-script">+ Script</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="scr-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px">PowerShell und cmd laufen unter Windows, bash und sh unter Linux/macOS – als Dienst-Benutzer des Agenten (Windows: SYSTEM, Linux: root). Als <b>Prüfung</b> markierte Scripts melden sich bei Exit-Code ≠ 0 (und wieder, wenn sie erneut erfolgreich sind) – z. B. alle 5 Minuten per Plan.</p>
+  <h2>Protokoll <span class="sub muted" style="font-weight:400;font-size:12.5px">Updates, Neustarts und Scripts – wer, wann, was, Ergebnis</span></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="act-tbl"></table></div>
   </div>
   <div class="setcat" data-cat="team">
@@ -774,6 +778,24 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-scr">
+  <form method="dialog" id="sc2-form">
+    <div class="dlg-h" id="sc2-title">Script</div>
+    <div class="dlg-b" style="display:block">
+      <div class="row" style="gap:10px;flex-wrap:wrap"><label class="field" style="flex:2;min-width:200px">Name<input name="name" maxlength="80" placeholder="z. B. WireGuard-Tunnel prüfen"></label>
+        <label class="field" style="flex:1;min-width:140px">Sprache<select name="lang"><option value="powershell">PowerShell (Windows)</option><option value="cmd">cmd / Batch (Windows)</option><option value="bash">bash (Linux/macOS)</option><option value="sh">sh (Linux/macOS)</option></select></label>
+        <label class="field" style="width:120px">Zeitlimit (s)<input name="timeout" type="number" min="5" max="3600" value="300"></label></div>
+      <label class="field">Beschreibung (optional)<input name="desc" maxlength="300"></label>
+      <label class="field">Script<textarea name="body" rows="12" spellcheck="false" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:pre;tab-size:4"></textarea></label>
+      <label class="check"><input type="checkbox" name="check"> <span><b>Als Prüfung</b> – Exit-Code ≠ 0 löst eine Meldung aus (z. B. Tunnel down), Exit 0 die Entwarnung</span></label>
+      <div class="muted" style="font-size:12px;margin-top:6px" id="sc2-ver"></div>
+      <label class="field" style="margin-top:8px">Zwei-Faktor-Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-stelliger Code"></label>
+    </div>
+    <div class="dlg-err" id="sc2-err"></div>
+    <div class="dlg-f"><button class="btn danger" type="button" id="sc2-del" style="margin-right:auto">Löschen</button><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-act">
   <form method="dialog" id="ac-form">
     <div class="dlg-h" id="ac-title"></div>
@@ -782,10 +804,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <div id="ac-plan" style="display:none">
         <label class="field">Name<input name="pname" maxlength="80" placeholder="z. B. Patchday Kindergärten"></label>
         <label class="field">Für<select name="ptarget"></select></label>
-        <div id="ac-days" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 8px"></div>
-        <label class="field">Uhrzeit<input type="time" name="pat" value="22:00"></label>
+        <label class="field">Was<select name="pkind"></select></label>
+        <label class="field" id="ac-whenw">Wann<select name="pwhen"><option value="days">an Wochentagen zur Uhrzeit</option><option value="5">alle 5 Minuten</option><option value="15">alle 15 Minuten</option><option value="30">alle 30 Minuten</option><option value="60">stündlich</option><option value="240">alle 4 Stunden</option></select></label>
+        <div id="ac-dayw"><div id="ac-days" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 8px"></div>
+        <label class="field">Uhrzeit<input type="time" name="pat" value="22:00"></label></div>
         <label class="check"><input type="checkbox" name="pon" checked> <span>Plan aktiv</span></label>
       </div>
+      <label class="field" id="ac-scrw" style="display:none">Script<select name="scr"></select></label>
       <div id="ac-upd">
         <label class="field">Welche Updates<select name="cat"><option value="security">Sicherheitsupdates (inkl. Defender-Signaturen und Tool gegen Schadsoftware)</option><option value="all">Alle Updates (ohne Funktionsupdates und Treiber)</option></select></label>
         <label class="field">Neustart<select name="reboot"><option value="ifneeded">wenn nötig – 5 Minuten nach der Installation</option><option value="never">nie – nur melden, dass einer nötig ist</option></select></label>
@@ -942,7 +967,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       <label class="check"><input type="checkbox" name="on"> <span><b>Rechner überwachen</b> – der Rechner mit dem Agent und weitere Rechner mit dem Agent im Modus „nur Rechner“ melden jede Minute CPU, Arbeitsspeicher, Laufwerke, Dienste, Updates, Virenschutz und ausstehende Neustarts. Es wird nur gemessen, nichts ferngesteuert.</span></label>
       <label class="field" style="margin-top:10px">Überwachte Dienste – Standard für alle Rechner (einer pro Zeile; pro Rechner änderbar in den Rechner-Details → Dienste → Festlegen)<textarea name="services" rows="3" placeholder="Spooler&#10;MSSQLSERVER&#10;smbd"></textarea><small>Windows: Dienstname oder Anzeigename (services.msc). Linux: systemd-Dienst. Mac: launchd-Label. Meldung, wenn ein Dienst nicht läuft.</small></label>
       <label class="check" style="margin-top:4px"><input type="checkbox" name="selfHeal"> <span><b>Selbstheilung erlauben</b> – gestoppte Dienste, die unten markiert sind, startet der Agent automatisch neu (höchstens 3 Versuche im Abstand von 1 Minute). Andere Dienste und Befehle werden nie ausgeführt. Kann auf dem Rechner zusätzlich mit <code>"noSelfHeal": true</code> in der agent.json abgeschaltet werden; unter Windows braucht der Agent dafür Administratorrechte.</span></label>
-      <label class="check" style="margin-top:4px"><input type="checkbox" name="updates"> <span><b>Updates und Neustarts erlauben</b> (Testphase) – Inhaber und Admins können für die Rechner dieses Standorts mit Zwei-Faktor-Code Updates installieren und neu starten, auch per Plan (Einstellungen → Updates). Nur diese festen Aktionen, keine freien Befehle.</span></label>
+      <label class="check" style="margin-top:4px"><input type="checkbox" name="updates"> <span><b>Updates, Neustarts und Scripts erlauben</b> (Testphase) – Inhaber und Admins können auf den Rechnern dieses Standorts mit Zwei-Faktor-Code Updates installieren, neu starten und Scripts aus der Script-Bibliothek ausführen, auch per Plan (Einstellungen → Updates &amp; Scripts). Frei eingetippte Befehle gibt es nicht.</span></label>
       <div class="heal-list" id="sy-heal"></div>
       <div class="syscfg-grid" style="margin-top:8px">
         <label class="field">Laufwerk voll ab (%)<input name="diskPct" type="number" min="50" max="99"></label>
@@ -1205,9 +1230,10 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   const lbl=selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
   const muteable=selS||selC, canEd=!st0.me||st0.me.role!=='viewer';
   const actable=muteable&&canEd&&st0.sites.some(x=>siteActOK(x)&&(selS?x.id===selS.id:x.customer===OVF.c));
-  const ch=lbl?`📍 ${lbl} ${actable?'<button class="btn sm" id="crumb-upd" type="button">⬆️ Updates</button>':''}${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
+  const ch=lbl?`📍 ${lbl} ${actable?'<button class="btn sm" id="crumb-upd" type="button">⬆️ Updates</button><button class="btn sm" id="crumb-scr" type="button">▶ Script</button>':''}${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
   if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s=''; ovfSave(); ovRerender(); };
     const ub=$('#crumb-upd'); if(ub) ub.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('winupdate','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('winupdate','customer',OVF.c,co?co.name:''); } };
+    const sb=$('#crumb-scr'); if(sb) sb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('script','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('script','customer',OVF.c,co?co.name:''); } };
     const mb=$('#crumb-mute'); if(mb) mb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openMute('site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openMute('customer',OVF.c,co?co.name:''); } }; }
   $('#tr-mob').innerHTML=`<span>☰ ${lbl?lbl.replace(/<[^>]+>/g,''):'Alle Kunden & Standorte'}</span><span>${nb?`<b style="color:var(--bad)">${nb} gestört</b>`:''} ▾</span>`; }
 (()=>{ const el=$('#ov-tree');
@@ -2511,7 +2537,7 @@ function renderMachine(){ const d=MD.data||machineOf(MD.id); if(!d){ $('#m-name'
   const m=machineOf(MD.id)||d, r=(MD.data&&MD.data.cur)||m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
   $('#m-dot').style.background=`var(${col})`; $('#m-name').textContent='💻 '+m.name;
   $('#m-svcsrc').textContent=m.services?'eigene Liste für diesen Rechner':'wie Standort';
-  { const so=S.state.sites.find(x=>x.id===m.site), ok=siteActOK(so); $('#m-upd').style.display=ok?'':'none'; $('#m-reboot').style.display=ok?'':'none'; $('#m-mute').style.marginLeft=ok?'0':'auto';
+  { const so=S.state.sites.find(x=>x.id===m.site), ok=siteActOK(so); $('#m-upd').style.display=ok?'':'none'; $('#m-reboot').style.display=ok?'':'none'; $('#m-script').style.display=ok?'':'none'; $('#m-mute').style.marginLeft=ok?'0':'auto';
     const acts=MD.acts||[]; $('#m-actw').style.display=ok||acts.length?'':'none'; const t=$('#m-acts'); t.innerHTML=actRows(acts,false); bindActRows(t,acts); }
   $('#m-sub').textContent=[r.os,m.host&&m.host!==m.name?m.host:'',siteName(m.site),m.sysOnly?'Agent „nur Rechner“':'Standort-Agent',m.at?'Stand '+fmtTime(m.at,false):''].filter(Boolean).join(' · ');
   const probs=m.problems||[]; $('#m-probs').innerHTML=(m.status==='off'?[`<span class="tag bad">Meldet sich nicht${m.at?' seit '+fmtDT(m.at,false):''}</span>`]:[]).concat(probs.map(p=>`<span class="tag ${/Dienst|Virenschutz/.test(p)?'bad':'warn'}">${esc(p)}</span>`)).join('')+(m.status==='disabled'?'<span class="tag">Rechner-Überwachung am Standort ausgeschaltet</span>':'');
@@ -2596,7 +2622,9 @@ syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok
   try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
 
 /* ---------- Updates & Neustarts (Testphase) ---------- */
-let TF={on:false}; const AC={mode:'run',kind:'winupdate',scope:'',id:'',plan:null}; let UP={plans:[],acts:[]};
+let TF={on:false}; const AC={mode:'run',kind:'winupdate',scope:'',id:'',plan:null}; let UP={plans:[],acts:[],scripts:[]};
+async function loadScripts(){ try{ UP.scripts=await api('/api/scripts'); }catch(e){} return UP.scripts; }
+const LANGN={powershell:'PowerShell',cmd:'cmd',bash:'bash',sh:'sh'};
 const WDN=['So','Mo','Di','Mi','Do','Fr','Sa'];
 function siteActOK(s){ return !!(s&&s.sys&&s.sys.on&&s.sys.updates); }
 function actTargets(scope,id){ const st=S.state; let ss=st.sites.filter(siteActOK); if(scope==='site') ss=ss.filter(s=>s.id===id); if(scope==='customer') ss=ss.filter(s=>s.customer===id); const set=new Set(ss.map(s=>s.id)); return (st.machines||[]).filter(m=>set.has(m.site)&&(scope!=='machine'||m.id===id)); }
@@ -2611,17 +2639,23 @@ async function renderTF(){ const box=$('#tf-box'); if(!box) return; await loadTF
 const acf=$('#ac-form'), acdlg=$('#dlg-act');
 function acTargetText(ms,label){ if(!ms.length) return '<span style="color:var(--bad)">Keine Rechner – für diese Auswahl sind Updates und Neustarts nicht erlaubt (Einstellungen → Standorte → 💻 Rechner-Überwachung).</span>';
   return `<b>${esc(label)}</b> · ${ms.length} Rechner: <span class="muted">${ms.slice(0,12).map(m=>esc(m.name)).join(', ')}${ms.length>12?' …':''}</span>`; }
-async function openAction(kind,scope,id,label){ Object.assign(AC,{mode:'run',kind,scope,id,plan:null}); await loadTF();
-  const ms=actTargets(scope,id); $('#ac-title').textContent=kind==='reboot'?'🔄 Neu starten':'⬆️ Updates installieren'; $('#ac-target').innerHTML=acTargetText(ms,label);
+async function openAction(kind,scope,id,label){ Object.assign(AC,{mode:'run',kind,scope,id,plan:null}); await loadTF(); if(kind==='script') await loadScripts();
+  const ms=actTargets(scope,id); $('#ac-title').textContent=kind==='reboot'?'🔄 Neu starten':kind==='script'?'▶ Script ausführen':'⬆️ Updates installieren'; $('#ac-target').innerHTML=acTargetText(ms,label);
   $('#ac-plan').style.display='none'; $('#ac-upd').style.display=kind==='winupdate'?'':'none'; $('#ac-del').style.display='none'; $('#ac-err').textContent=''; acf.code.value='';
+  $('#ac-scrw').style.display=kind==='script'?'':'none'; if(kind==='script') acf.scr.innerHTML=UP.scripts.length?UP.scripts.map(x=>`<option value="${x.id}">${esc(x.name)} (${LANGN[x.lang]||x.lang})</option>`).join(''):'<option value="">Noch keine Scripts – unter Einstellungen → Updates &amp; Scripts anlegen</option>';
   $('#ac-hint').innerHTML=TF.on?(kind==='reboot'?'Der Rechner startet 1 Minute nach Eingang des Auftrags neu. Meldungen sind 2 Stunden stumm.':'Updates werden gesucht, heruntergeladen und installiert – das kann eine Weile dauern. Ausgeschaltete Rechner holen den Auftrag bis zu 12 Stunden später ab. Das Ergebnis kommt als Meldung und steht im Protokoll.'):'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung einrichten.';
-  $('#ac-ok').disabled=!TF.on||!ms.length; $('#ac-ok').textContent=kind==='reboot'?'Neu starten':'Starten'; acdlg.showModal(); }
+  if(kind==='script'&&TF.on) $('#ac-hint').innerHTML='Das Script läuft als Dienst-Benutzer des Agenten (Windows: SYSTEM, Linux: root). Ausgabe und Exit-Code stehen danach im Protokoll.';
+  $('#ac-ok').disabled=!TF.on||!ms.length||(kind==='script'&&!UP.scripts.length); $('#ac-ok').textContent=kind==='reboot'?'Neu starten':kind==='script'?'Ausführen':'Starten'; acdlg.showModal(); }
 function planTargetOpts(){ const st=S.state, cs=st.customers||[], ss=st.sites.filter(s=>s.id!=='cloud'&&s.kind!=='unifi'), ms=st.machines||[];
   return (cs.length?'<optgroup label="Kunden">'+cs.map(c=>`<option value="customer:${c.id}">${esc(c.name)}</option>`).join('')+'</optgroup>':'')+
     '<optgroup label="Standorte">'+ss.map(s=>`<option value="site:${s.id}">${esc(s.name)}${siteActOK(s)?'':' (nicht erlaubt)'}</option>`).join('')+'</optgroup>'+
     (ms.length?'<optgroup label="Einzelne Rechner">'+ms.map(m=>`<option value="machine:${m.id}">${esc(m.name)} · ${esc(siteName(m.site))}</option>`).join('')+'</optgroup>':''); }
-async function openPlan(id){ const x=id&&UP.plans.find(p=>p.id===id); Object.assign(AC,{mode:'plan',kind:'winupdate',plan:x||null}); await loadTF();
-  $('#ac-title').textContent=x?'Update-Plan bearbeiten':'Update-Plan anlegen'; $('#ac-target').innerHTML=''; $('#ac-plan').style.display=''; $('#ac-upd').style.display='';
+async function openPlan(id){ const x=id&&UP.plans.find(p=>p.id===id); Object.assign(AC,{mode:'plan',kind:'winupdate',plan:x||null}); await loadTF(); await loadScripts();
+  $('#ac-title').textContent=x?'Plan bearbeiten':'Plan anlegen'; $('#ac-target').innerHTML=''; $('#ac-plan').style.display=''; $('#ac-scrw').style.display='none';
+  acf.pkind.innerHTML='<option value="winupdate">⬆️ Updates installieren</option>'+(UP.scripts.length?'<optgroup label="Script ausführen">'+UP.scripts.map(sc=>`<option value="script:${sc.id}">▶ ${esc(sc.name)}${sc.check?' (Prüfung)':''}</option>`).join('')+'</optgroup>':'');
+  acf.pkind.value=x&&x.kind==='script'?'script:'+x.scriptId:'winupdate'; acf.pwhen.value=x&&x.every?String(x.every):'days'; if(!acf.pwhen.value) acf.pwhen.value='days';
+  const syncK=()=>{ const scr=acf.pkind.value!=='winupdate'; $('#ac-upd').style.display=scr?'none':''; [...acf.pwhen.options].forEach(o=>{ if(o.value!=='days') o.disabled=!scr; }); if(!scr) acf.pwhen.value='days'; $('#ac-dayw').style.display=acf.pwhen.value==='days'?'':'none'; };
+  acf.pkind.onchange=syncK; acf.pwhen.onchange=syncK; syncK();
   acf.ptarget.innerHTML=planTargetOpts(); acf.pname.value=x?x.name:''; acf.pat.value=x?x.at:'22:00'; acf.pon.checked=x?x.on:true; acf.cat.value=x?x.cat:'security'; acf.reboot.value=x?x.reboot:'ifneeded';
   if(x) acf.ptarget.value=x.scope+':'+x.target;
   $('#ac-days').innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="check"><input type="checkbox" value="${d}"${x?(x.weekdays.includes(d)?' checked':''):(d===3?' checked':'')}> ${WDN[d]}</label>`).join('');
@@ -2631,21 +2665,36 @@ async function openPlan(id){ const x=id&&UP.plans.find(p=>p.id===id); Object.ass
   $('#ac-ok').disabled=!TF.on; $('#ac-ok').textContent='Speichern'; acdlg.showModal(); }
 acf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#ac-err').textContent='';
   try{ if(AC.mode==='plan'){ const [sc,tid]=acf.ptarget.value.split(':');
-      await api('/api/updateplans',{method:'POST',body:JSON.stringify({id:AC.plan?AC.plan.id:'',name:acf.pname.value,scope:sc,target:tid,weekdays:$$('#ac-days input:checked').map(i=>+i.value),at:acf.pat.value,cat:acf.cat.value,reboot:acf.reboot.value,on:acf.pon.checked,code:acf.code.value})});
+      const scr=acf.pkind.value.startsWith('script:');
+      await api('/api/updateplans',{method:'POST',body:JSON.stringify({id:AC.plan?AC.plan.id:'',name:acf.pname.value,scope:sc,target:tid,kind:scr?'script':'winupdate',scriptId:scr?acf.pkind.value.slice(7):'',every:scr&&acf.pwhen.value!=='days'?+acf.pwhen.value:0,weekdays:$$('#ac-days input:checked').map(i=>+i.value),at:acf.pat.value,cat:acf.cat.value,reboot:acf.reboot.value,on:acf.pon.checked,code:acf.code.value})});
       acdlg.close(); toast('Plan gespeichert'); loadUpdates(); }
-    else { const r=await api('/api/actions',{method:'POST',body:JSON.stringify({kind:AC.kind,scope:AC.scope,id:AC.id,cat:acf.cat.value,reboot:acf.reboot.value,code:acf.code.value})});
+    else { const r=await api('/api/actions',{method:'POST',body:JSON.stringify({kind:AC.kind,scope:AC.scope,id:AC.id,cat:acf.cat.value,reboot:acf.reboot.value,script:acf.scr.value,code:acf.code.value})});
       acdlg.close(); toast(`Auftrag an ${r.machines} Rechner – Ergebnis kommt als Meldung`); if(MD.id) loadMachine(); } }catch(err){ $('#ac-err').textContent=err.message; } });
 $('#ac-del').onclick=async()=>{ if(!AC.plan||!await uiConfirm('Plan „'+AC.plan.name+'“ löschen?')) return; try{ await api('/api/updateplans?id='+AC.plan.id,{method:'DELETE'}); acdlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
 $('#add-uplan').onclick=()=>openPlan('');
 const ACST={queued:['wartet auf Rechner','--off'],running:['läuft','--warn'],done:['fertig','--ok'],error:['Fehler','--bad']};
 function actRows(list,withName){ return list.length?'<tr><th>Zeit</th>'+(withName?'<th>Rechner</th>':'')+'<th>Aktion</th><th class="hide-m">Von</th><th>Ergebnis</th></tr>'+list.map((a,i)=>{ const [l,c]=ACST[a.status]||ACST.queued, fail=(a.detail||[]).some(d=>d.startsWith('✗'));
-    return `<tr data-ai="${i}" style="cursor:${(a.detail||[]).length?'pointer':'default'}"><td class="num" style="white-space:nowrap">${fmtDT(a.t,false)}</td>${withName?`<td><b>${esc(a.name)}</b> <span class="muted">${esc(siteName(a.site))}</span></td>`:''}<td>${a.kind==='reboot'?'🔄 Neustart':'⬆️ Updates'}${a.opts?`<div class="muted" style="font-size:12px">${esc(a.opts)}</div>`:''}</td><td class="hide-m" style="font-size:12.5px">${esc(a.by)}</td><td><span style="color:var(${fail?'--warn':c})">${a.status==='done'?esc(a.result||l):a.status==='error'?esc(a.result||l):l}</span>${(a.detail||[]).length?` <a href="#" class="muted" style="font-size:12px">Details</a>`:''}</td></tr>`; }).join(''):'<tr><td class="muted">Noch keine Aktionen.</td></tr>'; }
+    return `<tr data-ai="${i}" style="cursor:${(a.detail||[]).length?'pointer':'default'}"><td class="num" style="white-space:nowrap">${fmtDT(a.t,false)}</td>${withName?`<td><b>${esc(a.name)}</b> <span class="muted">${esc(siteName(a.site))}</span></td>`:''}<td>${a.kind==='reboot'?'🔄 Neustart':a.kind==='script'?'▶ Script':'⬆️ Updates'}${a.opts?`<div class="muted" style="font-size:12px">${esc(a.opts)}</div>`:''}</td><td class="hide-m" style="font-size:12.5px">${esc(a.by)}</td><td><span style="color:var(${fail?'--warn':c})">${a.status==='done'?esc(a.result||l):a.status==='error'?esc(a.result||l):l}</span>${(a.detail||[]).length?` <a href="#" class="muted" style="font-size:12px">Details</a>`:''}</td></tr>`; }).join(''):'<tr><td class="muted">Noch keine Aktionen.</td></tr>'; }
 function bindActRows(tbl,list){ tbl.querySelectorAll('tr[data-ai]').forEach(tr=>tr.onclick=e=>{ e.preventDefault(); const a=list[+tr.dataset.ai]; if(a&&(a.detail||[]).length) uiAlert(a.name+' · '+fmtDT(a.t,false)+'\n\n'+a.detail.join('\n')); }); }
-async function loadUpdates(){ try{ const [pl,ac]=await Promise.all([api('/api/updateplans'),api('/api/actions')]); UP={plans:pl,acts:ac}; }catch(e){ return; }
+async function loadUpdates(){ try{ const [pl,ac,sc]=await Promise.all([api('/api/updateplans'),api('/api/actions'),api('/api/scripts')]); UP={plans:pl,acts:ac,scripts:sc}; }catch(e){ return; }
+  $('#scr-tbl').innerHTML=UP.scripts.length?'<tr><th>Script</th><th>Sprache</th><th class="hide-m">Version</th><th class="hide-m">Geändert</th><th></th></tr>'+UP.scripts.map(x=>`<tr><td><b>${esc(x.name)}</b>${x.check?' <span class="tag">Prüfung</span>':''}${x.desc?`<div class="muted" style="font-size:12px">${esc(x.desc)}</div>`:''}</td><td>${LANGN[x.lang]||x.lang}</td><td class="hide-m">v${x.version}</td><td class="hide-m" style="font-size:12.5px">${fmtDT(x.updated,false)} · ${esc(x.by||'')}</td><td style="text-align:right"><button class="btn sm ed" data-scre="${x.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="muted">Noch keine Scripts.</td></tr>';
+  $$('#scr-tbl [data-scre]').forEach(b=>b.onclick=()=>openScript(b.dataset.scre));
   const tn=p=>{ const st=S.state; if(p.scope==='customer') return '👥 '+(((st.customers||[]).find(c=>c.id===p.target)||{}).name||'?'); if(p.scope==='site') return '📍 '+siteName(p.target); return '💻 '+(((st.machines||[]).find(m=>m.id===p.target)||{}).name||'?'); };
-  $('#up-tbl').innerHTML=UP.plans.length?'<tr><th>Plan</th><th>Für</th><th>Wann</th><th class="hide-m">Was</th><th class="hide-m">Zuletzt</th><th></th></tr>'+UP.plans.map(p=>`<tr><td><b>${esc(p.name)}</b>${p.on?'':' <span class="tag">aus</span>'}</td><td>${esc(tn(p))}</td><td>${[1,2,3,4,5,6,0].filter(d=>p.weekdays.includes(d)).map(d=>WDN[d]).join(', ')} ${esc(p.at)}</td><td class="hide-m" style="font-size:12.5px">${esc(actionOptsTxt(p.cat,p.reboot))}</td><td class="hide-m">${p.lastRun?fmtDT(p.lastRun,false):'–'}</td><td style="text-align:right"><button class="btn sm ed" data-upe="${p.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="muted">Noch kein Plan – z. B. „jeden Mittwoch 22:00 Sicherheitsupdates, Neustart wenn nötig“.</td></tr>';
+  $('#up-tbl').innerHTML=UP.plans.length?'<tr><th>Plan</th><th>Für</th><th>Wann</th><th class="hide-m">Was</th><th class="hide-m">Zuletzt</th><th></th></tr>'+UP.plans.map(p=>`<tr><td><b>${esc(p.name)}</b>${p.on?'':' <span class="tag">aus</span>'}</td><td>${esc(tn(p))}</td><td>${p.every?(p.every>=60?'alle '+(p.every/60)+' h':'alle '+p.every+' min'):[1,2,3,4,5,6,0].filter(d=>(p.weekdays||[]).includes(d)).map(d=>WDN[d]).join(', ')+' '+esc(p.at)}</td><td class="hide-m" style="font-size:12.5px">${p.kind==='script'?'▶ '+esc(((UP.scripts.find(x=>x.id===p.scriptId)||{}).name)||'?'):esc(actionOptsTxt(p.cat,p.reboot))}</td><td class="hide-m">${p.lastRun?fmtDT(p.lastRun,false):'–'}</td><td style="text-align:right"><button class="btn sm ed" data-upe="${p.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="muted">Noch kein Plan – z. B. „jeden Mittwoch 22:00 Sicherheitsupdates, Neustart wenn nötig“ oder „alle 5 Minuten WireGuard prüfen“.</td></tr>';
   $$('#up-tbl [data-upe]').forEach(b=>b.onclick=()=>openPlan(b.dataset.upe));
   $('#act-tbl').innerHTML=actRows(UP.acts,true); bindActRows($('#act-tbl'),UP.acts); }
+/* Script-Bibliothek */
+let SCR=null; const sc2f=$('#sc2-form'), sc2dlg=$('#dlg-scr');
+async function openScript(id){ await loadTF(); const x=id&&UP.scripts.find(y=>y.id===id); SCR=x||null;
+  $('#sc2-title').textContent=x?'Script bearbeiten':'Script anlegen'; sc2f.name.value=x?x.name:''; sc2f.lang.value=x?x.lang:'powershell'; sc2f.timeout.value=x?x.timeout:300; sc2f.desc.value=x?x.desc||'':''; sc2f.body.value=x?x.body:''; sc2f.check.checked=!!(x&&x.check); sc2f.code.value='';
+  $('#sc2-ver').innerHTML=x?`Version ${x.version} · ${fmtDT(x.updated,false)} · ${esc(x.by||'')}${(x.history||[]).length?` · <a href="#" id="sc2-hist">frühere Fassungen (${x.history.length})</a>`:''}`:'Zum Speichern ist der Zwei-Faktor-Code nötig. Frühere Fassungen bleiben erhalten.';
+  const h=$('#sc2-hist'); if(h) h.onclick=e=>{ e.preventDefault(); uiAlert(x.history.map(v=>`— Version ${v.version} · ${fmtDT(v.t,false)} · ${v.by}\n${v.body}`).join('\n\n')); };
+  $('#sc2-del').style.display=x?'':'none'; $('#sc2-err').textContent=TF.on?'':'Zuerst unter Mein Konto die Zwei-Faktor-Anmeldung einrichten.'; sc2dlg.showModal(); }
+$('#add-script').onclick=()=>openScript('');
+sc2f.body.addEventListener('keydown',e=>{ if(e.key==='Tab'){ e.preventDefault(); const t=e.target, a=t.selectionStart; t.setRangeText('    ',a,t.selectionEnd,'end'); } });
+sc2f.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#sc2-err').textContent='';
+  try{ await api('/api/scripts',{method:'POST',body:JSON.stringify({id:SCR?SCR.id:'',name:sc2f.name.value,lang:sc2f.lang.value,timeout:+sc2f.timeout.value||300,desc:sc2f.desc.value,body:sc2f.body.value,check:sc2f.check.checked,code:sc2f.code.value})}); sc2dlg.close(); toast('Script gespeichert'); loadUpdates(); }catch(err){ $('#sc2-err').textContent=err.message; } });
+$('#sc2-del').onclick=async()=>{ if(!SCR) return; const c=await uiPrompt('Script „'+SCR.name+'“ löschen? Zur Bestätigung den Zwei-Faktor-Code eingeben:'); if(!c) return; try{ await api('/api/scripts?id='+SCR.id+'&code='+encodeURIComponent(c),{method:'DELETE'}); sc2dlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
 function actionOptsTxt(cat,rb){ return (cat==='all'?'alle Updates':'Sicherheitsupdates')+' · '+(rb==='ifneeded'?'Neustart wenn nötig':'kein Neustart'); }
 $('#m-svcedit').onclick=()=>{ const m=machineOf(MD.id); if(!m) return; const so=S.state.sites.find(x=>x.id===m.site)||{}, ss=(so.sys&&so.sys.services)||[], f=$('#ms-form');
   $('#ms-title').textContent='Dienste · '+m.name; $('#ms-site').textContent=ss.length?'('+ss.join(', ')+')':'(Standort überwacht keine Dienste)'; $('#ms-err').textContent='';
@@ -2654,6 +2703,7 @@ $('#m-svcedit').onclick=()=>{ const m=machineOf(MD.id); if(!m) return; const so=
 $('#ms-form').addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); const f=$('#ms-form');
   try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:MD.id,svcMode:f.mode.value,services:f.services.value.split('\n').map(x=>x.trim()).filter(Boolean)})}); $('#dlg-msvc').close(); toast('Gespeichert – der Agent übernimmt es in etwa einer Minute'); await refreshState(); loadMachine(); }catch(err){ $('#ms-err').textContent=err.message; } });
 $('#m-upd').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('winupdate','machine',m.id,m.name); };
+$('#m-script').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('script','machine',m.id,m.name); };
 $('#m-reboot').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('reboot','machine',m.id,m.name); };
 
 /* ---------- KI-Assistent ---------- */

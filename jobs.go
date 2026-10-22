@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -306,7 +307,7 @@ func (a *Agent) runJob(j agentJob) {
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
 		res, err = unifiProbe(j.Params["url"], j.Params["key"], strings.Split(j.Params["paths"], ","))
-	case "winupdate", "reboot":
+	case "winupdate", "reboot", "script":
 		if m := j.Params["machine"]; m == "" || !strings.HasSuffix(m, ":"+a.machine) {
 			err = errors.New("Auftrag gilt für einen anderen Rechner")
 			break
@@ -319,6 +320,15 @@ func (a *Agent) runJob(j agentJob) {
 			err = errors.New("auf diesem Rechner abgeschaltet (\"noActions\" in der agent.json)")
 		case !allowed:
 			err = errors.New("für diesen Standort nicht erlaubt")
+		case j.Kind == "script":
+			to, _ := strconv.Atoi(j.Params["timeout"])
+			var sr actionResult
+			sr, err = a.runScript(j.Params["lang"], j.Params["script"], to)
+			if err != nil && sr.Output != "" {
+				err = errors.New(err.Error() + "\n" + sr.Output)
+			} else if err == nil {
+				res = sr
+			}
 		case j.Kind == "reboot":
 			if err = rebootMachine(60); err == nil {
 				res = actionResult{Message: "Neustart in 1 Minute"}

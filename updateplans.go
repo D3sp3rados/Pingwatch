@@ -2,7 +2,9 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -17,9 +19,12 @@ type UpdatePlan struct {
 	Scope    string `json:"scope"`  // site, customer, machine
 	Target   string `json:"target"` // ID von Standort / Kunde / Rechner
 	Weekdays []int  `json:"weekdays"`
-	At       string `json:"at"`     // "HH:MM"
-	Cat      string `json:"cat"`    // security, all
-	Reboot   string `json:"reboot"` // never, ifneeded
+	At       string `json:"at"`                 // "HH:MM"
+	Cat      string `json:"cat"`                // security, all
+	Reboot   string `json:"reboot"`             // never, ifneeded
+	Kind     string `json:"kind,omitempty"`     // winupdate (Standard) oder script
+	ScriptID string `json:"scriptId,omitempty"` // bei Kind script
+	Every    int    `json:"every,omitempty"`    // Minuten: regelmäßig statt Wochentag/Uhrzeit (mind. 5)
 	On       bool   `json:"on"`
 	By       string `json:"by,omitempty"`
 	LastRun  int64  `json:"lastRun,omitempty"`
@@ -59,9 +64,22 @@ func (s *Server) handleUpdatePlans(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Bitte einen Namen angeben", 400)
 			return
 		}
-		if _, ok := hhmm(x.At); !ok {
-			http.Error(w, "Uhrzeit ungültig", 400)
-			return
+		if x.Kind != "script" {
+			x.Kind, x.ScriptID = "winupdate", ""
+		} else {
+			m.mu.RLock()
+			ok := m.scriptLocked(p.Org, x.ScriptID) != nil
+			m.mu.RUnlock()
+			if !ok {
+				http.Error(w, "Bitte ein Script wählen", 400)
+				return
+			}
+		}
+		if x.Every < 0 || x.Kind != "script" {
+			x.Every = 0
+		}
+		if x.Every > 0 && x.Every < 5 {
+			x.Every = 5
 		}
 		days := []int{}
 		for _, d := range x.Weekdays {
@@ -69,9 +87,15 @@ func (s *Server) handleUpdatePlans(w http.ResponseWriter, r *http.Request) {
 				days = append(days, d)
 			}
 		}
-		if len(days) == 0 {
-			http.Error(w, "Bitte mindestens einen Wochentag wählen", 400)
-			return
+		if x.Every == 0 {
+			if _, ok := hhmm(x.At); !ok {
+				http.Error(w, "Uhrzeit ungültig", 400)
+				return
+			}
+			if len(days) == 0 {
+				http.Error(w, "Bitte mindestens einen Wochentag wählen", 400)
+				return
+			}
 		}
 		x.Weekdays = days
 		if x.Cat != "all" {
@@ -185,25 +209,56 @@ func (m *Monitor) planTargetsLocked(org, scope, id string) (machines []MachineCf
 	return
 }
 
+// actReq: was an welche Rechner geht.
+type actReq struct {
+	Org, By, Kind, Cat, Reboot, Opts string
+	Script                           *Script // bei Kind "script"
+	Quiet                            bool    // regelmäßige Script-Prüfung: nur Fehler protokollieren
+	Plan                             string  // Name des Plans (für Meldungen)
+}
+
+// jobMeta: Angaben zu Aufträgen, die (noch) keinen Protokolleintrag haben.
+var jobMeta = struct {
+	sync.Mutex
+	m map[string]ActionLog
+}{m: map[string]ActionLog{}}
+
 // queueActionsLocked: Aufträge anlegen und protokollieren (m.mu gehalten).
-func (m *Monitor) queueActionsLocked(org, by, kind, cat, reboot, opts string, targets []MachineCfg, now int64) {
+func (m *Monitor) queueActionsLocked(q actReq, targets []MachineCfg, now int64) {
 	jobs.Lock()
 	for _, mc := range targets {
-		j := agentJob{ID: randHex(8), Kind: kind, Params: map[string]string{"machine": mc.ID, "cat": cat, "reboot": reboot}}
-		q := mc.Site
-		if mc.SysOnly {
-			q = "m:" + mc.ID
+		j := agentJob{ID: randHex(8), Kind: q.Kind, Params: map[string]string{"machine": mc.ID, "cat": q.Cat, "reboot": q.Reboot}}
+		if q.Script != nil {
+			j.Params["script"], j.Params["lang"], j.Params["timeout"] = q.Script.Body, q.Script.Lang, strconv.Itoa(q.Script.Timeout)
+			j.Params["sid"], j.Params["sname"] = q.Script.ID, q.Script.Name
 		}
-		jobs.byID[j.ID] = &jobState{agentJob: j, Org: org, Site: mc.Site, Status: "queued", Created: now}
-		jobs.queue[q] = append(jobs.queue[q], j)
-		m.cfg.Actions = append(m.cfg.Actions, ActionLog{ID: randHex(6), Org: org, T: now, By: by, Kind: kind, Opts: opts, Machine: mc.ID, Name: mc.Name, Site: mc.Site, Job: j.ID, Status: "queued"})
+		qk := mc.Site
+		if mc.SysOnly {
+			qk = "m:" + mc.ID
+		}
+		jobs.byID[j.ID] = &jobState{agentJob: j, Org: q.Org, Site: mc.Site, Status: "queued", Created: now}
+		jobs.queue[qk] = append(jobs.queue[qk], j)
+		a := ActionLog{ID: randHex(6), Org: q.Org, T: now, By: q.By, Kind: q.Kind, Opts: q.Opts, Machine: mc.ID, Name: mc.Name, Site: mc.Site, Job: j.ID, Status: "queued"}
+		if q.Script != nil {
+			a.Script = q.Script.ID
+		}
+		if q.Quiet {
+			jobMeta.Lock()
+			jobMeta.m[j.ID] = a
+			if len(jobMeta.m) > 20000 {
+				jobMeta.m = map[string]ActionLog{}
+			}
+			jobMeta.Unlock()
+		} else {
+			m.cfg.Actions = append(m.cfg.Actions, a)
+		}
 	}
 	jobs.Unlock()
 	if n := len(m.cfg.Actions); n > 3000 {
 		m.cfg.Actions = append([]ActionLog(nil), m.cfg.Actions[n-3000:]...)
 	}
 	// Meldungen der Rechner und Standorte während Updates/Neustart stumm (2 Stunden)
-	if kind == "reboot" || reboot != "never" {
+	if q.Kind == "reboot" || q.Kind == "winupdate" && q.Reboot != "never" {
 		var hs []string
 		seen := map[string]bool{}
 		for _, mc := range targets {
@@ -213,7 +268,7 @@ func (m *Monitor) queueActionsLocked(org, by, kind, cat, reboot, opts string, ta
 				hs = append(hs, "s:"+mc.Site)
 			}
 		}
-		m.cfg.Maints = append(m.cfg.Maints, Maint{ID: randHex(6), Org: org, Name: "🔄 " + actionKinds[kind] + " (" + by + ")", Hosts: hs, Start: now - 1000, End: now + 2*3600*1000, Created: now})
+		m.cfg.Maints = append(m.cfg.Maints, Maint{ID: randHex(6), Org: q.Org, Name: "🔄 " + actionKinds[q.Kind] + " (" + q.By + ")", Hosts: hs, Start: now - 1000, End: now + 2*3600*1000, Created: now})
 	}
 }
 
@@ -230,6 +285,12 @@ func (m *Monitor) updatePlanLoop() {
 	}
 }
 
+// planLast: letzter Lauf von Intervall-Plänen (nur im Speicher, damit nicht ständig gespeichert wird).
+var planLast = struct {
+	sync.Mutex
+	m map[string]time.Time
+}{m: map[string]time.Time{}}
+
 func (m *Monitor) runDuePlans(now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -240,21 +301,43 @@ func (m *Monitor) runDuePlans(now time.Time) {
 		if !x.On {
 			continue
 		}
-		at, ok := hhmm(x.At)
-		day := false
-		for _, d := range x.Weekdays {
-			day = day || d == int(now.Weekday())
+		if x.Every > 0 {
+			planLast.Lock()
+			last := planLast.m[x.ID]
+			due := now.Sub(last) >= time.Duration(x.Every)*time.Minute-15*time.Second
+			if due {
+				planLast.m[x.ID] = now
+			}
+			planLast.Unlock()
+			if !due {
+				continue
+			}
+		} else {
+			at, ok := hhmm(x.At)
+			day := false
+			for _, d := range x.Weekdays {
+				day = day || d == int(now.Weekday())
+			}
+			// fällig: richtiger Tag, Uhrzeit erreicht (bis 10 Minuten danach) und heute noch nicht gelaufen
+			if !ok || !day || cur < at || cur > at+10 || (x.LastRun > 0 && time.UnixMilli(x.LastRun).Format("2006-01-02") == now.Format("2006-01-02")) {
+				continue
+			}
+			x.LastRun = now.UnixMilli()
+			changed = true
 		}
-		// fällig: richtiger Tag, Uhrzeit erreicht (bis 10 Minuten danach) und heute noch nicht gelaufen
-		if !ok || !day || cur < at || cur > at+10 || (x.LastRun > 0 && time.UnixMilli(x.LastRun).Format("2006-01-02") == now.Format("2006-01-02")) {
+		targets, _ := m.planTargetsLocked(x.Org, x.Scope, x.Target)
+		if len(targets) == 0 {
 			continue
 		}
-		x.LastRun = now.UnixMilli()
-		changed = true
-		targets, _ := m.planTargetsLocked(x.Org, x.Scope, x.Target)
-		if len(targets) > 0 {
-			m.queueActionsLocked(x.Org, "Plan „"+x.Name+"“", "winupdate", x.Cat, x.Reboot, actionOpts(x.Cat, x.Reboot), targets, now.UnixMilli())
+		q := actReq{Org: x.Org, By: "Plan „" + x.Name + "“", Kind: "winupdate", Cat: x.Cat, Reboot: x.Reboot, Opts: actionOpts(x.Cat, x.Reboot), Plan: x.Name}
+		if x.Kind == "script" {
+			sc := m.scriptLocked(x.Org, x.ScriptID)
+			if sc == nil {
+				continue
+			}
+			q = actReq{Org: x.Org, By: q.By, Kind: "script", Opts: "Script „" + sc.Name + "“", Script: sc, Quiet: x.Every > 0, Plan: x.Name}
 		}
+		m.queueActionsLocked(q, targets, now.UnixMilli())
 	}
 	if changed {
 		m.saveConfigLocked()

@@ -22,6 +22,9 @@ func TestActionsAndPlans(t *testing.T) {
 	s, ts := newTestServer(t)
 	c := newClient(t, ts)
 	c.login("", "admin-pass-123")
+	totpState.Lock()
+	totpState.used = map[string]uint64{}
+	totpState.Unlock()
 	_, body := c.do("POST", "/api/sites", map[string]any{"name": "Büro"})
 	var sc SiteCfg
 	json.Unmarshal([]byte(body), &sc)
@@ -117,7 +120,7 @@ func TestAgentActionsGuard(t *testing.T) {
 	mc, _ := s.m.registerMachine(site, b.machine, "PC-B", false)
 	now := time.Now().UnixMilli()
 	s.m.mu.Lock()
-	s.m.queueActionsLocked("default", "Test", "reboot", "", "never", "", []MachineCfg{mc}, now)
+	s.m.queueActionsLocked(actReq{Org: "default", By: "Test", Kind: "reboot", Reboot: "never"}, []MachineCfg{mc}, now)
 	s.m.mu.Unlock()
 	jb := takeJobs(site.ID)
 	if len(jb) != 1 {
@@ -139,4 +142,84 @@ func TestAgentActionsGuard(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("kein Ergebnis im Protokoll")
+}
+
+func TestScriptsLibraryAndRun(t *testing.T) {
+	s, ts := newTestServer(t)
+	c := newClient(t, ts)
+	c.login("", "admin-pass-123")
+	_, body := c.do("POST", "/api/totp", map[string]string{"action": "setup"})
+	var su struct{ Secret string }
+	json.Unmarshal([]byte(body), &su)
+	code := func() string {
+		totpState.Lock()
+		totpState.used = map[string]uint64{}
+		totpState.Unlock()
+		return totpAt(su.Secret, uint64(time.Now().Unix()/30))
+	}
+	code()
+	c.do("POST", "/api/totp", map[string]string{"action": "enable", "code": code()})
+	if code, _ := c.do("POST", "/api/scripts", map[string]any{"name": "WG", "lang": "bash", "body": "echo hi", "code": "000000"}); code != 403 {
+		t.Fatal("ohne gültigen Code", code)
+	}
+	_, body = c.do("POST", "/api/scripts", map[string]any{"name": "WireGuard prüfen", "lang": "bash", "body": "echo ok", "check": true, "code": code()})
+	var sc Script
+	json.Unmarshal([]byte(body), &sc)
+	if sc.ID == "" || sc.Version != 1 || sc.Timeout != 300 {
+		t.Fatal(body)
+	}
+	_, body = c.do("POST", "/api/scripts", map[string]any{"id": sc.ID, "name": "WireGuard prüfen", "lang": "bash", "body": "echo neu", "check": true, "code": code()})
+	json.Unmarshal([]byte(body), &sc)
+	if sc.Version != 2 || len(sc.History) != 1 || sc.History[0].Body != "echo ok" {
+		t.Fatalf("Version: %s", body)
+	}
+	// Ausführung über Plan (alle 5 Minuten, still) – Fehler wird protokolliert und gemeldet
+	_, sb := c.do("POST", "/api/sites", map[string]any{"name": "Büro"})
+	var site SiteCfg
+	json.Unmarshal([]byte(sb), &site)
+	c.do("POST", "/api/sites", map[string]any{"id": site.ID, "sys": map[string]any{"on": true, "updates": true}})
+	mc, _ := s.m.registerMachine(site, "srv", "SRV", true)
+	if code, b := c.do("POST", "/api/updateplans", map[string]any{"name": "WG-Check", "kind": "script", "scriptId": sc.ID, "every": 1, "scope": "site", "target": site.ID, "on": true, "code": code()}); code != 200 {
+		t.Fatal(code, b)
+	}
+	s.m.runDuePlans(time.Now())
+	jb := takeJobs("m:" + mc.ID)
+	if len(jb) != 1 || jb[0].Kind != "script" || jb[0].Params["script"] != "echo neu" {
+		t.Fatalf("%+v", jb)
+	}
+	zero, one := 0, 1
+	ok, _ := json.Marshal(actionResult{Message: "Exit 0", Exit: &zero})
+	s.m.actionJobDone(jb[0].ID, "script", "", ok)
+	s.m.mu.RLock()
+	n := len(s.m.cfg.Actions)
+	s.m.mu.RUnlock()
+	if n != 0 {
+		t.Fatal("erfolgreiche Prüfung im Protokoll")
+	}
+	planLast.Lock()
+	planLast.m = map[string]time.Time{}
+	planLast.Unlock()
+	s.m.runDuePlans(time.Now())
+	jb = takeJobs("m:" + mc.ID)
+	bad, _ := json.Marshal(actionResult{Message: "Exit 1 · Tunnel down", Exit: &one, Output: "Tunnel down"})
+	s.m.actionJobDone(jb[0].ID, "script", "", bad)
+	s.m.mu.RLock()
+	defer s.m.mu.RUnlock()
+	if len(s.m.cfg.Actions) != 1 || s.m.cfg.Actions[0].Status != "error" {
+		t.Fatalf("Fehler nicht protokolliert: %+v", s.m.cfg.Actions)
+	}
+}
+
+func TestRunScriptLocal(t *testing.T) {
+	a := &Agent{dataDir: t.TempDir()}
+	r, err := a.runScript("sh", "echo Hallo Welt\nexit 3", 10)
+	if err != nil || r.Exit == nil || *r.Exit != 3 || !strings.Contains(r.Output, "Hallo Welt") {
+		t.Fatal(r, err)
+	}
+	if _, err := a.runScript("sh", "sleep 5", 1); err == nil || !strings.Contains(err.Error(), "Zeitlimit") {
+		t.Fatal("Zeitlimit", err)
+	}
+	if _, err := a.runScript("cmd", "dir", 5); err == nil {
+		t.Fatal("cmd unter Linux erlaubt")
+	}
 }
