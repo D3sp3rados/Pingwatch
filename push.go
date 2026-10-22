@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -99,39 +98,43 @@ func newPusherFromEnv() (*Pusher, error) {
 }
 
 func parseP8(raw string) (*ecdsa.PrivateKey, error) {
-	raw = strings.TrimSpace(raw)
-	raw = strings.ReplaceAll(raw, `\n`, "\n")
+	raw = strings.TrimSpace(strings.ReplaceAll(raw, `\n`, "\n"))
+	// ganze Datei als Base64?
 	if !strings.Contains(raw, "BEGIN") {
-		// Base64 der ganzen Datei oder nur der Schlüsselteil
-		if b, err := base64.StdEncoding.DecodeString(raw); err == nil {
-			if strings.Contains(string(b), "BEGIN") {
-				raw = string(b)
-			} else {
-				raw = "-----BEGIN PRIVATE KEY-----\n" + raw + "\n-----END PRIVATE KEY-----"
-			}
+		if b, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(raw), "")); err == nil && strings.Contains(string(b), "BEGIN") {
+			raw = string(b)
 		}
 	}
-	// Zeilenumbrüche können beim Einfügen in Umgebungsvariablen verloren gehen
-	if !strings.Contains(raw, "\n") {
-		raw = strings.Replace(raw, "-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n", 1)
-		raw = strings.Replace(raw, "-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----", 1)
-		parts := strings.SplitN(raw, "\n", 3)
-		if len(parts) == 3 {
-			parts[1] = strings.ReplaceAll(parts[1], " ", "\n")
-			raw = strings.Join(parts, "\n")
+	// Inhalt zwischen BEGIN/END herauslösen – Zeilenumbrüche, Leerzeichen oder Anführungszeichen egal
+	body := raw
+	if i := strings.Index(body, "BEGIN"); i >= 0 {
+		if k := strings.Index(body[i:], "-----"); k >= 0 {
+			body = body[i+k+5:]
 		}
 	}
-	blk, _ := pem.Decode([]byte(raw))
-	if blk == nil {
-		return nil, errors.New("kein gültiger PEM-Schlüssel")
+	if i := strings.Index(body, "-----END"); i >= 0 {
+		body = body[:i]
+	} else if i := strings.Index(body, "END PRIVATE"); i >= 0 {
+		body = body[:i]
 	}
-	k, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
+	var b strings.Builder
+	for _, r := range body {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '+' || r == '/' {
+			b.WriteRune(r)
+		}
+	}
+	clean := b.String()
+	der, err := base64.RawStdEncoding.DecodeString(clean)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("kein gültiger Schlüssel (Base64-Fehler, %d Zeichen erkannt)", len(clean))
+	}
+	k, err := x509.ParsePKCS8PrivateKey(der)
+	if err != nil {
+		return nil, fmt.Errorf("Schlüssel unvollständig oder falsch kopiert (%d Zeichen erkannt, eine .p8-Datei hat ca. 184) – bitte den kompletten Inhalt der .p8-Datei einfügen", len(clean))
 	}
 	ek, ok := k.(*ecdsa.PrivateKey)
 	if !ok {
-		return nil, errors.New("kein EC-Schlüssel")
+		return nil, errors.New("kein EC-Schlüssel – bitte den APNs-Schlüssel (.p8) verwenden")
 	}
 	return ek, nil
 }
@@ -436,8 +439,8 @@ func (m *Monitor) notifyEventStart(e Event) {
 		m.notify(notice{"outage", e.HostID, "🔴 " + e.HostName + " antwortet nicht",
 			m.withInfo(e.HostID, e.Site, "Seit "+at+" keine Antwort"), e.Org})
 	case "offline":
-		m.notify(notice{"offline", "", "⚪️ Standort " + e.HostName + " offline",
-			fmt.Sprintf("Agent meldet sich seit %s nicht mehr", at), e.Org})
+		m.notify(notice{"offline", "", "⚪️ Agent " + e.HostName + " nicht erreichbar",
+			fmt.Sprintf("Der Agent meldet sich seit %s nicht mehr (PC aus, kein Internet oder Dienst gestoppt?).\n%d Hosts dieses Standorts werden solange nicht geprüft.", at, m.siteHostCount(e.Site)), e.Org})
 	}
 }
 
@@ -464,7 +467,19 @@ func (m *Monitor) notifyEventEnd(e Event) {
 		m.notify(notice{"spike", e.HostID, "🟡 Hohe Antwortzeit bei " + e.HostName,
 			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04"))), e.Org})
 	case "offline":
-		m.notify(notice{"online", "", "🟢 Standort " + e.HostName + " wieder online",
-			fmt.Sprintf("Agent war %s offline", dur), e.Org})
+		m.notify(notice{"online", "", "🟢 Agent " + e.HostName + " wieder online",
+			fmt.Sprintf("Der Agent war %s nicht erreichbar, die Prüfungen laufen wieder.", dur), e.Org})
 	}
+}
+
+func (m *Monitor) siteHostCount(site string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, h := range m.cfg.Hosts {
+		if h.Site == site && !h.Paused {
+			n++
+		}
+	}
+	return n
 }

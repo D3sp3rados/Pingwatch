@@ -540,6 +540,11 @@ func (m *Monitor) housekeeping() {
 				continue
 			}
 			st.mu.Lock()
+			// Agent hat sich seit dem Serverstart noch gar nicht gemeldet (z. B. Büro-PC aus) → nach 2 Minuten melden
+			if st.lastSeen == 0 && st.offEv == nil && nowMs-serverStart.UnixMilli() > 120_000 {
+				st.lastSeen = serverStart.UnixMilli()
+			}
+			var startNote *Event
 			if st.lastSeen > 0 && nowMs-st.lastSeen > 45_000 && st.offEv == nil {
 				inM := m.inMaint(s.Org, "", now)
 				m.evMu.Lock()
@@ -550,9 +555,12 @@ func (m *Monitor) housekeeping() {
 				cp := *e
 				m.evMu.Unlock()
 				st.offEv = e
-				m.notifyEventStart(cp)
+				startNote = &cp
 			}
 			st.mu.Unlock()
+			if startNote != nil {
+				m.notifyEventStart(*startNote)
+			}
 		}
 		if now.Sub(lastMaint) > time.Hour {
 			lastMaint = now
@@ -850,3 +858,5 @@ func (m *Monitor) Reset(org, hostID string, from, to int64, samples, events bool
 		len(hosts), time.UnixMilli(from).Format("02.01.2006 15:04"), time.UnixMilli(to).Format("02.01.2006 15:04"), samples, len(removed))
 	return len(removed)
 }
+
+var serverStart = time.Now()
