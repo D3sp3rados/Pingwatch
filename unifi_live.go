@@ -107,18 +107,6 @@ func devLabel(d unifiDevice) string {
 
 // ingestUniFi verarbeitet eine Abfrage des Agenten.
 func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) {
-	// ignorierte WAN-Anschlüsse gar nicht erst verarbeiten (keine Meldung, keine Anzeige)
-	if site.UniFi != nil && len(site.UniFi.WanIgnore) > 0 {
-		for i := range devs {
-			ws := devs[i].WAN[:0:0]
-			for _, w := range devs[i].WAN {
-				if !site.UniFi.ignoresWAN(w.Name) {
-					ws = append(ws, w)
-				}
-			}
-			devs[i].WAN = ws
-		}
-	}
 	now := time.Now()
 	nowMs := now.UnixMilli()
 	inMaint := m.inMaint(site.Org, "", now)
@@ -147,6 +135,29 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 	if st.errEv != nil {
 		ends = append(ends, m.closeSiteEvent(st.errEv, nowMs))
 		st.errEv = nil
+	}
+	// ignorierte und nie verbundene WAN-Anschlüsse gar nicht erst verarbeiten (keine Meldung, keine Anzeige).
+	// Auch serverseitig, damit ältere Agenten nicht nachgerüstet werden müssen. Ein Anschluss, der
+	// schon einmal angezeigt wurde, bleibt (sonst würde ein echter Ausfall verschluckt).
+	for i := range devs {
+		k := devs[i].MAC
+		if k == "" {
+			k = devs[i].Name
+		}
+		known := map[string]bool{}
+		if o := st.Devices[k]; o != nil {
+			for _, w := range o.WAN {
+				known[w.Name] = true
+			}
+		}
+		ws := devs[i].WAN[:0:0]
+		for _, w := range devs[i].WAN {
+			if site.UniFi.ignoresWAN(w.Name) || (!known[w.Name] && !w.Up && w.IP == "" && w.Avail <= 0) {
+				continue
+			}
+			ws = append(ws, w)
+		}
+		devs[i].WAN = ws
 	}
 	seen := map[string]bool{}
 	first := len(st.Devices) == 0

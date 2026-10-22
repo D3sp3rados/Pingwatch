@@ -161,3 +161,15 @@ func TestWanIgnore(t *testing.T) {
 		t.Fatalf("parseWANs: %+v", ws)
 	}
 }
+
+func TestIngestDropsUnusedWAN(t *testing.T) {
+	srv, _ := newTestServer(t)
+	m := srv.m
+	site := SiteCfg{ID: "wanTest", Name: "Test", Org: "default", UniFi: &UniFiCfg{On: true}}
+	devs := []unifiDevice{{ID: "d1", Name: "GW", MAC: "aa", State: "ONLINE", WAN: []unifiWAN{{Name: "WAN", Up: true, IP: "1.2.3.4", Avail: 100}, {Name: "WAN3"}}}}
+	m.ingestUniFi(site, devs, "")
+	v := m.unifiSiteView(&site)
+	if v.WanDown != 0 {
+		t.Fatalf("WanDown = %d, erwartet 0", v.WanDown)
+	}
+}
