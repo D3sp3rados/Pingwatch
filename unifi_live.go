@@ -350,6 +350,7 @@ func (s *Server) handleAgentUniFi(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Devices []unifiDevice `json:"devices"`
 		Error   string        `json:"error"`
+		Protect *protectSnap  `json:"protect"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&req); err != nil {
 		http.Error(w, "ungültig", 400)
@@ -360,6 +361,12 @@ func (s *Server) handleAgentUniFi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.m.ingestUniFi(site, req.Devices, req.Error)
+	if req.Protect != nil {
+		if len(req.Protect.Devs) > 2000 {
+			req.Protect.Devs = req.Protect.Devs[:2000]
+		}
+		s.m.ingestProtect(site, req.Protect)
+	}
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
@@ -462,21 +469,22 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 }
 
 type unifiSummary struct {
-	On          bool        `json:"on"`
-	Mode        string      `json:"mode,omitempty"` // "cloud" = über die UniFi-Cloud
-	Console     string      `json:"console,omitempty"`
-	ConsoleName string      `json:"consoleName,omitempty"`
-	KeySet      bool        `json:"keySet,omitempty"` // eigener Key am Standort
-	URL         string      `json:"url,omitempty"`
-	Site        string      `json:"site,omitempty"`
-	WanIgnore   []string    `json:"wanIgnore,omitempty"`
-	At          int64       `json:"at,omitempty"`
-	Err         string      `json:"err,omitempty"`
-	Total       int         `json:"total"`
-	Offline     int         `json:"offline"`
-	Boots       int         `json:"boots"`   // Neustarts in 24 h (alle Geräte)
-	WanDown     int         `json:"wanDown"` // getrennte WAN-Leitungen
-	Devices     []unifiView `json:"devices,omitempty"`
+	On          bool         `json:"on"`
+	Mode        string       `json:"mode,omitempty"` // "cloud" = über die UniFi-Cloud
+	Console     string       `json:"console,omitempty"`
+	ConsoleName string       `json:"consoleName,omitempty"`
+	KeySet      bool         `json:"keySet,omitempty"` // eigener Key am Standort
+	URL         string       `json:"url,omitempty"`
+	Site        string       `json:"site,omitempty"`
+	WanIgnore   []string     `json:"wanIgnore,omitempty"`
+	At          int64        `json:"at,omitempty"`
+	Err         string       `json:"err,omitempty"`
+	Total       int          `json:"total"`
+	Offline     int          `json:"offline"`
+	Boots       int          `json:"boots"`   // Neustarts in 24 h (alle Geräte)
+	WanDown     int          `json:"wanDown"` // getrennte WAN-Leitungen
+	Devices     []unifiView  `json:"devices,omitempty"`
+	Protect     *protectView `json:"protect,omitempty"`
 }
 
 type unifiView struct {
@@ -519,6 +527,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	v.On, v.URL, v.Site = site.UniFi.On, site.UniFi.URL, site.UniFi.Site
 	v.Mode, v.Console, v.ConsoleName, v.KeySet = site.UniFi.Mode, site.UniFi.Console, site.UniFi.ConsoleName, site.UniFi.Key != ""
 	v.WanIgnore = site.UniFi.WanIgnore
+	v.Protect = protectSiteView(site.ID)
 	unifiLiveState.Lock()
 	defer unifiLiveState.Unlock()
 	st := unifiLiveState.bySite[site.ID]
@@ -626,6 +635,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 
 // unifiLoop fragt die Konsole jede Minute ab, solange sie in der Konfiguration steht.
 func (a *Agent) unifiLoop() {
+	var lastProtect time.Time
 	for {
 		a.mu.Lock()
 		cfg := a.unifi
@@ -635,6 +645,13 @@ func (a *Agent) unifiLoop() {
 			body := map[string]any{"devices": devs}
 			if err != nil {
 				body["error"] = err.Error()
+			} else if time.Since(lastProtect) >= protectEvery {
+				lastProtect = time.Now()
+				if p, perr := newUniFiAPI(cfg.URL, cfg.Key).protect(); perr == nil && p != nil {
+					body["protect"] = p
+				} else if perr != nil {
+					log.Printf("UniFi Protect: %v", perr)
+				}
 			}
 			b, _ := json.Marshal(body)
 			if resp, e := a.req("POST", "/api/agent/unifi", bytes.NewReader(b), false); e == nil {

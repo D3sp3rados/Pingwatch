@@ -1307,6 +1307,12 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
     const s=e.target.closest('[data-ts]'); if(s){ OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
     const c=e.target.closest('[data-tc]'); if(c){ OVF.c=c.dataset.tc; OVF.s=''; if(OVF.c){ OVF.x=OVF.x||{}; OVF.x[OVF.c]=1; } ovfSave(); el.classList.remove('open'); ovRerender(); } });
   el.addEventListener('input',e=>{ if(e.target.id==='tr-q'){ OVF.q=e.target.value; ovfSave(); renderTree(S.state); } }); })();
+const PKIND={camera:'📷 Kamera',sensor:'🌡 Sensor',light:'💡 Licht',chime:'🔔 Gong',viewer:'🖥 Viewer',nvr:'💾 NVR'};
+const protOn=d=>!d.state||d.state==='CONNECTED', protLow=d=>d.batLow||(d.bat>=0&&d.bat<=15);
+const protVal=d=>[d.temp!=null?d.temp.toLocaleString('de-DE',{maximumFractionDigits:1})+' °C':'',d.hum!=null?Math.round(d.hum)+' %':'',d.open!=null?(d.open?'offen':'zu'):'',d.leak?'💧 Wasser!':'',d.bat>=0?'🔋 '+d.bat+' %':''].filter(Boolean).join(' · ');
+function protTable(pv,selId){ if(!pv||!(pv.devs||[]).length) return '';
+  return '<table class="tbl"><tr><th>Gerät</th><th>Art</th><th>Status</th><th>Werte</th><th class="hide-m">Modell</th></tr>'+pv.devs.map(d=>{ const on=protOn(d), low=protLow(d);
+    return `<tr${selId===d.kind+':'+d.id?' style="background:var(--acc-a)"':''}><td><span class="dot" style="display:inline-block;margin-right:6px;background:var(${on?(low?'--warn':'--ok'):'--bad'})"></span><b>${esc(d.name)}</b></td><td>${PKIND[d.kind]||esc(d.kind)}</td><td>${on?'online':'offline'}${low?' · <span style="color:var(--warn)">Akku schwach</span>':''}</td><td class="num">${esc(protVal(d))}</td><td class="hide-m">${esc(d.model||'')}</td></tr>`; }).join('')+'</table>'; }
 function ovRows(st){ const rows=[], all=S.state, hasC=(all.customers||[]).length>0, cn=id=>{ const c=custOf(all,id); return c?c.name:''; };
   for(const h of st.hosts){ let [lbl,col]=STATUS[h.status]||STATUS.unknown; const a24=agg(h.h24), live=(h.ongoing||[]).find(e=>e.type==='outage'), so=all.sites.find(x=>x.id===h.site), lost=h.status==='siteoff'&&so&&so.lastSeen&&!h.paused;
     if(lost){ col='--bad'; lbl='Standort offline seit '+fmtDT(so.lastSeen,false); }
@@ -1319,6 +1325,8 @@ function ovRows(st){ const rows=[], all=S.state, hasC=(all.customers||[]).length
     for(const d of u.devices||[]){ const off=['OFFLINE','CONNECTION_INTERRUPTED','ISOLATED','DISCONNECTED'].includes(d.state);
       rows.push({k:'u',id:d.mac||d.name,site_id:s.id,sev:off?4:d.state==='ONLINE'?1:3,col:off?'--bad':d.state==='ONLINE'?'--ok':'--warn',name:d.name,typ:'📶 '+(UCAT[d.cat]||'UniFi'),cust:cn(s.id),site:s.name,addr:d.ip||'',
         val:d.cpu||d.mem?`CPU ${Math.round(d.cpu)} % · RAM ${Math.round(d.mem)} %`:'—',vs:d.cpu||0,info:off?'offline seit '+fmtDT(d.since,false):d.state==='ONLINE'?'online':d.state.toLowerCase()}); }
+    for(const d of (u.protect&&u.protect.devs)||[]){ const on=protOn(d), low=protLow(d);
+      rows.push({k:'p',id:d.kind+':'+d.id,site_id:s.id,sev:on?(low?3:1):4,col:on?(low?'--warn':'--ok'):'--bad',name:d.name,typ:PKIND[d.kind]||'📷 Protect',cust:cn(s.id),site:s.name,addr:'',val:protVal(d)||'—',vs:d.bat??0,info:on?(low?'Akku schwach':'online'):'offline'}); }
     if(u.err) rows.push({k:'us',id:s.id,site_id:s.id,sev:4,col:'--bad',name:'UniFi-Konsole',typ:'📶 UniFi',cust:cn(s.id),site:s.name,addr:'',val:'—',vs:0,info:u.err}); }
   const key=OVT.sort, dir=OVT.dir;
   rows.sort((a,b)=>{ let r=0; if(key==='sev') r=(a.sev-b.sev); else if(key==='val') r=(a.vs??-1)-(b.vs??-1); else r=String(a[key]||'').localeCompare(String(b[key]||''),'de',{numeric:true});
@@ -1384,7 +1392,8 @@ function renderOvRMM(root,st){
       tr.ondblclick=()=>{ const k=tr.dataset.k, id=tr.dataset.id; if(k==='h') location.hash='#/host/'+id; else if(k==='m') location.hash='#/machine/'+id; }; }); }
   if(RM.sel&&RM.sel.k==='m'&&!machineOf(RM.sel.id)) RM.sel=null;
   rmPane(false); }
-function rmSelect(k,id,site){ if(k==='u'||k==='us'){ const s=S.state.sites.find(x=>x.id===site); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); return; }
+function rmSelect(k,id,site){ if(k==='p'){ RM.sel={k,id,site}; RM.paneKey=''; $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); }); rmPane(true); return; }
+  if(k==='u'||k==='us'){ const s=S.state.sites.find(x=>x.id===site); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); return; }
   RM.sel={k,id}; RM.d=null; RM.evs=[]; RM.acts=[]; RM.inv=null; RM.loadAt=0; RM.paneKey='';
   $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); });
   rmPane(true); }
@@ -1397,10 +1406,12 @@ async function rmLoad(){ const sel=RM.sel; if(!sel) return; RM.loadAt=Date.now()
   rmPane(false); }
 function rmPane(force){ const pane=$('#rm-pane'); if(!pane) return; const sel=RM.sel;
   if(!sel){ pane.innerHTML='<div class="empty">Zeile anklicken, um Details zu sehen · Doppelklick öffnet die Vollansicht.</div>'; RM.paneKey=''; return; }
-  if(Date.now()-RM.loadAt>15000) rmLoad();
+  if(sel.k!=='p'&&Date.now()-RM.loadAt>15000) rmLoad();
   // Notizen nicht überschreiben, während jemand tippt
   if(!force&&pane.contains(document.activeElement)&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if(sel.k==='h') return rmPaneHost(pane,force);
+  if(sel.k==='p'){ const s=S.state.sites.find(x=>x.id===sel.site), pv=s&&s.unifi&&s.unifi.protect; const html=`<div class="rm-ph"><b style="font-size:15px">📷 UniFi Protect · ${esc(s?s.name:'')}</b><span class="muted" style="font-size:12.5px">${pv?`${pv.total} Geräte · ${pv.offline} offline · Stand ${fmtTime(pv.at,false)}`:''}</span></div><div class="rm-body">${protTable(pv,sel.id)||'<div class="empty">Keine Daten.</div>'}</div>`;
+    if(!force&&RM.paneKey===html) return; RM.paneKey=html; pane.innerHTML=html; return; }
   const m=machineOf(sel.id); if(!m){ pane.innerHTML=''; return; }
   const tabs=[['ov','Übersicht'],['upd','Updates'+((m.cur||{}).upd>0?' ('+m.cur.upd+')':'')],['sw','Software'],['scr','Scripts'],['hist','Verlauf'],['notes','Notizen'+(m.notes?' 📝':'')],['inv','Inventar'],['log','Protokoll']];
   const so=S.state.sites.find(x=>x.id===m.site), actOK=siteActOK(so), ro=document.body.classList.contains('viewer');
@@ -2170,6 +2181,7 @@ async function openULive(site){ ulf.dataset.site=site; $('#ul-title').textConten
   const ST={ONLINE:['online','ok'],OFFLINE:['offline','bad'],CONNECTION_INTERRUPTED:['Verbindung unterbrochen','bad'],ISOLATED:['isoliert','bad'],UPDATING:['Update läuft','warn'],PENDING_ADOPTION:['wartet auf Übernahme','warn']};
   $('#ul-devs').innerHTML=(v.devices||[]).length?'<table class="tbl"><tr><th>Gerät</th><th>Status</th><th class="hide-m">IP</th><th class="hide-m">Modell</th><th class="hide-m">seit</th></tr>'+v.devices.map(d=>{ const [t,c]=ST[d.state]||[d.state.toLowerCase(),''];
     return `<tr><td><b>${esc(d.name||d.mac)}</b></td><td><span class="tag ${c}">${esc(t)}</span></td><td class="hide-m num">${esc(d.ip||'')}</td><td class="hide-m">${esc(d.model||'')}</td><td class="hide-m">${fmtDT(d.since,false)}</td></tr>`; }).join('')+'</table>':'';
+  if(v.protect) $('#ul-devs').innerHTML+=`<h3 style="margin:14px 0 6px;font-size:14px">UniFi Protect <span class="muted" style="font-weight:400;font-size:12.5px">${v.protect.total} Geräte · ${v.protect.offline} offline${v.protect.batLow?' · '+v.protect.batLow+' Akku schwach':''} · Stand ${fmtTime(v.protect.at,false)}${v.protect.version?' · Protect '+esc(v.protect.version):''}</span></h3>`+(protTable(v.protect)||'<div class="muted" style="font-size:13px">Keine Protect-Geräte.</div>')+(v.protect.err?`<div class="muted" style="font-size:12px;margin-top:4px">Nicht abfragbar: ${esc(v.protect.err)}</div>`:'');
   uldlg.showModal(); }
 ulf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const cloud=ulf.dataset.mode==='cloud'; const cs=$('#ul-console'); const cname=cs.value?(cs.options[cs.selectedIndex].textContent||'').split(' · ')[0]:'';

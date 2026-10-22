@@ -139,7 +139,9 @@ var unifiCloudPoll = struct {
 	sync.Mutex
 	next map[string]time.Time // Standort → nächste Abfrage (Drosselung nach HTTP 429)
 	busy map[string]bool
-}{next: map[string]time.Time{}, busy: map[string]bool{}}
+	// protect: letzte Protect-Abfrage je Standort
+	protect map[string]time.Time
+}{next: map[string]time.Time{}, busy: map[string]bool{}, protect: map[string]time.Time{}}
 
 // unifiCloudLoop fragt alle Standorte mit „UniFi über Cloud“ jede Minute ab.
 func (m *Monitor) unifiCloudLoop() {
@@ -213,6 +215,20 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 		return
 	}
 	m.ingestUniFi(s, devs, "")
+	unifiCloudPoll.Lock()
+	due := time.Since(unifiCloudPoll.protect[s.ID]) >= protectEvery
+	if due {
+		unifiCloudPoll.protect[s.ID] = time.Now()
+	}
+	unifiCloudPoll.Unlock()
+	if due {
+		p, err := newUniFiCloudAPI(s.UniFi.Console, key).protect()
+		if err != nil {
+			log.Printf("UniFi-Cloud %s: Protect: %v", s.Name, err)
+		} else if p != nil {
+			m.ingestProtect(s, p)
+		}
+	}
 }
 
 // ---------- Diagnose ----------
