@@ -1588,7 +1588,7 @@ function drawIfChart(pts){ const c=$('#sn-chart'), dpr=devicePixelRatio||1, W=c.
 /* Netzwerk-Scan & UniFi-Import */
 const idlg=$('#dlg-import'), imf=$('#im-form'); let IM={};
 function openImport(site,kind){ IM={site,kind,rows:[]}; $('#im-title').textContent=(kind==='scan'?'Netzwerk scannen':'UniFi-Geräte importieren')+' · '+siteName(site);
-  $('#im-scanf').style.display=kind==='scan'?'':'none'; { const so=(S.state.sites||[]).find(x=>x.id===site)||{}, uo=!!(so.unifi&&so.unifi.on); $('#im-vlanw').style.display=uo?'':'none'; imf.vlans.checked=uo; } $('#im-unifif').style.display=kind==='unifi'?'':'none';
+  $('#im-scanf').style.display=kind==='scan'?'':'none'; { const so=(S.state.sites||[]).find(x=>x.id===site)||{}, uo=!!(so.unifi&&so.unifi.on); $('#im-vlanw').style.display=uo?'':'none'; imf.vlans.checked=false; } $('#im-unifif').style.display=kind==='unifi'?'':'none';
   $('#im-res').innerHTML=''; $('#im-state').textContent=''; $('#im-err').textContent=''; $('#im-add').disabled=true; $('#im-go').disabled=false; idlg.showModal(); }
 $('#im-go').onclick=async()=>{ const params=IM.kind==='scan'?{cidr:imf.cidr.value.trim(),vlans:imf.vlans.checked?'1':''}:{url:imf.url.value.trim().replace(/\/$/,''),key:imf.key.value.trim(),site:imf.usite.value.trim()};
   if(IM.kind==='unifi'&&!/^https:\/\//.test(params.url)) params.url='https://'+params.url;
