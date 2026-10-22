@@ -60,3 +60,15 @@ func TestChannelGroups(t *testing.T) {
 		t.Fatal("ohne Filter = alle")
 	}
 }
+
+func TestWithInfo(t *testing.T) {
+	m := NewMonitor(NewFileStore(t.TempDir()))
+	m.cfg.Sites = []SiteCfg{{ID: "s1", Name: "Albbruck Büro"}}
+	m.cfg.Groups = []Group{{ID: "g1", Name: "Oli Pfeiffer"}}
+	m.cfg.Hosts = []HostCfg{{ID: "h1", Addr: "185.51.186.213", Site: "s1", Group: "g1"}}
+	got := m.withInfo("h1", "s1", "Seit 09:31:02 keine Antwort")
+	want := "185.51.186.213 · Kunde Oli Pfeiffer\nSeit 09:31:02 keine Antwort\nGeprüft von: Agent Albbruck Büro"
+	if got != want {
+		t.Fatalf("%q", got)
+	}
+}

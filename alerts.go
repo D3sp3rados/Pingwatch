@@ -235,7 +235,7 @@ func sendAlert(c Channel, n notice, at time.Time, orgName string) error {
 <div style="font-size:17px;font-weight:600;color:#0f172a">%s</div>
 <div style="font-size:14px;color:#334155;margin-top:4px">%s</div></div>
 <p style="font-size:12px;color:#64748b">%s · %s%s</p></div>`,
-			kindColor(n.kind), html.EscapeString(n.title), html.EscapeString(n.body), at.Format("02.01.2006 15:04:05"),
+			kindColor(n.kind), html.EscapeString(n.title), strings.ReplaceAll(html.EscapeString(n.body), "\n", "<br>"), at.Format("02.01.2006 15:04:05"),
 			html.EscapeString(orgName), linkHTML(dashboardURL()))
 		return sendMail(splitAddrs(c.Target), subj, txt, htm, nil)
 	case "teams":
@@ -249,7 +249,7 @@ func sendAlert(c Channel, n notice, at time.Time, orgName string) error {
 					"body": []any{
 						map[string]any{"type": "TextBlock", "text": n.title, "weight": "Bolder", "size": "Medium", "wrap": true,
 							"color": map[string]string{"outage": "Attention", "offline": "Attention", "loss": "Warning", "spike": "Warning", "recovered": "Good", "online": "Good"}[n.kind]},
-						map[string]any{"type": "TextBlock", "text": n.body, "wrap": true},
+						map[string]any{"type": "TextBlock", "text": strings.ReplaceAll(n.body, "\n", "\n\n"), "wrap": true},
 						map[string]any{"type": "TextBlock", "text": at.Format("02.01.2006 15:04:05") + " · " + orgName, "isSubtle": true, "size": "Small", "wrap": true},
 					},
 					"actions": teamsActions(),

@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -376,6 +377,55 @@ func (m *Monitor) siteNameOf(id string) string {
 	return ""
 }
 
+// hostInfo: „IP · Kunde“ und „Geprüft von …“ für die Meldungstexte.
+func (m *Monitor) hostInfo(hostID, site string) (head, by string) {
+	m.mu.RLock()
+	var addr, group string
+	for _, h := range m.cfg.Hosts {
+		if h.ID == hostID {
+			addr = h.Addr
+			if h.Method == "tcp" && h.Port > 0 {
+				addr += ":" + strconv.Itoa(h.Port)
+			}
+			for _, g := range m.cfg.Groups {
+				if g.ID == h.Group {
+					group = g.Name
+				}
+			}
+			if site == "" {
+				site = h.Site
+			}
+		}
+	}
+	m.mu.RUnlock()
+	head = addr
+	if group != "" {
+		if head != "" {
+			head += " · "
+		}
+		head += "Kunde " + group
+	}
+	if site == "cloud" || site == "" {
+		by = "Geprüft von: Cloud-Server"
+	} else if n := m.siteNameOf(site); n != "" {
+		by = "Geprüft von: Agent " + n
+	}
+	return
+}
+
+// withInfo setzt Adresse/Kunde vor und „Geprüft von“ unter den Text.
+func (m *Monitor) withInfo(hostID, site, text string) string {
+	head, by := m.hostInfo(hostID, site)
+	out := text
+	if head != "" {
+		out = head + "\n" + out
+	}
+	if by != "" {
+		out += "\n" + by
+	}
+	return out
+}
+
 func (m *Monitor) notifyEventStart(e Event) {
 	if e.quiet() {
 		return
@@ -384,7 +434,7 @@ func (m *Monitor) notifyEventStart(e Event) {
 	switch e.Type {
 	case "outage":
 		m.notify(notice{"outage", e.HostID, "🔴 " + e.HostName + " antwortet nicht",
-			fmt.Sprintf("Seit %s keine Antwort (%s)", at, m.siteNameOf(e.Site)), e.Org})
+			m.withInfo(e.HostID, e.Site, "Seit "+at+" keine Antwort"), e.Org})
 	case "offline":
 		m.notify(notice{"offline", "", "⚪️ Standort " + e.HostName + " offline",
 			fmt.Sprintf("Agent meldet sich seit %s nicht mehr", at), e.Org})
@@ -402,17 +452,17 @@ func (m *Monitor) notifyEventEnd(e Event) {
 			return
 		}
 		m.notify(notice{"recovered", e.HostID, "🟢 " + e.HostName + " wieder erreichbar",
-			fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur), e.Org})
+			m.withInfo(e.HostID, e.Site, fmt.Sprintf("Ausfall %s – %s (%s)", time.UnixMilli(e.Start).Format("15:04"), time.UnixMilli(e.End).Format("15:04"), dur)), e.Org})
 	case "loss":
 		m.notify(notice{"loss", e.HostID, "🟠 Paketverlust bei " + e.HostName,
-			fmt.Sprintf("%d Pings verloren um %s", e.Count, time.UnixMilli(e.Start).Format("15:04")), e.Org})
+			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d Pings verloren um %s", e.Count, time.UnixMilli(e.Start).Format("15:04"))), e.Org})
 	case "spike":
 		avg := int64(0)
 		if e.Count > 0 {
 			avg = e.Sum / int64(e.Count)
 		}
 		m.notify(notice{"spike", e.HostID, "🟡 Hohe Antwortzeit bei " + e.HostName,
-			fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04")), e.Org})
+			m.withInfo(e.HostID, e.Site, fmt.Sprintf("%d× über Schwelle, max %s ms, Ø %s ms (%s)", e.Count, fmtR(e.Max), fmtR(int32(avg)), time.UnixMilli(e.Start).Format("15:04"))), e.Org})
 	case "offline":
 		m.notify(notice{"online", "", "🟢 Standort " + e.HostName + " wieder online",
 			fmt.Sprintf("Agent war %s offline", dur), e.Org})
