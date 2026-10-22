@@ -277,3 +277,11 @@ func collectInventory() *sysInventory {
 	}
 	return inv
 }
+
+func loggedInUser() string {
+	b, err := runCmd(10*time.Second, "who")
+	if err != nil {
+		return ""
+	}
+	return parseWho(b)
+}

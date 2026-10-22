@@ -301,3 +301,14 @@ func collectInventory() *sysInventory {
 	inv.HW.NICs = netInventory()
 	return inv
 }
+
+// loggedInUser: an der Konsole angemeldeter Benutzer, sonst Besitzer der Explorer-Prozesse (RDP).
+func loggedInUser() string {
+	b, err := runPS(45*time.Second, `$ErrorActionPreference='SilentlyContinue'
+$u=@((Get-CimInstance Win32_ComputerSystem).UserName) + @(Get-Process explorer -IncludeUserName | ForEach-Object { $_.UserName })
+($u | Where-Object { $_ } | Select-Object -Unique) -join ', '`)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}

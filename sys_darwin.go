@@ -128,3 +128,11 @@ func collectInventory() *sysInventory {
 	inv.HW.NICs = netInventory()
 	return inv
 }
+
+func loggedInUser() string {
+	b, err := runCmd(5*time.Second, "stat", "-f", "%Su", "/dev/console")
+	if u := strings.TrimSpace(string(b)); err == nil && u != "root" && u != "" {
+		return u
+	}
+	return ""
+}

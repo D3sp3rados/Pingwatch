@@ -84,6 +84,8 @@ type sysSlow struct {
 	updAt         int64
 	av            *sysAV
 	reboot        int
+	user          string
+	ips           []string
 }
 
 type sysCollector struct {
@@ -157,7 +159,14 @@ func (c *sysCollector) collect(services []string) *sysReport {
 		}
 		c.mu.Unlock()
 	})
+	c.due("user", 5*time.Minute, func() {
+		u, ips := loggedInUser(), localIPs()
+		c.mu.Lock()
+		c.slow.user, c.slow.ips = u, ips
+		c.mu.Unlock()
+	})
 	c.mu.Lock()
+	r.User, r.IPs = c.slow.user, c.slow.ips
 	r.EvCrit, r.EvErr = c.slow.evCrit, c.slow.evErr
 	r.Updates, r.UpdDrv, r.UpdList, r.UpdAt = c.slow.updates, c.slow.updDrv, c.slow.updList, c.slow.updAt
 	r.AV, r.Reboot = c.slow.av, c.slow.reboot
@@ -978,4 +987,47 @@ func atoiSafe(s string) (int, bool) {
 		n = -n
 	}
 	return n, true
+}
+
+// localIPs: eigene Adressen der aktiven Schnittstellen (IPv4 zuerst, ohne Loopback/Link-Local).
+func localIPs() []string {
+	var v4, v6 []string
+	ifs, _ := net.Interfaces()
+	for _, i := range ifs {
+		if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := i.Addrs()
+		for _, a := range addrs {
+			n, ok := a.(*net.IPNet)
+			if !ok || n.IP.IsLinkLocalUnicast() || n.IP.IsLoopback() {
+				continue
+			}
+			if n.IP.To4() != nil {
+				v4 = append(v4, n.IP.String())
+			} else if len(v6) < 4 {
+				v6 = append(v6, n.IP.String())
+			}
+		}
+	}
+	out := append(v4, v6...)
+	if len(out) > 12 {
+		out = out[:12]
+	}
+	return out
+}
+
+// parseWho: Benutzernamen aus „who“ (eindeutig, Reihenfolge wie gemeldet).
+func parseWho(b []byte) string {
+	var out []string
+	seen := map[string]bool{}
+	for _, l := range strings.Split(string(b), "\n") {
+		f := strings.Fields(l)
+		if len(f) == 0 || seen[f[0]] {
+			continue
+		}
+		seen[f[0]] = true
+		out = append(out, f[0])
+	}
+	return strings.Join(out, ", ")
 }

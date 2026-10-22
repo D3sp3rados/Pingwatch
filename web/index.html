@@ -112,6 +112,23 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .ovt tr[data-k]{cursor:pointer}
 .ovt tr[data-k]:hover td{background:var(--bg)}
 .ovt td{white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.rmm{display:flex;flex-direction:column;gap:0}
+.rm-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.rm-in{font:inherit;font-size:13px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);width:240px;max-width:100%}
+.rm-top{padding:0;overflow:auto;min-height:140px}
+.rm-top .rmt th{position:sticky;top:0;background:var(--panel);z-index:1}
+.rmt td,.rmt th{padding:6px 10px}
+.rmt tr.sel td{background:var(--acc-a)!important}
+.rm-sec{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;padding:10px 12px 4px}
+.rm-split{height:10px;cursor:row-resize;display:flex;align-items:center;justify-content:center;touch-action:none}
+.rm-split::after{content:"";width:48px;height:4px;border-radius:2px;background:var(--line)}
+.rm-split:hover::after{background:var(--mut)}
+.rm-pane{padding:10px 12px;min-height:220px}
+.rm-ph{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.rm-tabs{margin-bottom:10px;flex-wrap:wrap}
+.rm-body{max-height:60vh;overflow:auto}
+.rm-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.rm-cols{grid-template-columns:1fr}}
 @media(max-width:820px){.ov-wrap.has-tree{display:block}#ov-tree{position:static;max-height:none;margin-bottom:10px}#ov-tree .tr-mob{display:flex;width:100%;justify-content:space-between;align-items:center;background:none;border:0;font:inherit;font-weight:600;color:var(--fg);padding:6px 4px;cursor:pointer}#ov-tree:not(.open) .tr-body{display:none}}
 .cmdbox{display:flex;gap:8px;align-items:flex-start;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 6px 6px 10px;margin:2px 0}
 .cmdbox pre{flex:1;min-width:0;margin:0;padding:4px 0;white-space:pre-wrap;word-break:break-all;font-size:12.5px;user-select:all}
@@ -362,7 +379,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <div id="mute-banner"></div>
 <div id="pw-banner"></div>
 <div id="trial-banner"></div>
-<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button></div><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
+<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button><button data-v="rmm">🖥 RMM</button></div><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
 
 <section id="v-host">
   <div class="det-h">
@@ -1316,6 +1333,122 @@ function renderOvTable(root,st){ const {rows,hasC}=ovRows(st); root.classList.re
   root.querySelectorAll('tr[data-k]').forEach(tr=>tr.onclick=()=>{ const k=tr.dataset.k, id=tr.dataset.id;
     if(k==='h') location.hash='#/host/'+id; else if(k==='m') location.hash='#/machine/'+id;
     else { const s=S.state.sites.find(x=>x.id===tr.dataset.st); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); } }); }
+/* ---------- RMM-Ansicht: dichte Liste oben, Details unten ---------- */
+const RM={cat:null,sel:null,tab:'ov',q:'',sort:'sev',dir:-1,d:null,evs:[],acts:[],inv:null,loadAt:0,paneKey:''};
+try{ const x=JSON.parse(localStorage.getItem('pw_rmm')||'{}'); if(x.cat) RM.cat=x.cat; if(x.h) RM.h=x.h; if(x.tab) RM.tab=x.tab; }catch(e){}
+function rmSave(){ try{ localStorage.setItem('pw_rmm',JSON.stringify({cat:RM.cat,h:RM.h,tab:RM.tab})); }catch(e){} }
+const isSrvM=m=>{ const os=(m.cur&&m.cur.os)||''; return /server/i.test(os)||(!!os&&!/windows|mac/i.test(os)); };
+const agoTxt=t=>{ if(!t) return '–'; const s=(Date.now()-t)/1000; return s<90?'gerade eben':s<3600?Math.round(s/60)+' min':s<86400?Math.round(s/3600)+' h':Math.round(s/86400)+' Tage'; };
+function rmMachineRows(st){ const all=S.state, cn=id=>{ const c=custOf(all,id); return c?c.name:''; };
+  return (st.machines||[]).map(m=>{ const r=m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
+    return {k:'m',id:m.id,m,col,lbl,sev:m.status==='bad'||m.status==='off'?4:m.status==='warn'?3:m.status==='ok'?1:0,srv:isSrvM(m),cust:cn(m.site),site:siteName(m.site),name:m.name,desc:m.desc||'',user:r.user||'',os:r.os||'',
+      upd:r.upd>0?r.upd:0,at:m.at||0,up:m.online&&r.up?r.up:-1,ip:(r.ips||[])[0]||''}; }); }
+function rmSortRows(rows){ const k=RM.sort, d=RM.dir; return rows.sort((a,b)=>{ let r; if(['sev','upd','at','up'].includes(k)) r=(a[k]??-1)-(b[k]??-1); else r=String(a[k]||'').localeCompare(String(b[k]||''),'de',{numeric:true});
+  return r*d||(b.sev-a.sev)||String(a.cust).localeCompare(b.cust,'de')||String(a.site).localeCompare(b.site,'de')||String(a.name).localeCompare(b.name,'de',{numeric:true}); }); }
+function rmIcons(m){ const r=m.cur||{}, av=r.av, out=[];
+  if(av) out.push(!av.on||!av.rt?'<span title="Virenschutz '+(!av.on?'aus':'Echtzeit aus')+'" style="color:var(--bad)">🛡</span>':av.sig>3?'<span title="Signaturen '+av.sig+' Tage alt" style="color:var(--warn)">🛡</span>':'<span title="Virenschutz aktiv" style="opacity:.75">🛡</span>');
+  if(r.reboot===1) out.push('<span title="Neustart ausstehend">🔄</span>');
+  if(r.upd>0) out.push(`<span title="${r.upd} Updates ausstehend" style="color:var(--warn);font-weight:600">⬆${r.upd}</span>`);
+  if((m.problems||[]).length) out.push(`<span title="${esc(m.problems.join('\n'))}">⚠️</span>`);
+  if(m.notes) out.push('<span title="Notiz vorhanden">📝</span>');
+  return out.join(' '); }
+function renderOvRMM(root,st){
+  if(!root.querySelector('.rmm')){ root.dataset.thtml=''; root.innerHTML=`<div class="rmm"><div class="rm-bar"><div class="seg" id="rm-cats"></div><input type="search" id="rm-q" class="rm-in" placeholder="Suchen (Name, Benutzer, IP …)"></div>
+    <div class="panel rm-top" id="rm-top"></div><div class="rm-split" id="rm-split" title="Ziehen, um die Höhe zu ändern"></div><div class="panel rm-pane" id="rm-pane"></div></div>`;
+    const q=$('#rm-q'); q.value=RM.q; q.oninput=()=>{ RM.q=q.value; renderOvRMM(root,ovFiltered(S.state)); };
+    const sp=$('#rm-split'); sp.onpointerdown=e=>{ e.preventDefault(); const top=$('#rm-top'), y0=e.clientY, h0=top.offsetHeight; sp.setPointerCapture(e.pointerId);
+      sp.onpointermove=ev=>{ RM.h=Math.max(140,Math.min(window.innerHeight-160,h0+ev.clientY-y0)); top.style.height=RM.h+'px'; };
+      sp.onpointerup=()=>{ sp.onpointermove=null; rmSave(); }; }; }
+  const top=$('#rm-top'); top.style.height=(RM.h||Math.round(window.innerHeight*.42))+'px';
+  const ms=rmMachineRows(st), {rows:all,hasC}=ovRows(st), net=all.filter(r=>r.k!=='m');
+  const cats=[['srv','Server',ms.filter(r=>r.srv)],['ws','Arbeitsplätze',ms.filter(r=>!r.srv)],['net','Netzwerk',net],['all','Alle',null]];
+  if(!RM.cat) RM.cat=ms.length?(ms.some(r=>r.srv)?'srv':'ws'):'net';
+  const bad=l=>(l||[]).filter(r=>r.sev>=3).length;
+  $('#rm-cats').innerHTML=cats.map(([k,t,l])=>{ const n=l?l.length:ms.length+net.length, b=l?bad(l):bad(ms)+bad(net); return `<button data-c="${k}" class="${RM.cat===k?'on':''}">${t} <span class="muted">${n}</span>${b?` <span style="color:var(--bad)">●${b}</span>`:''}</button>`; }).join('');
+  $$('#rm-cats button').forEach(b=>b.onclick=()=>{ RM.cat=b.dataset.c; rmSave(); renderOvRMM(root,st); });
+  const f=RM.q.toLowerCase().trim(), hit=r=>!f||[r.name,r.desc,r.user,r.ip,r.os,r.cust,r.site,r.addr,r.typ].join(' ').toLowerCase().includes(f);
+  const th=(k,t,c='')=>`<th data-sort="${k}" class="${c}">${t}${RM.sort===k?(RM.dir<0?' ▾':' ▴'):''}</th>`;
+  const mTbl=l=>`<table class="tbl ovt rmt"><tr>${th('sev','')}${hasC?th('cust','Kunde'):''}${th('site','Standort','hide-m')}${th('name','Rechner')}${th('desc','Beschreibung','hide-m')}${th('user','Benutzer','hide-m')}${th('os','Betriebssystem','hide-m')}<th></th>${th('at','Letzter Kontakt','hide-m')}${th('up','Laufzeit','hide-m')}</tr>`
+    +rmSortRows(l.filter(hit)).map(r=>`<tr data-k="m" data-id="${esc(r.id)}" class="${RM.sel&&RM.sel.k==='m'&&RM.sel.id===r.id?'sel':''}"><td style="width:18px"><span class="dot" style="display:inline-block;background:var(${r.col})" title="${esc(r.lbl)}"></span></td>${hasC?`<td title="${esc(r.cust)}">${esc(r.cust)}</td>`:''}<td class="hide-m" title="${esc(r.site)}">${esc(r.site)}</td><td><b title="${esc(r.name)}">${esc(r.name)}</b></td><td class="hide-m" title="${esc(r.desc)}">${esc(r.desc)}</td><td class="hide-m" title="${esc(r.user)}">${esc(r.user)}</td><td class="hide-m" title="${esc(r.os)}">${esc(r.os.replace(/^Microsoft /,'').replace(/ · Kernel.*/,''))}</td><td style="font-size:13px">${rmIcons(r.m)}</td><td class="hide-m num" title="${r.at?fmtDT(r.at,false):''}">${agoTxt(r.at)}</td><td class="hide-m num">${r.up>=0?fmtUp(r.up):'–'}</td></tr>`).join('')+'</table>';
+  const nTbl=l=>`<table class="tbl ovt rmt"><tr>${th('sev','')}${hasC?th('cust','Kunde'):''}${th('site','Standort','hide-m')}${th('name','Name')}${th('typ','Art','hide-m')}${th('addr','Adresse','hide-m')}${th('val','Wert')}${th('info','Status','hide-m')}</tr>`
+    +rmSortRows(l.filter(hit)).map(r=>`<tr data-k="${r.k}" data-id="${esc(r.id)}" data-st="${esc(r.site_id||'')}" class="${RM.sel&&RM.sel.k===r.k&&RM.sel.id===r.id?'sel':''}"><td style="width:18px"><span class="dot" style="display:inline-block;background:var(${r.col})"></span></td>${hasC?`<td title="${esc(r.cust)}">${esc(r.cust)}</td>`:''}<td class="hide-m" title="${esc(r.site)}">${esc(r.site)}</td><td><b title="${esc(r.name)}">${esc(r.name)}</b></td><td class="hide-m">${esc(r.typ)}</td><td class="hide-m num">${esc(r.addr)}</td><td class="num">${esc(r.val)}</td><td class="hide-m" title="${esc(r.info)}">${esc(r.info)}</td></tr>`).join('')+'</table>';
+  const sec=t=>`<div class="rm-sec">${t}</div>`;
+  let html; const l=cats.find(c=>c[0]===RM.cat)[2];
+  if(RM.cat==='net') html=net.length?nTbl(net):'<div class="empty">Keine Netzwerkgeräte.</div>';
+  else if(RM.cat==='all') html=(ms.length?sec('Rechner')+mTbl(ms):'')+(net.length?sec('Netzwerk')+nTbl(net):'')||'<div class="empty">Hier gibt es noch nichts.</div>';
+  else html=l.length?mTbl(l):`<div class="empty">Keine ${RM.cat==='srv'?'Server':'Arbeitsplätze'} mit Agent${OVF.bad?' mit Störung':''}.</div>`;
+  if(top.dataset.h!==html){ const sc=top.scrollTop; top.innerHTML=html; top.dataset.h=html; top.scrollTop=sc;
+    top.querySelectorAll('th[data-sort]').forEach(t=>t.onclick=()=>{ const k=t.dataset.sort; if(RM.sort===k) RM.dir=-RM.dir; else { RM.sort=k; RM.dir=['sev','upd','at','up','val'].includes(k)?-1:1; } renderOvRMM(root,st); });
+    top.querySelectorAll('tr[data-k]').forEach(tr=>{ tr.onclick=()=>rmSelect(tr.dataset.k,tr.dataset.id,tr.dataset.st);
+      tr.ondblclick=()=>{ const k=tr.dataset.k, id=tr.dataset.id; if(k==='h') location.hash='#/host/'+id; else if(k==='m') location.hash='#/machine/'+id; }; }); }
+  if(RM.sel&&RM.sel.k==='m'&&!machineOf(RM.sel.id)) RM.sel=null;
+  rmPane(false); }
+function rmSelect(k,id,site){ if(k==='u'||k==='us'){ const s=S.state.sites.find(x=>x.id===site); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); return; }
+  RM.sel={k,id}; RM.d=null; RM.evs=[]; RM.acts=[]; RM.inv=null; RM.loadAt=0; RM.paneKey='';
+  $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); });
+  rmPane(true); }
+async function rmLoad(){ const sel=RM.sel; if(!sel) return; RM.loadAt=Date.now();
+  if(sel.k==='m'){ const id=sel.id;
+    const [d,evs,acts]=await Promise.all([api('/api/machine?id='+encodeURIComponent(id)).catch(()=>null),api('/api/events?limit=200&host='+encodeURIComponent('m:'+id)+'&from='+(Date.now()-7*864e5)).catch(()=>[]),api('/api/actions?machine='+encodeURIComponent(id)).catch(()=>[])]);
+    if(!RM.sel||RM.sel.id!==id) return; RM.d=d; RM.evs=evs||[]; RM.acts=acts||[];
+    if(!RM.inv||Date.now()-RM.inv.at>5*6e4){ const inv=await api('/api/machine/inventory?id='+encodeURIComponent(id)).catch(()=>null); if(!RM.sel||RM.sel.id!==id) return; RM.inv={at:Date.now(),d:inv||{}}; }
+  } else if(sel.k==='h'){ const id=sel.id; const evs=await api('/api/events?limit=100&host='+encodeURIComponent(id)+'&from='+(Date.now()-7*864e5)).catch(()=>[]); if(!RM.sel||RM.sel.id!==id) return; RM.evs=evs||[]; }
+  rmPane(false); }
+function rmPane(force){ const pane=$('#rm-pane'); if(!pane) return; const sel=RM.sel;
+  if(!sel){ pane.innerHTML='<div class="empty">Zeile anklicken, um Details zu sehen · Doppelklick öffnet die Vollansicht.</div>'; RM.paneKey=''; return; }
+  if(Date.now()-RM.loadAt>15000) rmLoad();
+  // Notizen nicht überschreiben, während jemand tippt
+  if(!force&&pane.contains(document.activeElement)&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if(sel.k==='h') return rmPaneHost(pane,force);
+  const m=machineOf(sel.id); if(!m){ pane.innerHTML=''; return; }
+  const tabs=[['ov','Übersicht'],['upd','Updates'+((m.cur||{}).upd>0?' ('+m.cur.upd+')':'')],['sw','Software'],['scr','Scripts'],['hist','Verlauf'],['notes','Notizen'+(m.notes?' 📝':'')],['inv','Inventar'],['log','Protokoll']];
+  const so=S.state.sites.find(x=>x.id===m.site), actOK=siteActOK(so), ro=document.body.classList.contains('viewer');
+  const [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown, r=m.cur||{};
+  const head=`<div class="rm-ph"><span class="dot" style="background:var(${col})"></span><b style="font-size:15px">💻 ${esc(m.name)}</b><span class="muted" style="font-size:12.5px">${esc([lbl,siteName(m.site),m.desc].filter(Boolean).join(' · '))}</span>
+    <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${actOK&&!ro?'<button class="btn sm" data-a="winupdate">⬆️ Updates</button><button class="btn sm" data-a="script">▶ Script</button><button class="btn sm" data-a="reboot">🔄 Neu starten</button>':''}<a class="btn sm" href="#/machine/${esc(m.id)}">Vollansicht ↗</a></span></div>
+    <div class="seg rm-tabs">${tabs.map(([k,t])=>`<button data-t="${k}" class="${RM.tab===k?'on':''}">${t}</button>`).join('')}</div>`;
+  const kv=rows=>'<table class="tbl kvt">'+(rows.filter(x=>x[1]!==''&&x[1]!=null).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td class="empty">–</td></tr>')+'</table>';
+  const inv=RM.inv&&RM.inv.d&&RM.inv.d.inv, d=RM.d||{}; let body='';
+  const t=RM.tab;
+  if(t==='ov'){ const av=r.av, pc=(v,w,b)=>v>=b?'bad':v>=w?'warn':'';
+    const probs=(m.status==='off'?[`<span class="tag bad">Meldet sich nicht${m.at?' seit '+fmtDT(m.at,false):''}</span>`]:[]).concat((m.problems||[]).map(p=>`<span class="tag ${/Dienst|Virenschutz/.test(p)?'bad':'warn'}">${esc(p)}</span>`)).join('');
+    body=(probs?`<div class="mprob" style="margin:0 0 8px">${probs}</div>`:'')+`<div class="rm-cols"><div>`+kv([['Betriebssystem',esc(r.os||'')],['Angemeldet',esc(r.user||(inv&&inv.os&&inv.os.user)||'')],['IP-Adressen',(r.ips||[]).map(esc).join(', ')],['Rechnername',esc(m.host||'')],['Agent',esc(r.ver||'')+(m.sysOnly?' · nur Rechner':'')],['Letzter Kontakt',m.at?fmtDT(m.at,false)+' ('+agoTxt(m.at)+')':''],['Laufzeit',r.up?fmtUp(r.up):''],
+      ['Virenschutz',av?`<span style="color:var(--${!av.on||!av.rt?'bad':av.sig>3?'warn':'ok'})">${esc(av.name||'')} ${!av.on?'aus':!av.rt?'Echtzeit aus':'aktiv'}</span>${av.sig>=0?' · Signaturen '+(av.sig?av.sig+' Tage':'aktuell'):''}`:''],['Neustart',r.reboot===1?'<span style="color:var(--warn)">ausstehend</span>':r.reboot===0?'nicht nötig':''],['Ereignisse (1 h)',r.evC>=0?`${r.evC} kritisch · ${r.evE} Fehler`:'']])
+      +`</div><div>${m.cpu>=0?meterHTML('CPU',m.cpu,80,95):''}${m.mem>=0?meterHTML('RAM',m.mem,85,95):''}${(r.disks||[]).map(x=>{ const p=x.t?Math.round((x.t-Math.min(x.f,x.t))*100/x.t):0; return meterHTML(x.m,p,80,90)+`<div class="muted" style="font-size:11.5px;margin:-2px 0 4px">${fmtBytes(x.f)} frei von ${fmtBytes(x.t)}</div>`; }).join('')}
+      ${(r.svcs||[]).length?'<div style="margin-top:10px;font-size:12.5px">'+r.svcs.map(x=>`<span class="tag ${x.s==='running'?'':'bad'}" style="margin:0 4px 4px 0">${x.s==='running'?'●':'○'} ${esc(x.n)}</span>`).join('')+'</div>':''}</div></div>`; }
+  if(t==='upd') body=`<div style="padding:4px 2px 8px;font-size:13.5px">${r.upd>=0?(r.upd?`<b style="color:var(--warn)">${r.upd} Updates ausstehend</b>`+(r.updDrv?` · davon ${r.updDrv} Treiber`:''):'<b style="color:var(--ok)">Keine Updates ausstehend</b>'):'Update-Stand unbekannt'}${r.updAt?' · geprüft '+fmtDT(r.updAt,false):''}${r.reboot===1?' · <span style="color:var(--warn)">Neustart ausstehend</span>':''}</div>`
+    +((r.updList||[]).length?'<table class="tbl">'+r.updList.map(x=>`<tr><td>${esc(x)}</td></tr>`).join('')+'</table>':'')
+    +(()=>{ const a=RM.acts.filter(x=>x.kind!=='script'); return a.length?'<div class="rm-sec">Updates &amp; Neustarts</div><table class="tbl" data-acts="upd">'+actRows(a,false)+'</table>':''; })()
+    +(actOK?'':'<p class="muted" style="font-size:12.5px">Updates und Neustarts sind für diesen Standort nicht eingeschaltet (Einstellungen → Standorte → 💻 Rechner-Überwachung).</p>');
+  if(t==='sw'){ const sw=(inv&&inv.sw)||[], q=(RM.swq||'').toLowerCase(), l=sw.filter(x=>!q||(x.n+' '+(x.p||'')).toLowerCase().includes(q));
+    body=inv?`<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><input type="search" id="rm-swq" class="rm-in" placeholder="Software suchen …" value="${esc(RM.swq||'')}"><span class="muted" style="font-size:12.5px">${sw.length} Programme${q?' · '+l.length+' gefunden':''} · Stand ${fmtDT(inv.at,false)}</span></div><table class="tbl"><tr><th>Name</th><th>Version</th><th class="hide-m">Hersteller</th><th class="hide-m">Installiert</th></tr>${l.map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${esc(x.v||'')}</td><td class="hide-m">${esc(x.p||'')}</td><td class="hide-m num">${esc(x.d||'')}</td></tr>`).join('')}</table>`:'<div class="empty">'+(RM.inv?'Noch keine Inventur vom Agenten.':'Lädt …')+'</div>'; }
+  if(t==='scr'){ const a=RM.acts.filter(x=>x.kind==='script'); body=(actOK&&!ro?'<div style="margin-bottom:8px"><button class="btn sm pri" data-a="script">▶ Script ausführen</button> <a class="btn sm" href="#/settings/updates">Script-Bibliothek &amp; Pläne</a></div>':'')+'<table class="tbl" data-acts="scr">'+actRows(a,false)+'</table>'; }
+  if(t==='hist') body='<div class="evlist" id="rm-evs"></div>';
+  if(t==='notes') body=`<label class="field">Beschreibung (erscheint in der Liste)<input id="rm-desc" maxlength="200" value="${esc(m.desc||'')}" placeholder="z. B. Empfang, Buchhaltung, DC01"${ro?' disabled':''}></label>
+    <label class="field" style="margin-top:8px">Notizen<textarea id="rm-notes" class="rm-in" style="width:100%;resize:vertical;line-height:1.5" rows="8" maxlength="8000" placeholder="Zugänge, Besonderheiten, Ansprechpartner … (keine Passwörter)"${ro?' disabled':''}>${esc(m.notes||'')}</textarea></label>${ro?'':'<div style="margin-top:8px"><button class="btn sm pri" id="rm-nsave">Speichern</button></div>'}`;
+  if(t==='inv'){ const h=(inv&&inv.hw)||{}, o=(inv&&inv.os)||{};
+    body=inv?`<div class="rm-cols"><div>${kv([['Hersteller',esc(h.vendor||'')],['Modell',esc(h.model||'')],['Seriennummer',esc(h.serial||'')],['BIOS',esc(h.bios||'')],['Prozessor',esc(h.cpu||'')],['Kerne / Threads',h.cores?h.cores+' / '+(h.threads||h.cores):''],['Arbeitsspeicher',h.ram?fmtBytes(h.ram):''],...(h.disks||[]).map(x=>['Datenträger',esc((x.m||'')+' · '+fmtBytes(x.s))])])}</div>
+      <div>${kv([['Betriebssystem',esc(o.name||'')],['Version / Build',esc([o.version,o.build].filter(Boolean).join(' / '))],['Aktivierung',esc(o.activation||'')],['Domäne',esc(o.domain||'')+(o.domain?(o.inDomain?' (Domäne)':' (Arbeitsgruppe)'):'')],['Installiert am',o.installed?new Date(o.installed).toLocaleDateString('de-DE'):''],['Letzter Neustart',o.boot?fmtDT(o.boot,false):''],...(h.nics||[]).map(x=>['Netzwerk',esc(x.n)+(x.mac?' · <span class="num">'+esc(x.mac)+'</span>':'')+((x.ip||[]).length?'<br><span class="muted num">'+x.ip.map(esc).join(', ')+'</span>':'')])])}</div></div>
+      <p class="muted" style="font-size:12px;margin:6px 2px 0">Stand ${fmtDT(inv.at,false)}${inv.err?' · '+esc(inv.err):''}</p>`:'<div class="empty">'+(RM.inv?'Noch keine Inventur vom Agenten.':'Lädt …')+'</div>'; }
+  if(t==='log'){ const ch=(RM.inv&&RM.inv.d&&RM.inv.d.changes)||[], KL={neu:['neu','--ok'],entfernt:['entfernt','--bad'],aktualisiert:['aktualisiert','--acc'],hardware:['Hardware','--warn']};
+    body='<div class="rm-sec" style="margin-top:0">Aktionen</div><table class="tbl" data-acts="log">'+actRows(RM.acts,false)+'</table><div class="rm-sec">Inventar-Änderungen</div>'
+      +(ch.length?ch.slice(0,150).map(c=>{ const [l,cc]=KL[c.k]||[c.k,'--mut']; return `<div class="invch"><span class="muted num">${fmtDT(c.t,false)}</span> · <b style="color:var(${cc})">${l}</b> ${esc(c.w)}${c.from||c.to?` <span class="muted">${esc(c.from||'')}${c.from&&c.to?' → ':''}${esc(c.to||'')}</span>`:''}</div>`; }).join(''):'<div class="muted" style="font-size:13px">Keine Änderungen.</div>'); }
+  const html=head+`<div class="rm-body">${body}</div>`;
+  if(!force&&RM.paneKey===html+RM.evs.length) return; RM.paneKey=html+RM.evs.length;
+  const bodySc=(pane.querySelector('.rm-body')||{}).scrollTop||0;
+  pane.innerHTML=html; const nb=pane.querySelector('.rm-body'); if(nb) nb.scrollTop=bodySc;
+  pane.querySelectorAll('.rm-tabs button').forEach(b=>b.onclick=()=>{ RM.tab=b.dataset.t; rmSave(); rmPane(true); });
+  pane.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>openAction(b.dataset.a,'machine',m.id,m.name));
+  pane.querySelectorAll('table[data-acts]').forEach(tb=>{ const k=tb.dataset.acts, l=k==='upd'?RM.acts.filter(x=>x.kind!=='script'):k==='scr'?RM.acts.filter(x=>x.kind==='script'):RM.acts; bindActRows(tb,l); });
+  if(t==='hist') renderEvents($('#rm-evs'),RM.evs,false,100);
+  const swq=$('#rm-swq'); if(swq){ swq.oninput=()=>{ RM.swq=swq.value; rmPane(true); const n=$('#rm-swq'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); }; }
+  const ns=$('#rm-nsave'); if(ns) ns.onclick=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:m.id,desc:$('#rm-desc').value,notes:$('#rm-notes').value})}); toast('Notizen gespeichert'); document.activeElement.blur(); await refreshState(); rmPane(true); }catch(e){ uiAlert(e.message); } }; }
+function rmPaneHost(pane,force){ const h=S.state.hosts.find(x=>x.id===RM.sel.id); if(!h){ pane.innerHTML=''; return; }
+  const [lbl,col]=STATUS[h.status]||STATUS.unknown, a24=agg(h.h24);
+  const html=`<div class="rm-ph"><span class="dot" style="background:var(${col})"></span><b style="font-size:15px">${esc(h.name)}</b><span class="muted" style="font-size:12.5px">${esc([lbl,h.addr,h.site==='cloud'?'Cloud':siteName(h.site)].filter(Boolean).join(' · '))}</span><a class="btn sm" style="margin-left:auto" href="#/host/${esc(h.id)}">Vollansicht ↗</a></div>
+    <div class="rm-body"><div class="rm-cols"><div><table class="tbl kvt"><tr><td>Adresse</td><td class="num">${esc(h.addr)}${h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+esc(h.ip)+')':''}</td></tr><tr><td>Prüfung</td><td>${esc((h.method||'icmp').toUpperCase())}${h.port?' · Port '+h.port:''}</td></tr><tr><td>Letzte Antwort</td><td class="num">${h.lastR>=0?fmtMs(h.lastR):'–'}</td></tr><tr><td>Verlust 24 h</td><td class="num">${a24.n?pct(a24.lost,a24.n):'–'}</td></tr>${h.fritz?'<tr><td>Fritzbox</td><td>wird ausgelesen – Details in der Vollansicht</td></tr>':''}</table></div>
+    <div><div class="rm-sec" style="margin-top:0">Ereignisse (7 Tage)</div><div class="evlist" id="rm-evs"></div></div></div></div>`;
+  if(!force&&RM.paneKey===html+RM.evs.length) return; RM.paneKey=html+RM.evs.length; pane.innerHTML=html; renderEvents($('#rm-evs'),RM.evs,false,30); }
 $('#ov-bad').onclick=()=>{ OVF.bad=!OVF.bad; ovfSave(); ovRerender(); };
 function renderOverview(){
   const st0=S.state; if(!st0) return;
@@ -1328,6 +1461,8 @@ function renderOverview(){
   const gs=st.groups||[]; const mode=ovMode(); const view=ovView(); root.classList.toggle('compact',view==='list'); $$('#ovview button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   $('#ovbar').style.display=st0.hosts.length>1||useTree(st0)||(st0.machines||[]).length>1?'flex':'none';
   $('#ovbar').style.flexWrap='wrap';
+  if(view==='rmm'){ $('#ovmode').style.display='none'; root.dataset.sig=''; cards={}; renderOvRMM(root,st); return; }
+  if(root.querySelector('.rmm')) root.innerHTML='';
   if(view==='table'){ $('#ovmode').style.display='none'; root.dataset.sig=''; cards={}; renderOvTable(root,st); return; }
   root.dataset.thtml=''; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
   const secs=[], ms=st.machines||[];
@@ -1850,7 +1985,7 @@ $('#pf-save').onclick=async()=>{ const me=(S.state&&S.state.me)||{}; const body=
 
 /* Übersicht: Gruppen oder Standorte */
 function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
-function ovView(){ let v=null; try{ v=localStorage.getItem('pw_ovview'); }catch(e){} if(v==='list'||v==='tiles'||v==='table') return v;
+function ovView(){ let v=null; try{ v=localStorage.getItem('pw_ovview'); }catch(e){} if(v==='list'||v==='tiles'||v==='table'||v==='rmm') return v;
   const st=S.state||{hosts:[],sites:[]}; return st.hosts.length+(st.machines||[]).length>40||st.sites.length>6?'table':'tiles'; }
 $$('#ovview button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_ovview',b.dataset.v); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); });
 $$('#ovmode button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_ovmode',b.dataset.m); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); });

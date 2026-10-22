@@ -11,6 +11,7 @@ func eventCounts() (int, int, bool)              { return -1, -1, false }
 func rebootPending() int                         { return -1 }
 func antivirus() *sysAV                          { return nil }
 func pendingUpdates() (int, int, []string, bool) { return -1, 0, nil, false }
+func loggedInUser() string                       { return "" }
 
 func restartService(string) error { return errNotSupported }
 func collectInventory() *sysInventory {

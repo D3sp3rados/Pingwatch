@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // Rechner-Überwachung („RMM light“): Der Agent meldet jede Minute Auslastung, Laufwerke,
@@ -133,6 +134,9 @@ type MachineCfg struct {
 	Services *[]string `json:"services,omitempty"`
 	// Meldung, wenn der Rechner sich nicht meldet: "" = automatisch (Server ja, Arbeitsplatz nein), "on", "off"
 	OffAlert string `json:"offAlert,omitempty"`
+	// Beschreibung (eine Zeile) und Notizen der Techniker
+	Desc  string `json:"desc,omitempty"`
+	Notes string `json:"notes,omitempty"`
 }
 
 // ---------- Messwerte (Agent → Server) ----------
@@ -180,6 +184,8 @@ type sysReport struct {
 	AV       *sysAV    `json:"av,omitempty"`
 	Reboot   int       `json:"reboot"` // Neustart ausstehend: 1 ja, 0 nein, -1 unbekannt
 	Ver      string    `json:"ver,omitempty"`
+	User     string    `json:"user,omitempty"`   // angemeldete Benutzer (Komma-getrennt)
+	IPs      []string  `json:"ips,omitempty"`    // eigene Adressen (IPv4 zuerst)
 	Heal     []sysHeal `json:"heal,omitempty"`   // Selbstheilung: Neustart-Versuche seit der letzten Meldung
 	NoHeal   bool      `json:"noHeal,omitempty"` // Selbstheilung im Agenten abgeschaltet (agent.json)
 }
@@ -531,6 +537,10 @@ func (m *Monitor) ingestSys(mc MachineCfg, c SysCfg, samples []sysSample) {
 			continue
 		}
 		r := s.R
+		r.User = clipStr(r.User, 200)
+		if len(r.IPs) > 12 {
+			r.IPs = r.IPs[:12]
+		}
 		sm.at = s.T
 		sm.cur = r
 		_, dp := r.fullestDisk()
@@ -883,6 +893,8 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 		// Dienste: "site" = Liste des Standorts, "own" = eigene Liste (Services)
 		SvcMode  string   `json:"svcMode"`
 		OffAlert *string  `json:"offAlert"` // "", "on", "off"
+		Desc     *string  `json:"desc"`
+		Notes    *string  `json:"notes"`
 		Services []string `json:"services"`
 	}
 	if r.Method == http.MethodPost {
@@ -924,6 +936,12 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 				if n := strings.TrimSpace(*body.Name); n != "" && len(n) <= 80 {
 					x.Name = n
 				}
+			}
+			if body.Desc != nil {
+				x.Desc = clipStr(strings.TrimSpace(strings.ReplaceAll(*body.Desc, "\n", " ")), 200)
+			}
+			if body.Notes != nil {
+				x.Notes = clipStr(strings.TrimRight(*body.Notes, " \n"), 8000)
 			}
 			if body.OffAlert != nil && (*body.OffAlert == "" || *body.OffAlert == "on" || *body.OffAlert == "off") {
 				x.OffAlert = *body.OffAlert
@@ -1035,4 +1053,15 @@ func (mc MachineCfg) wantsOffAlert(cur *sysReport) bool {
 		return false
 	}
 	return cur == nil || isServerOS(cur.OS)
+}
+
+// clipStr kürzt auf höchstens n Bytes, ohne ein UTF-8-Zeichen zu zerschneiden.
+func clipStr(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

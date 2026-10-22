@@ -51,6 +51,10 @@ func (m *Monitor) simMachines() {
 				r := &sysReport{Host: x.host, OS: x.os, Uptime: int64(now.Sub(start).Seconds()) + 86400*int64(3+i*9),
 					CPU: math.Max(0, x.cpu+wave*8+rand.Float64()*6), MemTotal: x.mem, MemUsed: uint64(float64(x.mem) * (0.55 + 0.1*wave)),
 					Disks: x.disks, Svcs: x.svcs, EvCrit: 0, EvErr: 2 + i, Updates: x.upd, UpdAt: now.UnixMilli(), AV: x.av, Reboot: x.reboot, Ver: version}
+				r.IPs = []string{"192.168.10." + strconv.Itoa(10+i)}
+				if i > 0 {
+					r.User = "FIRMA\\mueller"
+				}
 				if x.os[0] == 'D' {
 					r.EvCrit, r.EvErr, r.Reboot = -1, -1, 0
 				}

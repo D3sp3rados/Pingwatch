@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 func TestSysParsers(t *testing.T) {
@@ -584,5 +585,34 @@ func TestMachineOwnServices(t *testing.T) {
 	c.do("POST", "/api/machine", map[string]any{"id": mc.ID, "svcMode": "site"})
 	if l := get("ws1"); len(l) != 2 {
 		t.Fatalf("zurück auf Standort: %v", l)
+	}
+}
+
+func TestMachineNotes(t *testing.T) {
+	s, ts := newTestServer(t)
+	c := newClient(t, ts)
+	c.login("", "admin-pass-123")
+	c.do("POST", "/api/sites", map[string]string{"name": "Büro"})
+	s.m.mu.RLock()
+	site := s.m.cfg.Sites[0]
+	s.m.mu.RUnlock()
+	mc, _ := s.m.registerMachine(site, "ws1", "WS1", true)
+	long := strings.Repeat("ä", 5000) // 10000 Bytes
+	if code, b := c.do("POST", "/api/machine", map[string]any{"id": mc.ID, "desc": "Empfang\nEG", "notes": long}); code != 200 {
+		t.Fatal(code, b)
+	}
+	got, _ := s.m.machineByID(mc.ID)
+	if got.Desc != "Empfang EG" || len(got.Notes) != 8000 || !utf8.ValidString(got.Notes) {
+		t.Fatalf("desc %q notes %d", got.Desc, len(got.Notes))
+	}
+	// Name bleibt unverändert, wenn nur Notizen kommen
+	if got.Name != mc.Name {
+		t.Fatalf("Name geändert: %q", got.Name)
+	}
+}
+
+func TestParseWho(t *testing.T) {
+	if got := parseWho([]byte("anna     tty1  2026-10-22 08:01\nbert pts/0 2026-10-22 09:00 (10.0.0.5)\nanna pts/1 2026-10-22 09:10\n")); got != "anna, bert" {
+		t.Fatal(got)
 	}
 }
