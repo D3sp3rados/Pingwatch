@@ -1649,7 +1649,7 @@ function groupDrill(root,st,gs,ms){ const fs=gdFolders(st,gs,ms); let f=OVG.g&&f
   if(OVG.g&&!f){ OVG.g=null; OVG.u=null; }
   if(f&&f.uonly&&!OVG.u) OVG.u=f.usites[0].id;
   if(!f){ // Ebene 1: Ordner
-    const html=`<div class="grid gd-grid">`+fs.map(x=>{ const s=gdStatus(x), parts=[];
+    const html=!fs.length?'<div class="panel empty">Für diese Auswahl gibt es keine Gruppen mit Hosts, Rechnern oder UniFi.</div>':`<div class="grid gd-grid">`+fs.map(x=>{ const s=gdStatus(x), parts=[];
       if(x.hosts.length) parts.push(`🌐 ${x.hosts.length} Host${x.hosts.length>1?'s':''}`);
       if(x.machines.length) parts.push(`💻 ${x.machines.length} Rechner`);
       let un=0,pn=0,sn=0; for(const u of x.usites){ const q=gdUniStats(u); un+=q.n.gateway+q.n.switch+q.n.ap+q.n.other; pn+=q.n.protect; sn+=q.n.sensor; }
@@ -1657,8 +1657,8 @@ function groupDrill(root,st,gs,ms){ const fs=gdFolders(st,gs,ms); let f=OVG.g&&f
       const names=[...x.hosts,...x.machines].map(y=>y.name); const prev=names.slice(0,5).join(' · ')+(names.length>5?` · +${names.length-5}`:'');
       return `<div class="panel gtile" data-gk="${esc(x.key)}"><div class="gt-h"><span class="dot" style="background:var(${s.col})"></span><b>${x.uonly?'📶':'📁'} ${esc(x.name)}</b>${s.bad?`<span class="tag bad">${s.bad} Störung${s.bad>1?'en':''}</span>`:s.warn?`<span class="tag warn">${s.warn} Warnung${s.warn>1?'en':''}</span>`:`<span class="muted" style="font-size:12.5px">alles OK</span>`}<span class="chev">›</span></div>
         <div class="gt-n">${parts.join('<span class="muted"> · </span>')||'<span class="muted">leer</span>'}</div>${prev?`<div class="gt-p muted">${esc(prev)}</div>`:''}${x.note?`<div class="gt-p muted">${esc(x.note)}</div>`:''}</div>`; }).join('')+'</div>';
-    if(root.dataset.sig!=='gd1'){ root.innerHTML=''; cards={}; root.dataset.sig='gd1'; }
-    if(root.dataset.gh!==html){ root.innerHTML=html; root.dataset.gh=html; root.querySelectorAll('[data-gk]').forEach(t=>t.onclick=()=>ovgSet({g:t.dataset.gk,u:null,c:'all'})); }
+    if(root.dataset.sig!=='gd1'){ root.innerHTML=''; cards={}; root.dataset.sig='gd1'; root.dataset.gh=''; }
+    if(root.dataset.gh!==html||!root.firstElementChild){ root.innerHTML=html; root.dataset.gh=html; root.querySelectorAll('[data-gk]').forEach(t=>t.onclick=()=>ovgSet({g:t.dataset.gk,u:null,c:'all'})); }
     return null; }
   const s=OVG.u&&f.usites.find(x=>x.id===OVG.u);
   if(s){ // Ebene 3: UniFi eines Standorts mit Auswahl
@@ -1676,9 +1676,9 @@ function groupDrill(root,st,gs,ms){ const fs=gdFolders(st,gs,ms); let f=OVG.g&&f
       +(net.length?`<div class="uf-g">${net.map(ntile).join('')}</div>`:'')+(prot.length?`<div class="uf-g" style="margin-top:${net.length?10:0}px">${prot.map(ptile).join('')}</div>`:'')
       +(!net.length&&!prot.length&&!u.err?'<div class="panel empty">Keine Geräte in dieser Auswahl.</div>':'');
     const crumbParts=f.uonly?['Alle Gruppen','📶 '+esc(f.name)]:['Alle Gruppen','📁 '+esc(f.name),'📶 UniFi · '+esc(s.name)];
-    const html=gdCrumb(crumbParts)+`<div class="muted" style="font-size:12.5px;margin:-4px 0 8px">${u.at?'Stand '+fmtTime(u.at,false):''}${u.protect?' · Protect '+fmtTime(u.protect.at,false):''}</div>`+chips+`<div style="margin-top:10px">${body}</div>`;
-    if(root.dataset.sig!=='gd3'){ root.innerHTML=''; cards={}; root.dataset.sig='gd3'; }
-    if(root.dataset.gh!==html){ root.innerHTML=html; root.dataset.gh=html;
+    const html=gdCrumb(crumbParts)+`<div class="muted" style="font-size:12.5px;margin:-4px 0 8px">${u.at?'Stand '+fmtTime(u.at,false):''}${u.protect?' · Protect '+fmtTime(u.protect.at,false):' · UniFi Protect: noch keine Daten (Abfrage alle 5 Minuten; lokal ab Agent 1.6.0)'}${u.protect&&u.protect.err?` · <span style="color:var(--warn)">${esc(u.protect.err)}</span>`:''}</div>`+chips+`<div style="margin-top:10px">${body}</div>`;
+    if(root.dataset.sig!=='gd3'){ root.innerHTML=''; cards={}; root.dataset.sig='gd3'; root.dataset.gh=''; }
+    if(root.dataset.gh!==html||!root.firstElementChild){ root.innerHTML=html; root.dataset.gh=html;
       gdBindCrumb(root,f.uonly?[()=>ovgSet({g:null,u:null})]:[()=>ovgSet({g:null,u:null}),()=>ovgSet({u:null})]);
       root.querySelectorAll('[data-uc]').forEach(b=>b.onclick=()=>ovgSet({c:b.dataset.uc}));
       root.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud))); }

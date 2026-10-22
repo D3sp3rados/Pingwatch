@@ -136,7 +136,8 @@ func (u *unifiAPI) protect() (*protectSnap, error) {
 		return nil, nil
 	}
 	if code != 200 {
-		return nil, fmt.Errorf("UniFi Protect: %v", u.httpErr(code))
+		// z. B. Key ohne Protect-Recht: als Hinweis anzeigen statt still verwerfen
+		return &protectSnap{At: time.Now().UnixMilli(), Err: fmt.Sprintf("Protect nicht abfragbar: %v", u.httpErr(code))}, nil
 	}
 	snap := &protectSnap{At: time.Now().UnixMilli()}
 	var info map[string]any
