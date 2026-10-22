@@ -108,6 +108,8 @@ func TestParseAV(t *testing.T) {
 		{in: `{"def":{"on":true,"rt":false,"age":5,"am":"Normal"}}`, name: "Microsoft Defender", on: true, rt: false, sig: 5},
 		// Drittanbieter aktiv, Defender passiv
 		{in: `{"def":{"on":false,"rt":false,"age":30,"am":"Passive Mode"},"sc":[{"n":"Windows Defender","st":393472},{"n":"ESET Security","st":266240}]}`, name: "ESET Security", on: true, rt: true, sig: -1},
+		// Reste eines deinstallierten Drittanbieters im Security Center, Defender läuft normal → Defender
+		{in: `{"def":{"on":true,"rt":true,"age":0,"am":"Normal"},"sc":[{"n":"Norton 360","st":266240},{"n":"Windows Defender","st":397568}]}`, name: "Microsoft Defender", on: true, rt: true, sig: 0},
 		// einzelnes Produkt als Objekt statt Liste
 		{in: "\ufeff" + `{"sc":{"n":"Sophos","st":266240}}`, name: "Sophos", on: true, rt: true, sig: -1},
 		// alles aus

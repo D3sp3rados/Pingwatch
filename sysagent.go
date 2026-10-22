@@ -421,6 +421,11 @@ func parseAVJSON(b []byte) *sysAV {
 		n = strings.ToLower(n)
 		return strings.Contains(n, "defender") || strings.Contains(n, "windows-virenschutz")
 	}
+	// Läuft Defender im Normalmodus mit aktivem Schutz, ist er zuständig – Windows schaltet Defender
+	// sonst in den passiven Modus. Einträge anderer Produkte sind dann Reste einer Deinstallation.
+	if d := raw.Def; d != nil && strings.EqualFold(d.AM, "Normal") && d.On && d.RT {
+		return &sysAV{Name: "Microsoft Defender", Enabled: true, RealTime: true, SigDays: d.Age}
+	}
 	// Security Center (Windows-Clients): aktives Produkt eines Drittanbieters bevorzugen
 	var firstOff *scProd
 	for i, p := range prods {
