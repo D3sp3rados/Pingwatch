@@ -1150,7 +1150,13 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	sysOut := map[string]any{"on": false}
 	if site.Sys != nil && site.Sys.On {
 		sc := site.Sys.eff()
-		sysOut = map[string]any{"on": true, "services": sc.Services}
+		svcs := sc.Services
+		if mid := r.Header.Get("X-Machine"); mid != "" {
+			if mc, ok := s.m.machineByID(machineKey(site.ID, mid)); ok && mc.Services != nil {
+				svcs = *mc.Services // eigene Liste dieses Rechners
+			}
+		}
+		sysOut = map[string]any{"on": true, "services": svcs}
 		if sc.SelfHeal && len(sc.Restart) > 0 {
 			sysOut["selfHeal"] = true
 			sysOut["restart"] = sc.Restart

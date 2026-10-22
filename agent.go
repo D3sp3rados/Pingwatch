@@ -204,9 +204,11 @@ func (a *Agent) req(method, path string, body io.Reader, gz bool) (*http.Respons
 	}
 	r.Header.Set("Authorization", "Bearer "+a.file.Token)
 	r.Header.Set("X-Agent-Version", version)
+	if a.machine != "" {
+		r.Header.Set("X-Machine", a.machine) // für rechnerbezogene Einstellungen (z. B. eigene Dienste)
+	}
 	if a.sysOnly {
 		r.Header.Set("X-Agent-Mode", "sysonly")
-		r.Header.Set("X-Machine", a.machine)
 	}
 	if gz {
 		r.Header.Set("Content-Encoding", "gzip")

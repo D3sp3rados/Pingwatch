@@ -129,6 +129,8 @@ type MachineCfg struct {
 	Group   string `json:"group,omitempty"` // Gruppe/Kunde
 	SysOnly bool   `json:"sysOnly,omitempty"`
 	Created int64  `json:"created"`
+	// eigene Dienste-Liste für diesen Rechner (nil = Liste des Standorts)
+	Services *[]string `json:"services,omitempty"`
 }
 
 // ---------- Messwerte (Agent → Server) ----------
@@ -873,6 +875,9 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 		ID    string  `json:"id"`
 		Name  *string `json:"name"`
 		Group *string `json:"group"`
+		// Dienste: "site" = Liste des Standorts, "own" = eigene Liste (Services)
+		SvcMode  string   `json:"svcMode"`
+		Services []string `json:"services"`
 	}
 	if r.Method == http.MethodPost {
 		if !readJSON(w, r, &body) {
@@ -913,6 +918,18 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 				if n := strings.TrimSpace(*body.Name); n != "" && len(n) <= 80 {
 					x.Name = n
 				}
+			}
+			switch body.SvcMode {
+			case "site":
+				x.Services = nil
+			case "own":
+				l := []string{}
+				for _, sv := range body.Services {
+					if sv = strings.TrimSpace(sv); sv != "" && len(sv) <= 120 && len(l) < 50 {
+						l = append(l, sv)
+					}
+				}
+				x.Services = &l
 			}
 			if body.Group != nil {
 				g := strings.TrimSpace(*body.Group)

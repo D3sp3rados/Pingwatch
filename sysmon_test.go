@@ -525,3 +525,43 @@ func TestAgentSysOnly(t *testing.T) {
 		t.Fatal("agent.json Modus", af, err)
 	}
 }
+
+func TestMachineOwnServices(t *testing.T) {
+	s, ts := newTestServer(t)
+	c := newClient(t, ts)
+	c.login("", "admin-pass-123")
+	c.do("POST", "/api/sites", map[string]string{"name": "Büro"})
+	s.m.mu.RLock()
+	site := s.m.cfg.Sites[0]
+	s.m.mu.RUnlock()
+	c.do("POST", "/api/sites", map[string]any{"id": site.ID, "sys": map[string]any{"on": true, "services": []string{"MSSQLSERVER", "Spooler"}}})
+	mc, _ := s.m.registerMachine(site, "ws1", "WS1", true)
+	if code, b := c.do("POST", "/api/machine", map[string]any{"id": mc.ID, "svcMode": "own", "services": []string{"Spooler", " "}}); code != 200 {
+		t.Fatal(code, b)
+	}
+	get := func(mid string) []string {
+		req, _ := http.NewRequest("GET", ts.URL+"/api/agent/config", nil)
+		req.Header.Set("Authorization", "Bearer "+site.Token)
+		req.Header.Set("X-Machine", mid)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var v struct {
+			Sys struct{ Services []string } `json:"sys"`
+		}
+		json.NewDecoder(resp.Body).Decode(&v)
+		return v.Sys.Services
+	}
+	if l := get("ws1"); len(l) != 1 || l[0] != "Spooler" {
+		t.Fatalf("eigene Liste: %v", l)
+	}
+	if l := get("srv"); len(l) != 2 {
+		t.Fatalf("Standort-Liste: %v", l)
+	}
+	c.do("POST", "/api/machine", map[string]any{"id": mc.ID, "svcMode": "site"})
+	if l := get("ws1"); len(l) != 2 {
+		t.Fatalf("zurück auf Standort: %v", l)
+	}
+}

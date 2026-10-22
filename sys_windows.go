@@ -205,7 +205,16 @@ func antivirus() *sysAV {
 
 // psUpdates: alle nicht installierten, nicht ausgeblendeten Updates wie in „Windows Update“
 // (online gesucht, inkl. Defender-Signaturen, .NET und Treiber) – Anzahl, davon Treiber, Titel.
-const psUpdates = `try{$s=New-Object -ComObject Microsoft.Update.Session; $q=$s.CreateUpdateSearcher(); $q.Online=$true; $r=$q.Search("IsInstalled=0 and IsHidden=0"); $d=0; $t=@(); foreach($u in $r.Updates){ if($u.Type -eq 2){$d++}; $t+=[string]$u.Title }; ConvertTo-Json -Compress @{n=$r.Updates.Count; d=$d; t=$t}}catch{'{"n":-1}'}`
+// psSearchFn: sucht bei Windows Update, beim Standarddienst (ggf. WSUS) und bei Microsoft Update
+// („Updates für andere Microsoft-Produkte“, z. B. .NET, PowerShell 7) und führt die Ergebnisse zusammen –
+// so wie die Einstellungen-App mehrere Quellen abfragt.
+const psSearchFn = `function PWSearch($crit){ $s=New-Object -ComObject Microsoft.Update.Session; $s.ClientApplicationID='PingWacht'; $seen=@{}; $list=New-Object System.Collections.ArrayList; $ok=$false
+ foreach($mode in 0,2,3){ try{ $q=$s.CreateUpdateSearcher(); $q.Online=$true; if($mode -eq 2){ $q.ServerSelection=2 } elseif($mode -eq 3){ $q.ServerSelection=3; $q.ServiceID='7971f918-a847-4430-9279-4a52d1efe18d' }
+  $r=$q.Search($crit); $ok=$true; foreach($u in $r.Updates){ $id=[string]$u.Identity.UpdateID; if(-not $seen.ContainsKey($id)){ $seen[$id]=1; [void]$list.Add($u) } } }catch{} }
+ if(-not $ok){ throw 'Windows Update nicht erreichbar' }; return ,$list }
+`
+
+const psUpdates = psSearchFn + `try{ $l=PWSearch "IsInstalled=0 and IsHidden=0"; $d=0; $t=@(); foreach($u in $l){ if($u.Type -eq 2){$d++}; $t+=[string]$u.Title }; ConvertTo-Json -Compress @{n=$l.Count; d=$d; t=$t}}catch{'{"n":-1}'}`
 
 func pendingUpdates() (int, int, []string, bool) {
 	b, err := runPS(5*time.Minute, psUpdates)

@@ -428,7 +428,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </div>
   <div class="mcols">
     <div><h2>Laufwerke</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-disks"></table></div></div>
-    <div><h2>Dienste</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-svcs"></table></div></div>
+    <div><h2>Dienste <button class="btn sm ed" id="m-svcedit" style="margin-left:8px">Festlegen</button> <span class="muted" id="m-svcsrc" style="font-weight:400;font-size:12.5px"></span></h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-svcs"></table></div></div>
   </div>
   <div id="m-actw" style="display:none"><h2>Updates &amp; Neustarts</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-acts"></table></div></div>
   <h2>Ereignisse <span class="sub muted" style="font-weight:400;font-size:12.5px">letzte 7 Tage</span></h2>
@@ -798,6 +798,19 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-msvc">
+  <form method="dialog" id="ms-form">
+    <div class="dlg-h" id="ms-title">Dienste</div>
+    <div class="dlg-b" style="display:block">
+      <label class="check"><input type="radio" name="mode" value="site"> <span><b>Wie der Standort</b> <span class="muted" id="ms-site"></span></span></label>
+      <label class="check" style="margin-top:6px"><input type="radio" name="mode" value="own"> <span><b>Eigene Liste für diesen Rechner</b></span></label>
+      <label class="field" style="margin-top:8px">Überwachte Dienste (einer pro Zeile, leer = keine)<textarea name="services" rows="5" placeholder="Spooler&#10;MSSQLSERVER"></textarea><small>Windows: Dienstname oder Anzeigename. Linux: systemd-Dienst. Mac: launchd-Label.</small></label>
+    </div>
+    <div class="dlg-err" id="ms-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-group">
   <form method="dialog" id="gr-form">
     <div class="dlg-h" id="gf-title">Gruppe anlegen</div>
@@ -927,7 +940,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
     <div class="dlg-h" id="sy-title">Rechner-Überwachung</div>
     <div class="dlg-b" style="display:block">
       <label class="check"><input type="checkbox" name="on"> <span><b>Rechner überwachen</b> – der Rechner mit dem Agent und weitere Rechner mit dem Agent im Modus „nur Rechner“ melden jede Minute CPU, Arbeitsspeicher, Laufwerke, Dienste, Updates, Virenschutz und ausstehende Neustarts. Es wird nur gemessen, nichts ferngesteuert.</span></label>
-      <label class="field" style="margin-top:10px">Überwachte Dienste (einer pro Zeile)<textarea name="services" rows="3" placeholder="Spooler&#10;MSSQLSERVER&#10;smbd"></textarea><small>Windows: Dienstname oder Anzeigename (services.msc). Linux: systemd-Dienst. Mac: launchd-Label. Meldung, wenn ein Dienst nicht läuft.</small></label>
+      <label class="field" style="margin-top:10px">Überwachte Dienste – Standard für alle Rechner (einer pro Zeile; pro Rechner änderbar in den Rechner-Details → Dienste → Festlegen)<textarea name="services" rows="3" placeholder="Spooler&#10;MSSQLSERVER&#10;smbd"></textarea><small>Windows: Dienstname oder Anzeigename (services.msc). Linux: systemd-Dienst. Mac: launchd-Label. Meldung, wenn ein Dienst nicht läuft.</small></label>
       <label class="check" style="margin-top:4px"><input type="checkbox" name="selfHeal"> <span><b>Selbstheilung erlauben</b> – gestoppte Dienste, die unten markiert sind, startet der Agent automatisch neu (höchstens 3 Versuche im Abstand von 1 Minute). Andere Dienste und Befehle werden nie ausgeführt. Kann auf dem Rechner zusätzlich mit <code>"noSelfHeal": true</code> in der agent.json abgeschaltet werden; unter Windows braucht der Agent dafür Administratorrechte.</span></label>
       <label class="check" style="margin-top:4px"><input type="checkbox" name="updates"> <span><b>Updates und Neustarts erlauben</b> (Testphase) – Inhaber und Admins können für die Rechner dieses Standorts mit Zwei-Faktor-Code Updates installieren und neu starten, auch per Plan (Einstellungen → Updates). Nur diese festen Aktionen, keine freien Befehle.</span></label>
       <div class="heal-list" id="sy-heal"></div>
@@ -2497,6 +2510,7 @@ async function loadMachine(){ const id=MD.id; if(!id) return; if(MD.actsId!==id)
 function renderMachine(){ const d=MD.data||machineOf(MD.id); if(!d){ $('#m-name').textContent='…'; return; }
   const m=machineOf(MD.id)||d, r=(MD.data&&MD.data.cur)||m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
   $('#m-dot').style.background=`var(${col})`; $('#m-name').textContent='💻 '+m.name;
+  $('#m-svcsrc').textContent=m.services?'eigene Liste für diesen Rechner':'wie Standort';
   { const so=S.state.sites.find(x=>x.id===m.site), ok=siteActOK(so); $('#m-upd').style.display=ok?'':'none'; $('#m-reboot').style.display=ok?'':'none'; $('#m-mute').style.marginLeft=ok?'0':'auto';
     const acts=MD.acts||[]; $('#m-actw').style.display=ok||acts.length?'':'none'; const t=$('#m-acts'); t.innerHTML=actRows(acts,false); bindActRows(t,acts); }
   $('#m-sub').textContent=[r.os,m.host&&m.host!==m.name?m.host:'',siteName(m.site),m.sysOnly?'Agent „nur Rechner“':'Standort-Agent',m.at?'Stand '+fmtTime(m.at,false):''].filter(Boolean).join(' · ');
@@ -2633,6 +2647,12 @@ async function loadUpdates(){ try{ const [pl,ac]=await Promise.all([api('/api/up
   $$('#up-tbl [data-upe]').forEach(b=>b.onclick=()=>openPlan(b.dataset.upe));
   $('#act-tbl').innerHTML=actRows(UP.acts,true); bindActRows($('#act-tbl'),UP.acts); }
 function actionOptsTxt(cat,rb){ return (cat==='all'?'alle Updates':'Sicherheitsupdates')+' · '+(rb==='ifneeded'?'Neustart wenn nötig':'kein Neustart'); }
+$('#m-svcedit').onclick=()=>{ const m=machineOf(MD.id); if(!m) return; const so=S.state.sites.find(x=>x.id===m.site)||{}, ss=(so.sys&&so.sys.services)||[], f=$('#ms-form');
+  $('#ms-title').textContent='Dienste · '+m.name; $('#ms-site').textContent=ss.length?'('+ss.join(', ')+')':'(Standort überwacht keine Dienste)'; $('#ms-err').textContent='';
+  const own=!!m.services; f.mode.value=own?'own':'site'; f.services.value=(own?m.services:ss).join('\n'); f.services.disabled=!own;
+  f.querySelectorAll('[name=mode]').forEach(r=>r.onchange=()=>{ f.services.disabled=f.mode.value!=='own'; if(f.mode.value==='site') f.services.value=ss.join('\n'); }); $('#dlg-msvc').showModal(); };
+$('#ms-form').addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); const f=$('#ms-form');
+  try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:MD.id,svcMode:f.mode.value,services:f.services.value.split('\n').map(x=>x.trim()).filter(Boolean)})}); $('#dlg-msvc').close(); toast('Gespeichert – der Agent übernimmt es in etwa einer Minute'); await refreshState(); loadMachine(); }catch(err){ $('#ms-err').textContent=err.message; } });
 $('#m-upd').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('winupdate','machine',m.id,m.name); };
 $('#m-reboot').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('reboot','machine',m.id,m.name); };
 

@@ -14,14 +14,13 @@ import (
 // psInstallUpdates: suchen, herunterladen, installieren (Windows-Update-Schnittstelle, wie
 // „Alle herunterladen und installieren“). Funktionsupdates (Upgrades) und Treiber nie.
 // security = Sicherheits-, kritische und Signatur-Updates sowie Update-Rollups (z. B. Tool zum Entfernen bösartiger Software).
-const psInstallUpdates = `$ErrorActionPreference='Stop'
+const psInstallUpdates = psSearchFn + `$ErrorActionPreference='Stop'
 try{
 $s=New-Object -ComObject Microsoft.Update.Session; $s.ClientApplicationID='PingWacht'
-$q=$s.CreateUpdateSearcher(); $q.Online=$true
-$r=$q.Search("IsInstalled=0 and IsHidden=0 and Type='Software'")
+$found=PWSearch "IsInstalled=0 and IsHidden=0 and Type='Software'"
 $sec=@('0fa1201d-4330-4fa8-8ae9-b877473b6441','e6cf1350-c01b-414d-a61f-263d14d133b4','e0789628-ce08-4437-be74-2495b842f43b','28bc880e-0592-4cbf-8f95-c79b17911d5f')
 $c=New-Object -ComObject Microsoft.Update.UpdateColl
-foreach($u in $r.Updates){
+foreach($u in $found){
   $ids=@($u.Categories | ForEach-Object { ([string]$_.CategoryID).ToLower() })
   if($ids -contains '3689bdc8-b205-4af4-8d4a-a63924c5e9d5'){ continue }
   if('@@CAT@@' -ne 'all' -and -not ($ids | Where-Object { $sec -contains $_ })){ continue }
