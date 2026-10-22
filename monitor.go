@@ -36,6 +36,11 @@ type HostCfg struct {
 	Watch       string `json:"watch,omitempty"`      // snmp: überwachte Ports (ifIndex, Komma-getrennt)
 	Group       string `json:"group,omitempty"`      // Gruppe/Ordner (z. B. Endkunde)
 	PauseUntil  int64  `json:"pauseUntil,omitempty"` // pausiert bis (ms), 0 = unbegrenzt
+	// Fritzbox per TR-064 über den Agenten auslesen (Internet-Status, Sync, Abbrüche)
+	Fritz     bool   `json:"fritz,omitempty"`
+	FritzPort int    `json:"fritzPort,omitempty"` // 49000 (http) oder 49443 (https)
+	FritzUser string `json:"fritzUser,omitempty"`
+	FritzPass string `json:"fritzPass,omitempty"` // nur an den Agenten, nie an den Browser
 }
 
 type SiteCfg struct {
@@ -134,6 +139,11 @@ func (h *HostCfg) normalize() {
 	}
 	if h.Site == "" {
 		h.Site = "cloud"
+	}
+	if !h.Fritz || h.Site == "cloud" {
+		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass = false, 0, "", ""
+	} else if h.FritzPort != 49443 {
+		h.FritzPort = 49000
 	}
 	if h.ThresholdMs < 0 {
 		h.ThresholdMs = 0

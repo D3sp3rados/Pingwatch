@@ -280,6 +280,11 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <canvas id="sn-chart" style="width:100%;height:200px;display:block;margin-top:8px"></canvas></div>
     <p class="muted" style="font-size:12.5px">Haken bei „Alarm“ = Meldung, wenn der Port auf „down“ geht (z. B. Uplink, Kamera, AP).</p>
   </div>
+  <div id="d-fritz" style="display:none">
+    <h2>Fritzbox <span class="sub muted" id="fz-sub" style="font-weight:400;font-size:12.5px"></span></h2>
+    <div class="stats" id="fz-stats"></div>
+    <div class="panel" id="fz-chartbox" style="padding:12px;margin-top:10px"><div class="muted" style="font-size:12.5px">Sync-Rate Download, letzte 24 h <span id="fz-range"></span></div><canvas id="fz-chart" style="width:100%;height:110px;display:block;margin-top:6px"></canvas></div>
+  </div>
   <h2>Ereignisse im Zeitraum <span class="sub" id="d-evcount"></span></h2>
   <div class="panel evlist" id="d-events"></div>
 </section>
@@ -676,6 +681,17 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       <label class="field" id="hf-expf"><span id="hf-expl">Erwartet</span><input name="expect" maxlength="120"><small id="hf-exph"></small></label>
       <label class="field" id="hf-dnsf">DNS-Server<input name="dnsServer" placeholder="leer = Standard, z. B. 192.168.1.1"></label>
       <label class="field" id="hf-portf"><span id="hf-portl">TCP-Port</span><input name="port" type="number" min="1" max="65535" value="443"></label>
+      <div class="full" id="hf-fritzf" style="display:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+        <label class="check"><input type="checkbox" name="fritz" id="hf-fritz"> <span><b>Fritzbox auslesen (TR-064)</b> – Internet-Status, Sync-Rate, Abbrüche und Neustarts</span></label>
+        <div id="hf-fritzb" style="display:none;margin-top:10px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <label class="field">Benutzer<input name="fritzUser" autocomplete="off" placeholder="z. B. pingwacht"></label>
+            <label class="field">Passwort<input name="fritzPass" type="password" autocomplete="new-password" id="hf-fritzpw"></label>
+            <label class="field" style="max-width:170px">Port<select name="fritzPort"><option value="49000">49000 (http)</option><option value="49443">49443 (https)</option></select></label>
+          </div>
+          <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">In der Fritzbox einrichten: <b>System → FRITZ!Box-Benutzer</b> → Benutzer anlegen mit Recht „FRITZ!Box Einstellungen“ · <b>Heimnetz → Netzwerk → Netzwerkeinstellungen</b> → „Zugriff für Anwendungen zulassen“ aktivieren. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
+        </div>
+      </div>
       <label class="field">Intervall (Sekunden)<select name="interval"><option value="500">0,5</option><option value="1000" selected>1</option><option value="2000">2</option><option value="5000">5</option><option value="10000">10</option><option value="30000">30</option><option value="60000">60</option></select></label>
       <label class="field">Timeout (ms)<input name="timeoutMs" type="number" min="100" max="10000" value="1000"></label>
       <label class="field">Spitze ab (ms)<input name="thresholdMs" type="number" min="0" placeholder="leer = automatisch"><small>Automatisch: 3× normaler Wert, mind. +30 ms</small></label>
@@ -860,7 +876,7 @@ const RANGES={'15m':15*60e3,'1h':36e5,'6h':6*36e5,'24h':864e5,'7d':7*864e5,'30d'
 let D={preset:'1h',from:0,to:0,data:null,scale:'lin',hover:-1,drag:null,stack:[]};
 function dRange(){ if(D.preset){ const to=Date.now(); return [to-RANGES[D.preset],to]; } return [D.from,D.to]; }
 async function loadDetail(){
-  const id=S.hostId; if(!id) return; loadSNMP();
+  const id=S.hostId; if(!id) return; loadSNMP(); loadFritz();
   const [from,to]=dRange(); const c=$('#chart'); const w=c.getBoundingClientRect().width||800;
   const n=Math.max(60,Math.min(1200,Math.round(w/2)));
   try{
@@ -1047,7 +1063,7 @@ function renderSettings(){
   const np=st.hosts.filter(h=>h.paused).length, nd=st.hosts.filter(h=>!h.paused&&h.status==='down').length;
   $('#hosts-sum').textContent=st.hosts.length+' Hosts'; $('#hosts-sub').innerHTML=`${st.hosts.length-np} aktiv · ${np} pausiert${nd?` · <b style="color:var(--bad)">${nd} ohne Antwort</b>`:''}${q?` · ${hs.length} gefiltert`:''}`;
   $('#hosts-tog').textContent=$('#hosts-box').open?'ausblenden ▴':'anzeigen ▾';
-  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> ${h.paused?`<button class="btn sm ed" data-pause="${h.id}" title="${h.pauseUntil?'pausiert bis '+fmtDT(h.pauseUntil,false):'dauerhaft pausiert'}">▶ Starten</button>`:`<button class="btn sm ed" data-hmute="${h.id}">⏸ Pause ▾</button>`}</td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
+  $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}${h.fritz?' · Fritzbox':''}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> ${h.paused?`<button class="btn sm ed" data-pause="${h.id}" title="${h.pauseUntil?'pausiert bis '+fmtDT(h.pauseUntil,false):'dauerhaft pausiert'}">▶ Starten</button>`:`<button class="btn sm ed" data-hmute="${h.id}">⏸ Pause ▾</button>`}</td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:false})}); refreshState(); });
   $$('#hosts-tbl [data-hmute]').forEach(b=>b.onclick=()=>{ const h=hs.find(x=>x.id===b.dataset.hmute); openMute('host',h.id,h.name); });
@@ -1085,7 +1101,7 @@ function renderSettings(){
   if(!sup){ $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
   $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); }catch(e){ alert(e.message); } };
@@ -1124,6 +1140,30 @@ function showUDev(s,d){ if(!d) return; const rows=[['Status',d.state==='ONLINE'?
   ['Neustarts (24 h)',d.boots.length?d.boots.map(b=>fmtTime(b,false)).join(', '):'keine']];
   for(const w of d.wan||[]) rows.push([w.name+(w.active?' (aktiv)':''),`${w.up?'verbunden':'<b style="color:var(--bad)">getrennt</b>'}${w.ip?' · '+esc(w.ip):''}${w.latency?' · '+w.latency.toFixed(1)+' ms':''}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}${w.avail?' · '+w.avail.toFixed(2)+' % verfügbar':''}`]);
   showTrace(d.name+' · '+s.name,''); $('#tr-text').innerHTML='<table class="tbl" style="font-size:13px;font-family:-apple-system,system-ui,Segoe UI,sans-serif;white-space:normal">'+rows.map(([k,v])=>`<tr><td class="muted" style="white-space:nowrap">${k}</td><td>${typeof v==='string'&&!v.includes('<')?esc(v):v}</td></tr>`).join('')+'</table>'; $('#tr-copy').style.display='none'; }
+
+/* Fritzbox (TR-064) */
+const FZ={host:null,at:0};
+const fmtKbit=k=>k>=1e6?(k/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Gbit/s':k>=1e3?(k/1e3).toLocaleString('de-DE',{maximumFractionDigits:1})+' Mbit/s':k>0?Math.round(k)+' kbit/s':'–';
+async function loadFritz(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); const box=$('#d-fritz');
+  if(!h||!h.fritz){ box.style.display='none'; return; } box.style.display='';
+  if(FZ.host===h.id&&!force&&Date.now()-FZ.at<30000) return; FZ.host=h.id; FZ.at=Date.now();
+  let r; try{ r=await api('/api/fritz?host='+h.id); }catch(e){ return; } if(S.hostId!==h.id) return;
+  const s=r.status, st=(k,v,c)=>`<div class="panel stat"><span>${k}</span><b class="num" ${c?`style="color:var(${c})"`:''}>${v}</b></div>`;
+  $('#fz-sub').textContent=r.err?'Fehler: '+r.err:r.at?'Stand '+fmtTime(r.at,false)+(s&&s.model?' · '+s.model+(s.fw?' · FRITZ!OS '+s.fw:''):''):'warte auf erste Abfrage durch den Agenten (bis 1 Minute) …';
+  $('#fz-sub').style.color=r.err?'var(--bad)':'';
+  if(!s){ $('#fz-stats').innerHTML=''; $('#fz-chartbox').style.display='none'; return; }
+  const conn=s.conn==='Connected'?['verbunden','--ok']:s.conn?['getrennt ('+s.conn+')','--bad']:['unbekannt',''];
+  $('#fz-stats').innerHTML=st('Internet',conn[0],conn[1])+st('Externe IP',esc(s.extIP||'–'))+st(s.dsl?'Sync Download':'Download',fmtKbit((s.down||0)/1000))+st(s.dsl?'Sync Upload':'Upload',fmtKbit((s.up||0)/1000))
+    +st('Verbunden seit',s.conn==='Connected'?fmtUp(s.connUptime):'–')+st('Abbrüche 24 h',r.drops24,r.drops24?'--warn':'')+st('Box-Laufzeit',fmtUp(s.boxUptime),r.boots24?'--warn':'')
+    +st('Verfügbarkeit 24 h',r.avail>=0?r.avail.toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'–',r.avail>=0&&r.avail<99.9?'--warn':'')+(s.access?st('Anschluss',esc(s.access.replace('X_AVM-DE_',''))+(s.link&&s.link!=='Up'?' · '+esc(s.link):'')):'');
+  $('#fz-chartbox').style.display=(r.hist||[]).some(p=>p.d>0)?'':'none'; $('#fz-range').textContent=r.maxDown?`· ${fmtKbit(r.minDown)} – ${fmtKbit(r.maxDown)}`:'';
+  drawFritzChart(r.hist||[]); }
+function drawFritzChart(pts){ const c=$('#fz-chart'), dpr=devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight; if(!W) return; c.width=W*dpr; c.height=H*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.body), acc=cs.getPropertyValue('--acc').trim(), bad=cs.getPropertyValue('--bad').trim(), mut=cs.getPropertyValue('--mut').trim();
+  const now=Date.now(), t0=now-864e5, max=Math.max(1,...pts.map(p=>p.d))*1.1, X=t=>(t-t0)/864e5*W, Y=v=>H-14-(v/max)*(H-20);
+  for(const p of pts) if(p.c===0){ g.fillStyle=bad; g.globalAlpha=.35; g.fillRect(X(p.t)-1,0,3,H-14); g.globalAlpha=1; }
+  g.strokeStyle=acc; g.lineWidth=1.6; g.beginPath(); let first=true; for(const p of pts){ if(!p.d) continue; const x=X(p.t), y=Y(p.d); first?g.moveTo(x,y):g.lineTo(x,y); first=false; } g.stroke();
+  g.fillStyle=mut; g.font='11px system-ui'; const nl=W<500?2:4; for(let i=0;i<=nl;i++){ const t=t0+i*24/nl*36e5; const x=Math.min(W-30,Math.max(0,X(t)-14)); g.fillText(new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),x,H-2); } }
 
 /* SNMP-Schnittstellen */
 const SN={host:null,ifIdx:0,hours:24,at:0};
@@ -1625,6 +1665,8 @@ function openHost(id){
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
   hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
+  hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
+  hf.fritzPass.placeholder=h&&h.fritzPassSet?'gespeichert – leer lassen = unverändert':'';
   syncHostForm(); dlg.showModal();
 }
 function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'||mt==='snmp'?'':'none'; $('#hf-commf').style.display=mt==='snmp'?'':'none';
@@ -1634,10 +1676,13 @@ function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=
   hf.addr.placeholder={http:'https://www.firma.de',dns:'www.firma.de'}[mt]||'192.168.1.1 oder 8.8.8.8';
   $('#hf-expl').textContent=mt==='dns'?'Erwartete IP-Adresse (optional)':'Erwartet (optional)';
   $('#hf-exph').textContent=mt==='http'?'Statuscode (z. B. 200) oder Text, der auf der Seite stehen muss. Zertifikat wird geprüft, Warnung 14 Tage vor Ablauf.':''; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
-  $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)'; }
-hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm;
+  $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)';
+  const agentSite=hf.site.value&&hf.site.value!=='cloud'; $('#hf-fritzf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-fritzb').style.display=hf.fritz.checked?'':'none'; }
+hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm; hf.fritz.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,group:hf.group.value==='__new'?'':hf.group.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
+  const fz=$('#hf-fritzf').style.display!=='none'&&hf.fritz.checked; Object.assign(body,{fritz:fz,fritzUser:fz?hf.fritzUser.value.trim():'',fritzPass:fz?hf.fritzPass.value:'',fritzPort:+hf.fritzPort.value||49000});
+  if(fz&&!hf.fritzPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).fritzPassSet){ $('#hf-err').textContent='Bitte das Passwort des Fritzbox-Benutzers eingeben.'; return; }
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!confirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };
 $('#add-host').onclick=()=>openHost();

@@ -282,6 +282,9 @@ func (a *Agent) worker(ah *agentHost) {
 	if ah.cfg.Method == "snmp" {
 		go a.snmpLoop(ah)
 	}
+	if ah.cfg.Fritz {
+		go a.fritzLoop(ah)
+	}
 	res := &resolver{addr: ah.cfg.Addr}
 	tk := time.NewTicker(time.Duration(ah.cfg.IntervalMs) * time.Millisecond)
 	defer tk.Stop()

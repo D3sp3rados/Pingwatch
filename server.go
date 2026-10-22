@@ -229,6 +229,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/job", s.handleAgentJob)
 	mux.HandleFunc("/api/agent/unifi", s.handleAgentUniFi)
 	mux.HandleFunc("/api/agent/snmp", s.handleAgentSNMP)
+	mux.HandleFunc("/api/agent/fritz", s.handleAgentFritz)
 	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
 
 	// geschützt
@@ -286,6 +287,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
+	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
 	mux.HandleFunc("/api/snmp/watch", protect(s.handleSNMPWatch))
 	mux.HandleFunc("/api/statuspage", protect(s.handleStatusConfig))
 	mux.HandleFunc("/status/", s.handlePublicStatus)
@@ -345,6 +347,8 @@ type HostView struct {
 	LastOut   *Event  `json:"lastOutage"`
 	Maint     bool    `json:"maint,omitempty"`
 	CertExp   int64   `json:"certExp,omitempty"`
+	// Fritzbox: Passwort hinterlegt (das Passwort selbst geht nie an den Browser)
+	FritzPassSet bool `json:"fritzPassSet,omitempty"`
 }
 
 type SiteView struct {
@@ -398,7 +402,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		siteOn, _ := m.siteOnline(h.cfg.Site)
 		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
-		v := HostView{HostCfg: h.cfg, IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
+		v := HostView{HostCfg: publicHost(h.cfg), FritzPassSet: h.cfg.FritzPass != "", IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
 			Threshold: h.effThreshold(), Maint: inM, CertExp: certExpiry(h.cfg.ID)}
 		if h.baseN >= 30 {
 			v.Baseline = h.baseMed
@@ -816,9 +820,14 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		hc.Org = p.Org
-		if old := s.m.host(hc.ID); old != nil && hc.Watch == "" {
+		if old := s.m.host(hc.ID); old != nil {
 			old.mu.Lock()
-			hc.Watch = old.cfg.Watch // überwachte Ports werden separat gepflegt
+			if hc.Watch == "" {
+				hc.Watch = old.cfg.Watch // überwachte Ports werden separat gepflegt
+			}
+			if hc.FritzPass == "" {
+				hc.FritzPass = old.cfg.FritzPass // leer = unverändert
+			}
 			old.mu.Unlock()
 		}
 		if isCheckMethod(hc.Method) {
@@ -834,7 +843,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		writeJSON(w, s.m.UpsertHost(hc))
+		writeJSON(w, publicHost(s.m.UpsertHost(hc)))
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		if s.hostFor(r, id) == nil {
@@ -849,7 +858,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		out := []HostCfg{}
 		for _, hc := range s.m.cfg.Hosts {
 			if hc.Org == p.Org {
-				out = append(out, hc)
+				out = append(out, publicHost(hc))
 			}
 		}
 		writeJSON(w, out)
