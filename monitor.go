@@ -56,6 +56,11 @@ type SiteCfg struct {
 	SetAuto      *bool `json:"setAutoUpdate,omitempty"` // nur API-Eingabe
 	// Rechner-Überwachung (CPU, RAM, Laufwerke, Dienste …)
 	Sys *SysCfg `json:"sys,omitempty"`
+	// Zuordnung zu einem Kunden des Kontos und eigene Kundennummer des Standorts
+	Customer    string  `json:"customer,omitempty"`
+	Number      string  `json:"number,omitempty"`
+	SetCustomer *string `json:"setCustomer,omitempty"` // nur API-Eingabe
+	SetNumber   *string `json:"setNumber,omitempty"`   // nur API-Eingabe
 }
 
 type Config struct {
@@ -69,6 +74,7 @@ type Config struct {
 	Channels      []Channel         `json:"channels"`
 	Maints        []Maint           `json:"maints"`
 	Groups        []Group           `json:"groups"`
+	Customers     []Customer        `json:"customers,omitempty"` // Kunden je Konto (ordnen Standorte)
 	Requests      []FeatureRequest  `json:"requests,omitempty"`  // Änderungswünsche aus dem KI-Assistenten
 	Machines      []MachineCfg      `json:"machines,omitempty"`  // überwachte Rechner (Rechner-Überwachung)
 	VapidKey      string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
@@ -738,6 +744,13 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 		if s.Kind != siteKindUniFi {
 			s.Kind = ""
 		}
+		if s.SetCustomer != nil {
+			s.Customer = *s.SetCustomer
+		}
+		if s.SetNumber != nil {
+			s.Number = *s.SetNumber
+		}
+		s.SetCustomer, s.SetNumber = nil, nil
 		if s.Sys != nil {
 			sc := *s.Sys
 			sc.norm()
@@ -756,6 +769,12 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 				}
 				if s.SetAuto != nil {
 					m.cfg.Sites[i].NoAutoUpdate = !*s.SetAuto
+				}
+				if s.SetCustomer != nil {
+					m.cfg.Sites[i].Customer = *s.SetCustomer
+				}
+				if s.SetNumber != nil {
+					m.cfg.Sites[i].Number = *s.SetNumber
 				}
 				if s.Sys != nil {
 					sc := *s.Sys

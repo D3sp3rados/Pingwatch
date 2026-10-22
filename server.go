@@ -310,6 +310,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/mute", protect(s.handleMute))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
+	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
 	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
@@ -536,7 +537,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
-		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind}, Online: on, Hosts: cnt[sc.ID]}
+		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind, Customer: sc.Customer, Number: sc.Number}, Online: on, Hosts: cnt[sc.ID]}
 		if sc.Sys != nil {
 			sy := sc.Sys.eff()
 			v.Sys = &sy
@@ -555,9 +556,10 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
 		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
-		"groups":   m.groupsOf(p.Org),
-		"mutes":    m.activeMutes(p.Org),
-		"machines": m.machinesOf(p.Org),
+		"groups":    m.groupsOf(p.Org),
+		"customers": m.customersOf(p.Org),
+		"mutes":     m.activeMutes(p.Org),
+		"machines":  m.machinesOf(p.Org),
 	}
 	for k, v := range s.accountInfo(r) {
 		out[k] = v
@@ -934,6 +936,19 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sc.Name = strings.TrimSpace(sc.Name)
+		if sc.SetNumber != nil {
+			n := strings.TrimSpace(*sc.SetNumber)
+			if len(n) > 40 {
+				http.Error(w, "Kundennummer zu lang", 400)
+				return
+			}
+			sc.SetNumber = &n
+		}
+		if sc.SetCustomer != nil && *sc.SetCustomer != "" && !s.m.customerExists(p.Org, *sc.SetCustomer) {
+			http.Error(w, "Kunde unbekannt", 400)
+			return
+		}
+		sc.Customer, sc.Number = "", "" // nur über setCustomer/setNumber
 		if sc.ID == "" {
 			if sc.Name == "" {
 				http.Error(w, "Name fehlt", 400)

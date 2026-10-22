@@ -574,6 +574,13 @@ func (s *Server) deleteOrg(id string) {
 		}
 	}
 	m.cfg.Groups = keepG
+	keepCu := m.cfg.Customers[:0]
+	for _, cu := range m.cfg.Customers {
+		if cu.Org != id {
+			keepCu = append(keepCu, cu)
+		}
+	}
+	m.cfg.Customers = keepCu
 	keepR := m.cfg.Requests[:0]
 	for _, x := range m.cfg.Requests {
 		if x.Org != id {
