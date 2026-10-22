@@ -43,6 +43,14 @@ type fritzVoIP struct {
 	Status string `json:"status,omitempty"` // Registered / Not registered …
 }
 
+type fritzDect struct {
+	ID     string `json:"id,omitempty"`
+	Name   string `json:"name"`
+	Model  string `json:"model,omitempty"`
+	Active bool   `json:"active"`
+	Update bool   `json:"update,omitempty"` // Firmware-Update für das Mobilteil verfügbar
+}
+
 type fritzSmart struct {
 	Name    string  `json:"name"`
 	Product string  `json:"product,omitempty"`
@@ -66,6 +74,7 @@ type fritzExtra struct {
 	UpdVersion string       `json:"updVersion,omitempty"`
 	Log        []string     `json:"log,omitempty"`
 	VoIP       []fritzVoIP  `json:"voip,omitempty"`
+	Dect       []fritzDect  `json:"dect,omitempty"`
 	Smart      []fritzSmart `json:"smart,omitempty"`
 	Missing    []string     `json:"missing,omitempty"` // was nicht abfragbar war (Rechte, Modell)
 }
@@ -256,6 +265,20 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 	} else {
 		miss("Telefonie", err)
 	}
+	// DECT-Mobilteile
+	const svcDect = "urn:dslforum-org:service:X_AVM-DE_Dect:1"
+	if v, err := c.call("/upnp/control/x_dect", svcDect, "GetNumberOfDectEntries"); err == nil {
+		n := atoiI(v["NewNumberOfEntries"])
+		for i := 0; i < n && i < 30; i++ {
+			e, err := c.callArgs("/upnp/control/x_dect", svcDect, "GetGenericDectEntry", map[string]string{"NewIndex": strconv.Itoa(i)})
+			if err != nil {
+				break
+			}
+			x.Dect = append(x.Dect, fritzDect{ID: e["NewID"], Name: e["NewName"], Model: e["NewModel"], Active: e["NewActive"] == "1", Update: e["NewUpdateAvailable"] == "1"})
+		}
+	} else {
+		miss("DECT", err)
+	}
 	// Smart Home (DECT-Thermostate, Steckdosen …)
 	for i := 0; i < 40; i++ {
 		v, err := c.callArgs("/upnp/control/x_homeauto", "urn:dslforum-org:service:X_AVM-DE_Homeauto:1", "GetGenericDeviceInfos", map[string]string{"NewIndex": strconv.Itoa(i)})
@@ -345,4 +368,32 @@ func (m *Monitor) fritzExtraIngest(hc HostCfg, fh *fritzHost, x *fritzExtra, rec
 		fh.fwNoted = ""
 	}
 	return notes
+}
+
+// maskNumber zeigt nur die letzten vier Ziffern (Datensparsamkeit).
+func maskNumber(n string) string {
+	d := 0
+	for i := len(n) - 1; i >= 0; i-- {
+		if n[i] >= '0' && n[i] <= '9' {
+			d++
+			if d == 4 {
+				return "…" + n[i:]
+			}
+		}
+	}
+	return n
+}
+
+// view: Kopie für den Browser – Rufnummern gekürzt, außer „vollständig anzeigen“ ist gesetzt.
+func (x *fritzExtra) view(full bool) *fritzExtra {
+	if x == nil || full || len(x.VoIP) == 0 {
+		return x
+	}
+	c := *x
+	c.VoIP = make([]fritzVoIP, len(x.VoIP))
+	for i, v := range x.VoIP {
+		v.Number = maskNumber(v.Number)
+		c.VoIP[i] = v
+	}
+	return &c
 }

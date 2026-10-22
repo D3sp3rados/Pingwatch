@@ -33,6 +33,10 @@ func TestFritzExtraQuery(t *testing.T) {
 		case "urn:dslforum-org:service:X_VoIP:1#X_AVM-DE_GetVoIPStatus":
 			voipArgs = append(voipArgs, body)
 			return map[string]string{"NewX_AVM-DE_VoIPStatus": "Registered"}
+		case "urn:dslforum-org:service:X_AVM-DE_Dect:1#GetNumberOfDectEntries":
+			return map[string]string{"NewNumberOfEntries": "1"}
+		case "urn:dslforum-org:service:X_AVM-DE_Dect:1#GetGenericDectEntry":
+			return map[string]string{"NewID": "1", "NewName": "Empfang", "NewModel": "FRITZ!Fon C6", "NewActive": "1", "NewUpdateAvailable": "0"}
 		case "urn:dslforum-org:service:X_AVM-DE_Homeauto:1#GetGenericDeviceInfos":
 			if strings.Contains(body, "<NewIndex>0</NewIndex>") {
 				return map[string]string{"NewDeviceName": "Heizung Büro", "NewPresent": "CONNECTED", "NewTemperatureIsEnabled": "ENABLED", "NewTemperatureCelsius": "215", "NewHkrIsEnabled": "ENABLED", "NewHkrSetTemperature": "220"}
@@ -57,6 +61,15 @@ func TestFritzExtraQuery(t *testing.T) {
 	}
 	if len(x.VoIP) != 1 || x.VoIP[0].Status != "Registered" || len(voipArgs) != 1 || !strings.Contains(voipArgs[0], "<NewX_AVM-DE_VoIPAccountIndex>0</NewX_AVM-DE_VoIPAccountIndex>") {
 		t.Fatalf("Telefonie: %+v %v", x.VoIP, voipArgs)
+	}
+	if len(x.Dect) != 1 || x.Dect[0].Name != "Empfang" || !x.Dect[0].Active {
+		t.Fatalf("DECT: %+v", x.Dect)
+	}
+	if v := x.view(false); v.VoIP[0].Number != "…3456" || x.VoIP[0].Number != "0711123456" {
+		t.Fatalf("Kürzen: %q / %q", v.VoIP[0].Number, x.VoIP[0].Number)
+	}
+	if x.view(true).VoIP[0].Number != "0711123456" {
+		t.Fatal("vollständig")
 	}
 	if len(x.Smart) != 1 || x.Smart[0].TempC != 21.5 || x.Smart[0].Target != 22 || !x.Smart[0].Present {
 		t.Fatalf("Smart Home: %+v", x.Smart)

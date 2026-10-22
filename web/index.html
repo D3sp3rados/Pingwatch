@@ -1141,6 +1141,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
             <label class="field" style="max-width:170px">Port<select name="fritzPort"><option value="49000">49000 (http)</option><option value="49443">49443 (https)</option></select></label>
           </div>
           <label class="check" style="margin-top:8px"><input type="checkbox" name="fritzNewDev"> <span>Neue Geräte im Heimnetz melden</span></label>
+          <label class="check" style="margin-top:4px"><input type="checkbox" name="fritzFullNums"> <span>Rufnummern vollständig anzeigen <span class="muted">(sonst nur die letzten 4 Ziffern)</span></span></label>
           <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">In der Fritzbox einrichten: <b>System → FRITZ!Box-Benutzer</b> → Benutzer anlegen mit Recht „FRITZ!Box Einstellungen“ · <b>Heimnetz → Netzwerk → Netzwerkeinstellungen</b> → „Zugriff für Anwendungen zulassen“ aktivieren. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
         </div>
       </div>
@@ -1937,7 +1938,7 @@ function enableOvDrag(root,secs){ const me=(S.state&&S.state.me)||{}; if(me.role
   for(const [k,c] of Object.entries(cards)){ if(c.dataset.dragset) continue; c.dataset.dragset='1'; c.draggable=true;
     c.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/pw-item',k); e.dataTransfer.effectAllowed='move'; c.classList.add('dragging'); });
     c.addEventListener('dragend',()=>c.classList.remove('dragging')); } }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev,fritzFullNums:!!h.fritzFullNums}; }
 /* UniFi-Cloud-Key des Kunden */
 const UC={keySet:false,loaded:false};
 async function ucLoad(){ try{ const r=await api('/api/unifi/cloud'); UC.keySet=!!r.keySet; }catch(e){} UC.loaded=true; ucRender(); }
@@ -2040,7 +2041,7 @@ async function loadFritz(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S
   drawFritzChart(r.hist||[]); FZ.x=r.extra||null; renderFritzX(); }
 function renderFritzX(){ const x=FZ.x, box=$('#fz-x'); if(!x){ box.style.display='none'; return; } box.style.display='';
   const devs=x.devices||[], act=devs.filter(d=>d.active).length;
-  const tabs=[['dev',`Geräte (${act}/${devs.length})`,devs.length],['wlan','WLAN',(x.wlan||[]).length],['tel','Telefonie',(x.voip||[]).length],['smart','Smart Home',(x.smart||[]).length],['log','Protokoll',(x.log||[]).length],['info','Box',1]].filter(t=>t[2]);
+  const tabs=[['dev',`Geräte (${act}/${devs.length})`,devs.length],['wlan','WLAN',(x.wlan||[]).length],['tel','Telefonie',(x.voip||[]).length],['dect','DECT',(x.dect||[]).length],['smart','Smart Home',(x.smart||[]).length],['log','Protokoll',(x.log||[]).length],['info','Box',1]].filter(t=>t[2]);
   if(!tabs.some(t=>t[0]===FZ.tab)) FZ.tab=tabs[0][0];
   $('#fz-tabs').innerHTML=tabs.map(t=>`<button data-t="${t[0]}" class="${t[0]===FZ.tab?'on':''}">${t[1]}</button>`).join('');
   $$('#fz-tabs button').forEach(b=>b.onclick=()=>{ FZ.tab=b.dataset.t; renderFritzX(); });
@@ -2052,6 +2053,7 @@ function renderFritzX(){ const x=FZ.x, box=$('#fz-x'); if(!x){ box.style.display
     h='<table class="tbl"><tr><th>Gerät</th><th>IP</th><th class="hide-m">MAC</th><th>Verbindung</th><th class="hide-m">Speed</th></tr>'+l.map(d=>`<tr${d.active?'':' style="opacity:.55"'}><td>${dot(d.active)}<b>${esc(d.name||'–')}</b>${d.guest?' <span class="muted">(Gast)</span>':''}</td><td class="num">${esc(d.ip||'–')}</td><td class="hide-m num">${esc(d.mac||'')}</td><td>${esc(d.iface==='802.11'?'WLAN':d.iface||'–')}</td><td class="hide-m num">${d.speed?d.speed+' Mbit/s':'–'}</td></tr>`).join('')+'</table>'; }
   if(FZ.tab==='wlan') h='<table class="tbl"><tr><th>Netz</th><th>SSID</th><th>Status</th><th>Kanal</th><th class="hide-m">Standard</th><th>Clients</th></tr>'+(x.wlan||[]).map(w=>`<tr><td>${w.band?esc(w.band.replace('GHz',' GHz')):'#'+w.idx}</td><td><b>${esc(w.ssid)}</b></td><td>${dot(w.on)}${w.on?'an':'aus'}</td><td class="num">${w.on&&w.channel?w.channel:'–'}</td><td class="hide-m">${esc(w.standard||'')}</td><td class="num">${w.on?w.clients:'–'}</td></tr>`).join('')+'</table>';
   if(FZ.tab==='tel') h='<table class="tbl"><tr><th>Rufnummer</th><th>Name</th><th>Anmeldung</th></tr>'+(x.voip||[]).map(v=>`<tr><td class="num"><b>${esc(v.number)}</b></td><td>${esc(v.name||'')}</td><td>${v.status?dot(/^registered$/i.test(v.status))+esc(/^registered$/i.test(v.status)?'angemeldet':v.status):'–'}</td></tr>`).join('')+'</table>';
+  if(FZ.tab==='dect') h='<table class="tbl"><tr><th>Mobilteil</th><th>Modell</th><th>Status</th><th>Update</th></tr>'+(x.dect||[]).map(d=>`<tr><td>${dot(d.active)}<b>${esc(d.name||'–')}</b></td><td>${esc(d.model||'')}</td><td>${d.active?'aktiv':'nicht aktiv'}</td><td>${d.update?'<span style="color:var(--warn)">verfügbar</span>':'–'}</td></tr>`).join('')+'</table>';
   if(FZ.tab==='smart') h='<table class="tbl"><tr><th>Gerät</th><th class="hide-m">Typ</th><th>Temperatur</th><th>Soll</th><th>Schalter</th><th>Leistung</th></tr>'+(x.smart||[]).map(s=>`<tr${s.present?'':' style="opacity:.55"'}><td>${dot(s.present)}<b>${esc(s.name)}</b></td><td class="hide-m">${esc(s.product||'')}</td><td class="num">${s.temp?s.temp.toLocaleString('de-DE')+' °C':'–'}</td><td class="num">${s.target?s.target.toLocaleString('de-DE')+' °C':'–'}</td><td>${s.switch==='ON'?'an':s.switch==='OFF'?'aus':'–'}</td><td class="num">${s.power?s.power.toLocaleString('de-DE')+' W':'–'}</td></tr>`).join('')+'</table>';
   if(FZ.tab==='log'){ const l=(x.log||[]).filter(hit); h=l.length?`<div style="padding:8px 12px;font-size:12.5px;line-height:1.6;max-height:360px;overflow:auto">${l.map(esc).join('<br>')}</div>`:'<div class="empty">Keine Einträge.</div>'; }
   if(FZ.tab==='info'){ const row=(k,v)=>`<tr><td class="muted">${k}</td><td>${v}</td></tr>`;
@@ -2701,7 +2703,7 @@ function openHost(id){
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
   hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
-  hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
+  hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzFullNums.checked=!!(h&&h.fritzFullNums); hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
   hf.fritzPass.placeholder=h&&h.fritzPassSet?'gespeichert – leer lassen = unverändert':'';
   syncHostForm(); dlg.showModal();
 }
@@ -2717,7 +2719,7 @@ function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=
 hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm; hf.fritz.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,group:hf.group.value==='__new'?'':hf.group.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
-  const fz=$('#hf-fritzf').style.display!=='none'&&hf.fritz.checked; Object.assign(body,{fritz:fz,fritzUser:fz?hf.fritzUser.value.trim():'',fritzPass:fz?hf.fritzPass.value:'',fritzPort:+hf.fritzPort.value||49000,fritzNewDev:fz&&hf.fritzNewDev.checked});
+  const fz=$('#hf-fritzf').style.display!=='none'&&hf.fritz.checked; Object.assign(body,{fritz:fz,fritzUser:fz?hf.fritzUser.value.trim():'',fritzPass:fz?hf.fritzPass.value:'',fritzPort:+hf.fritzPort.value||49000,fritzNewDev:fz&&hf.fritzNewDev.checked,fritzFullNums:fz&&hf.fritzFullNums.checked});
   if(fz&&!hf.fritzPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).fritzPassSet){ $('#hf-err').textContent='Bitte das Passwort des Fritzbox-Benutzers eingeben.'; return; }
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!await uiConfirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };

@@ -43,6 +43,8 @@ type HostCfg struct {
 	FritzPass string `json:"fritzPass,omitempty"` // nur an den Agenten, nie an den Browser
 	// FritzNewDev: neue Geräte im Heimnetz der Fritzbox melden
 	FritzNewDev bool `json:"fritzNewDev,omitempty"`
+	// FritzFullNums: Rufnummern vollständig anzeigen (sonst nur die letzten 4 Ziffern)
+	FritzFullNums bool `json:"fritzFullNums,omitempty"`
 }
 
 type SiteCfg struct {
@@ -169,7 +171,7 @@ func (h *HostCfg) normalize() {
 		h.Site = "cloud"
 	}
 	if !h.Fritz || h.Site == "cloud" {
-		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev = false, 0, "", "", false
+		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev, h.FritzFullNums = false, 0, "", "", false, false
 	} else if h.FritzPort != 49443 {
 		h.FritzPort = 49000
 	}

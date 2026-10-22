@@ -563,7 +563,7 @@ func (m *Monitor) fritzHostView(hc HostCfg) fritzView {
 	cut := now - 24*3600*1000
 	fh := getFritzHost(hc.ID)
 	fh.mu.Lock()
-	v.At, v.Err, v.Status, v.ConnSince, v.Extra = fh.at, fh.err, fh.cur, fh.connSince, fh.extra
+	v.At, v.Err, v.Status, v.ConnSince, v.Extra = fh.at, fh.err, fh.cur, fh.connSince, fh.extra.view(hc.FritzFullNums)
 	drops := trimTimes(fh.drops, cut)
 	v.Boots24 = len(trimTimes(fh.boots, cut))
 	var known, up int
