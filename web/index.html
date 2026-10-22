@@ -285,6 +285,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 .invch:first-child{border-top:0}
 .heal-list{display:grid;gap:4px;margin:6px 0 0 26px}
 .trial-banner{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.trial-banner a{font-weight:700;margin-left:6px;color:var(--acc)}
+#logout-btn{text-decoration:none;white-space:nowrap}@media (max-width:640px){#logout-btn .lo-t{display:none}}
 </style>
 </head>
 <body>
@@ -294,6 +295,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="summary" id="summary"></div>
   <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
   <button class="btn sm ed" id="mute-btn" title="Meldungen pausieren">🔔 Meldungen</button>
+  <a class="btn sm" id="logout-btn" href="/logout" title="Abmelden"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="lo-t"> Abmelden</span></a>
   <nav class="tabs" id="tabs">
     <a href="#/" data-v="overview">Übersicht</a>
     <a href="#/events" data-v="events">Ereignisse</a>
@@ -1700,6 +1702,7 @@ function renderTrial(){ const st=S.state||{}, o=st.org||{}, me=st.me||{}, el=$('
   if(o.trialEnded){ el.innerHTML='<div class="trial-banner">Die Testphase ist beendet – Ihr Konto läuft im kostenlosen Paket Free weiter. <a href="#/billing">Paket wählen →</a></div>'; return; }
   const d=Math.max(0,Math.ceil((o.trialUntil-Date.now())/864e5));
   el.innerHTML=`<div class="trial-banner">🧪 <b>Testphase:</b> noch ${d===1?'1 Tag':d+' Tage'} (bis ${fmtDate(o.trialUntil)}) – alle Funktionen von Pro. <a href="#/billing">Paket wählen →</a></div>`; }
+function renderLogout(){ const me=(S.state&&S.state.me)||{}; const b=$('#logout-btn'); if(b) b.title='Abmelden'+(me.email?' ('+me.email+')':''); }
 function renderTempPw(){ const me=(S.state&&S.state.me)||{}; const el=$('#pw-banner');
   if(!me.tempPw){ el.innerHTML=''; return; }
   el.innerHTML='<div class="pw-banner">⚠️ <b>Achtung:</b> Sie nutzen noch das vorläufige Passwort. <a href="#/settings/konto" id="pw-go">Hier ändern →</a></div>';
@@ -2192,7 +2195,7 @@ function route(){
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderTrial(); renderAI();
+  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderLogout(); renderTrial(); renderAI();
   if(S.view==='billing') renderBilling();
   if(S.view==='install') renderInstall();
   if(S.view==='overview') renderOverview();
