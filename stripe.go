@@ -389,6 +389,7 @@ func (s *Server) applySubscription(sub map[string]any) {
 		if !(o.ID == org || (subID != "" && o.StripeSub == subID) || (org == "" && cust != "" && o.StripeCustomer == cust)) {
 			continue
 		}
+		prevActive, prevPlan := o.Status == "active" && o.Billing == "stripe", o.Plan
 		o.StripeSub, o.StripeItem, o.Billing = subID, itemID, "stripe"
 		if cust != "" {
 			o.StripeCustomer = cust
@@ -398,6 +399,13 @@ func (s *Server) applySubscription(sub map[string]any) {
 		}
 		switch status {
 		case "active", "trialing":
+			if !prevActive || (plan != "" && prevPlan != plan) {
+				// neues bzw. geändertes Abo → Bestätigung mit Hinweis auf die Nutzungsbedingungen
+				to, name, pl := o.Email, o.Name, planByID(plan).Name
+				if to != "" && plan != "" {
+					go trialMail([]string{to}, "PingWacht: Ihr Abo ist aktiv", "Guten Tag,\n\nIhr Abo für „"+name+"“ ist aktiv (Paket "+pl+").\n\n"+termsMailText(publicBaseDefault())+"\nFragen? Antworten Sie einfach auf diese E-Mail.\n")
+				}
+			}
 			o.Status = "active"
 			if plan != "" {
 				o.Plan = plan

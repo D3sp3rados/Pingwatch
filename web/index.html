@@ -2513,7 +2513,7 @@ function route(){
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderLogout(); renderTrial(); renderAI();
+  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderLogout(); renderTrial(); renderAI(); askTerms();
   if(S.view==='billing') renderBilling();
   if(S.view==='install') renderInstall();
   if(S.view==='overview') renderOverview();
@@ -2632,7 +2632,18 @@ syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok
   const num=k=>+syf[k].value||0; const svcList=syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean);
   const restart=svcList.filter(x=>SY.restart.has(x.toLowerCase())&&HEAL_OK.test(x));
   const sys={on:syf.on.checked,updates:syf.updates.checked,selfHeal:syf.selfHeal.checked,restart,services:svcList,diskPct:num('diskPct'),diskMinGB:num('diskMinGB'),cpuPct:num('cpuPct'),memPct:num('memPct'),highMin:num('highMin'),avSigDays:num('avSigDays'),rebootDays:num('rebootDays'),evCrit:num('evCrit')};
-  try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
+  try{ if(sys.updates&&!(S.state.org&&S.state.org.actionsConsent)&&!await ensureActionsConsent()) return;
+    await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
+
+/* ---------- Nutzungsbedingungen: neue Fassung einmal bestätigen ---------- */
+let TERMS_ASKED=false;
+async function askTerms(){ const me=(S.state&&S.state.me)||{}; if(!me.termsPending||TERMS_ASKED) return; TERMS_ASKED=true;
+  const ok=await uiDialog({title:'Nutzungsbedingungen',text:'Bitte bestätigen Sie unsere Nutzungsbedingungen (Fassung '+me.termsPending+'). Kurz: PingWacht überwacht nach bestem Bemühen und ersetzt keine Datensicherung; Aktionen auf Rechnern (Updates, Neustarts, Scripts) lösen Sie selbst aus und verantworten sie; die Haftung ist bei einfacher Fahrlässigkeit begrenzt.\n\nVollständiger Text: '+location.origin+'/nutzungsbedingungen',ok:'Zustimmen',cancel:'Später'});
+  if(ok){ try{ await api('/api/terms/accept',{method:'POST',body:'{}'}); toast('Danke – Zustimmung gespeichert'); }catch(e){} } }
+/* Zustimmung beim ersten Einschalten von Updates/Neustarts/Scripts (einmal je Konto) */
+async function ensureActionsConsent(){ const c=await api('/api/actions/consent'); if(!c.needed) return true;
+  const ok=await uiDialog({title:'Updates, Neustarts und Scripts einschalten',text:c.text+'\n\nNutzungsbedingungen: '+location.origin+'/nutzungsbedingungen\n\nDiese Zustimmung gilt einmal für Ihr Konto.',ok:'Verstanden – einschalten',cancel:'Abbrechen'});
+  if(!ok) return false; await api('/api/actions/consent',{method:'POST',body:JSON.stringify({accept:true})}); return true; }
 
 /* ---------- Updates & Neustarts (Testphase) ---------- */
 let TF={on:false}; const AC={mode:'run',kind:'winupdate',scope:'',id:'',plan:null}; let UP={plans:[],acts:[],scripts:[]};

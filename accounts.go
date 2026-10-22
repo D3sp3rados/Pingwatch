@@ -70,8 +70,14 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 		me["email"] = p.User.Email
 		me["name"] = p.User.Name
 		me["id"] = p.User.ID
-		if u := s.m.userByID(p.User.ID); u != nil && u.TempPW {
-			me["tempPw"] = true
+		if u := s.m.userByID(p.User.ID); u != nil {
+			if u.TempPW {
+				me["tempPw"] = true
+			}
+			if u.Terms == nil || u.Terms.Ver != termsVersion {
+				me["termsPending"] = termsVersion // neue Fassung der Nutzungsbedingungen bestätigen
+			}
+			me["totp"] = u.TOTP != ""
 		}
 	} else {
 		me["email"] = "admin"
@@ -88,6 +94,7 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 			"status": o.Status, "billing": o.Billing, "retention": o.retention(s.m.cfg.RetentionDays),
 			"features": pl.Features, "minInterval": pl.MinInterval, "paidUntil": o.PaidUntil,
 			"hasStripe": o.StripeCustomer != "", "email": o.Email, "trialUntil": o.TrialUntil, "trialEnded": o.TrialEnded,
+			"actionsConsent": o.ActionsConsent != nil,
 		}
 	}
 	s.aiAccountInfo(p, s.m.orgByID(p.Org), out)
@@ -287,7 +294,7 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 <label>E-Mail</label><input name="email" type="email" required value="{{.Email}}" autocomplete="email">
 <label>Passwort (mind. 8 Zeichen)</label><input name="password" type="password" required minlength="8" autocomplete="new-password">
 <div class="hp" aria-hidden="true"><label>Website</label><input name="website" tabindex="-1" autocomplete="off"></div>
-<label class="chk"><input type="checkbox" name="terms" required> <span>Ich akzeptiere {{if .P.terms}}die <a href="{{.P.terms}}" target="_blank">AGB</a> und {{end}}die <a href="{{.P.privacy}}" target="_blank">Datenschutzerklärung</a>.</span></label>
+<label class="chk"><input type="checkbox" name="terms" required> <span>Ich akzeptiere {{if .P.terms}}die <a href="{{.P.terms}}" target="_blank">Nutzungsbedingungen</a> und {{end}}die <a href="{{.P.privacy}}" target="_blank">Datenschutzerklärung</a>.</span></label>
 <button>Test starten</button>
 <div class="small">Schon registriert? <a href="/login">Anmelden</a> · Anbieter: {{.P.name}} · <a href="{{.P.imprint}}" target="_blank">Impressum</a></div>
 </form></body></html>`))
@@ -321,7 +328,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		case len(pw) < 8:
 			err = "Passwort zu kurz (mind. 8 Zeichen)."
 		case r.FormValue("terms") == "":
-			err = "Bitte Datenschutzerklärung bestätigen."
+			err = "Bitte Nutzungsbedingungen und Datenschutzerklärung bestätigen."
 		case s.m.userByEmail(email) != nil:
 			err = "Diese E-Mail ist bereits registriert."
 		}
@@ -329,7 +336,8 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 			now := time.Now()
 			o := Org{ID: randHex(5), Name: org, Plan: "pro", Sites: 1, Created: now.UnixMilli(), Email: email, Status: "active",
 				TrialUntil: now.Add(time.Duration(days) * 24 * time.Hour).UnixMilli()}
-			u := User{ID: randHex(6), Email: email, Name: name, Org: o.ID, Role: "owner", PassHash: hashPassword(pw), Created: o.Created}
+			u := User{ID: randHex(6), Email: email, Name: name, Org: o.ID, Role: "owner", PassHash: hashPassword(pw), Created: o.Created,
+				Terms: &Consent{Ver: termsVersion, At: o.Created, By: email, IP: clientIP(r)}}
 			s.m.mu.Lock()
 			s.m.cfg.Orgs = append(s.m.cfg.Orgs, o)
 			s.m.cfg.Users = append(s.m.cfg.Users, u)
@@ -345,7 +353,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 				} else {
 					hello = "Hallo " + hello
 				}
-				trialMail([]string{email}, "Willkommen bei PingWacht", fmt.Sprintf("%s,\n\nIhr Testzugang für „%s“ ist eingerichtet. Sie können alle Funktionen des Pakets Pro bis zum %s kostenlos nutzen – ohne Kreditkarte, die Testphase endet automatisch.\n\nAnmelden: %s/login\nE-Mail: %s\n\nErste Schritte:\n1. Unter „Installieren“ den Agent für Ihr Netz herunterladen (Windows, Mac, Linux/Raspberry Pi, Home Assistant).\n2. Hosts anlegen – oder UniFi über die UniFi-Cloud verbinden.\n3. Unter „Mein Konto“ Push-Benachrichtigungen einschalten.\n\nFragen? Antworten Sie einfach auf diese E-Mail.\n", hello, org, until, base, email))
+				trialMail([]string{email}, "Willkommen bei PingWacht", fmt.Sprintf("%s,\n\nIhr Testzugang für „%s“ ist eingerichtet. Sie können alle Funktionen des Pakets Pro bis zum %s kostenlos nutzen – ohne Kreditkarte, die Testphase endet automatisch.\n\nAnmelden: %s/login\nE-Mail: %s\n\nErste Schritte:\n1. Unter „Installieren“ den Agent für Ihr Netz herunterladen (Windows, Mac, Linux/Raspberry Pi, Home Assistant).\n2. Hosts anlegen – oder UniFi über die UniFi-Cloud verbinden.\n3. Unter „Mein Konto“ Push-Benachrichtigungen einschalten.\n\n%s\nFragen? Antworten Sie einfach auf diese E-Mail.\n", hello, org, until, base, email, termsMailText(base)))
 				trialMail(operatorEmails(), "PingWacht: neue Registrierung – "+org, fmt.Sprintf("Neue Registrierung mit Testphase bis %s:\n\nFirma: %s\nName: %s\nE-Mail: %s\n\n%s/#/admin\n", until, org, name, email, base))
 			}()
 			s.setSession(w, r, s.makeToken(u.ID, userRef(&u)))

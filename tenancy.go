@@ -44,6 +44,8 @@ type Org struct {
 	StripeCustomer string `json:"stripeCustomer,omitempty"`
 	StripeSub      string `json:"stripeSub,omitempty"`
 	StripeItem     string `json:"stripeItem,omitempty"`
+	// einmalige Zustimmung beim ersten Einschalten von Updates/Neustarts/Scripts
+	ActionsConsent *Consent `json:"actionsConsent,omitempty"`
 }
 
 type User struct {
@@ -62,6 +64,7 @@ type User struct {
 	// Zwei-Faktor-Code (TOTP) für Updates/Neustarts: aktives bzw. noch nicht bestätigtes Geheimnis
 	TOTP        string `json:"totp,omitempty"`
 	TOTPPending string `json:"totpPending,omitempty"`
+	Terms *Consent `json:"terms,omitempty"` // Zustimmung zu den Nutzungsbedingungen
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.
@@ -533,7 +536,7 @@ func providerInfo() map[string]string {
 		"url":      envOr("PROVIDER_URL", "https://rst.de"),
 		"imprint":  envOr("PROVIDER_IMPRINT_URL", "/impressum"),
 		"privacy":  envOr("PROVIDER_PRIVACY_URL", "/datenschutz"),
-		"terms":    os.Getenv("PROVIDER_TERMS_URL"),
+		"terms":    envOr("PROVIDER_TERMS_URL", "/nutzungsbedingungen"),
 		"email":    envOr("PROVIDER_EMAIL", ""),
 		"signup":   strconv.FormatBool(os.Getenv("ALLOW_SIGNUP") == "1"),
 		"currency": "EUR",

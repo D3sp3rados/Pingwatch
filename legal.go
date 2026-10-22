@@ -40,7 +40,7 @@ a{color:var(--acc)}.brand{display:flex;align-items:center;gap:9px;font-weight:70
 .brand img{width:28px;height:28px;border-radius:7px}nav{max-width:760px;margin:14px auto 0;font-size:13px;color:var(--mut)}nav a{margin-right:14px}
 </style></head><body><a class="brand" href="/"><img src="/icon.svg" alt=""><span>Ping<span style="color:var(--acc)">Wacht</span></span></a><main>`
 
-const legalFoot = `</main><nav><a href="/">Zur App</a><a href="/impressum">Impressum</a><a href="/datenschutz">Datenschutz</a></nav></body></html>`
+const legalFoot = `</main><nav><a href="/">Zur App</a><a href="/impressum">Impressum</a><a href="/datenschutz">Datenschutz</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a></nav></body></html>`
 
 var impressumTmpl = template.Must(template.New("i").Parse(legalHead + `
 <h1>Impressum</h1>

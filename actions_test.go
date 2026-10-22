@@ -36,6 +36,12 @@ func TestActionsAndPlans(t *testing.T) {
 	if code, _ := c.do("POST", "/api/actions", map[string]any{"kind": "winupdate", "scope": "machine", "id": mc.ID, "code": "000000"}); code != 400 {
 		t.Fatal("ohne Erlaubnis", code)
 	}
+	if code, _ := c.do("POST", "/api/sites", map[string]any{"id": sc.ID, "sys": map[string]any{"on": true, "updates": true}}); code != 428 {
+		t.Fatal("ohne Zustimmung eingeschaltet", code)
+	}
+	if code, _ := c.do("POST", "/api/actions/consent", map[string]any{"accept": true}); code != 200 {
+		t.Fatal("Zustimmung", code)
+	}
 	c.do("POST", "/api/sites", map[string]any{"id": sc.ID, "sys": map[string]any{"on": true, "updates": true}})
 	// ohne Zwei-Faktor
 	if code, _ := c.do("POST", "/api/actions", map[string]any{"kind": "winupdate", "scope": "machine", "id": mc.ID, "code": "000000"}); code != 412 {
@@ -110,6 +116,7 @@ func TestAgentActionsGuard(t *testing.T) {
 	if a.sysActions {
 		t.Fatal("ohne Erlaubnis am Standort an")
 	}
+	c.do("POST", "/api/actions/consent", map[string]any{"accept": true})
 	c.do("POST", "/api/sites", map[string]any{"id": site.ID, "sys": map[string]any{"on": true, "updates": true}})
 	a.fetchConfig()
 	b.fetchConfig()
@@ -177,6 +184,7 @@ func TestScriptsLibraryAndRun(t *testing.T) {
 	_, sb := c.do("POST", "/api/sites", map[string]any{"name": "Büro"})
 	var site SiteCfg
 	json.Unmarshal([]byte(sb), &site)
+	c.do("POST", "/api/actions/consent", map[string]any{"accept": true})
 	c.do("POST", "/api/sites", map[string]any{"id": site.ID, "sys": map[string]any{"on": true, "updates": true}})
 	mc, _ := s.m.registerMachine(site, "srv", "SRV", true)
 	if code, b := c.do("POST", "/api/updateplans", map[string]any{"name": "WG-Check", "kind": "script", "scriptId": sc.ID, "every": 1, "scope": "site", "target": site.ID, "on": true, "code": code()}); code != 200 {

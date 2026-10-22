@@ -238,6 +238,7 @@ func (s *Server) routes() http.Handler {
 	})
 	mux.HandleFunc("/impressum", s.handleLegal)
 	mux.HandleFunc("/datenschutz", s.handleLegal)
+	mux.HandleFunc("/nutzungsbedingungen", s.handleTerms)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
@@ -313,6 +314,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
 	mux.HandleFunc("/api/totp", protect(s.handleTOTP))
+	mux.HandleFunc("/api/terms/accept", protect(s.handleTermsAccept))
+	mux.HandleFunc("/api/actions/consent", protect(s.handleActionsConsent))
 	mux.HandleFunc("/api/actions", protect(s.handleActions))
 	mux.HandleFunc("/api/updateplans", protect(s.handleUpdatePlans))
 	mux.HandleFunc("/api/scripts", protect(s.handleScripts))
@@ -960,6 +963,12 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 		if sc.SetCustomer != nil && *sc.SetCustomer != "" && !s.m.customerExists(p.Org, *sc.SetCustomer) {
 			http.Error(w, "Kunde unbekannt", 400)
 			return
+		}
+		if sc.Sys != nil && sc.Sys.Updates {
+			if o := s.m.orgByID(p.Org); o != nil && o.ActionsConsent == nil {
+				http.Error(w, "consent: Bitte zuerst den Hinweisen zu Updates, Neustarts und Scripts zustimmen", 428)
+				return
+			}
 		}
 		sc.Customer, sc.Number = "", "" // nur über setCustomer/setNumber
 		sc.AgentVer, sc.AgentPrev, sc.AgentUpdated = "", "", 0
