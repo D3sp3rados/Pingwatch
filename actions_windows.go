@@ -17,23 +17,29 @@ import (
 const psInstallUpdates = psSearchFn + `$ErrorActionPreference='Stop'
 try{
 $s=New-Object -ComObject Microsoft.Update.Session; $s.ClientApplicationID='PingWacht'
-$found=PWSearch "IsInstalled=0 and IsHidden=0 and Type='Software'"
 $sec=@('0fa1201d-4330-4fa8-8ae9-b877473b6441','e6cf1350-c01b-414d-a61f-263d14d133b4','e0789628-ce08-4437-be74-2495b842f43b','28bc880e-0592-4cbf-8f95-c79b17911d5f')
-$c=New-Object -ComObject Microsoft.Update.UpdateColl
-foreach($u in $found){
-  $ids=@($u.Categories | ForEach-Object { ([string]$_.CategoryID).ToLower() })
-  if($ids -contains '3689bdc8-b205-4af4-8d4a-a63924c5e9d5'){ continue }
-  if('@@CAT@@' -ne 'all' -and -not ($ids | Where-Object { $sec -contains $_ })){ continue }
-  if(-not $u.EulaAccepted){ $u.AcceptEula() }
-  [void]$c.Add($u)
+$ok=@(); $fail=@(); $rb=$false; $seen=@{}; $any=$false
+# je Update-Dienst getrennt suchen, laden und installieren (gemischte Quellen in einem Auftrag mag Windows nicht)
+foreach($sid in (PWServices)){
+  try{ $us=PWSearchIn $s $sid "IsInstalled=0 and IsHidden=0 and Type='Software'"; $any=$true }catch{ continue }
+  $c=New-Object -ComObject Microsoft.Update.UpdateColl
+  foreach($u in $us){
+    $id=[string]$u.Identity.UpdateID; if($seen.ContainsKey($id)){ continue }; $seen[$id]=1
+    $ids=@($u.Categories | ForEach-Object { ([string]$_.CategoryID).ToLower() })
+    if($ids -contains '3689bdc8-b205-4af4-8d4a-a63924c5e9d5'){ continue }
+    if('@@CAT@@' -ne 'all' -and -not ($ids | Where-Object { $sec -contains $_ })){ continue }
+    if(-not $u.EulaAccepted){ $u.AcceptEula() }
+    [void]$c.Add($u)
+  }
+  if($c.Count -eq 0){ continue }
+  try{
+    $d=$s.CreateUpdateDownloader(); $d.Updates=$c; [void]$d.Download()
+    $i=$s.CreateUpdateInstaller(); $i.Updates=$c; $ir=$i.Install()
+    for($k=0;$k -lt $c.Count;$k++){ $rc=$ir.GetUpdateResult($k).ResultCode; if($rc -eq 2 -or $rc -eq 3){ $ok+=[string]$c.Item($k).Title } else { $fail+=[string]$c.Item($k).Title } }
+    if($ir.RebootRequired){ $rb=$true }
+  }catch{ for($k=0;$k -lt $c.Count;$k++){ $fail+=([string]$c.Item($k).Title+' ('+$_.Exception.Message+')') } }
 }
-$ok=@(); $fail=@(); $rb=$false
-if($c.Count -gt 0){
-  $d=$s.CreateUpdateDownloader(); $d.Updates=$c; [void]$d.Download()
-  $i=$s.CreateUpdateInstaller(); $i.Updates=$c; $ir=$i.Install()
-  for($k=0;$k -lt $c.Count;$k++){ $rc=$ir.GetUpdateResult($k).ResultCode; if($rc -eq 2 -or $rc -eq 3){ $ok+=[string]$c.Item($k).Title } else { $fail+=[string]$c.Item($k).Title } }
-  $rb=[bool]$ir.RebootRequired
-}
+if(-not $any){ throw 'Windows Update nicht erreichbar' }
 try{ if((New-Object -ComObject Microsoft.Update.SystemInfo).RebootRequired){ $rb=$true } }catch{}
 ConvertTo-Json -Compress @{ok=$ok;fail=$fail;reboot=$rb}
 }catch{ ConvertTo-Json -Compress @{error=[string]$_.Exception.Message} }`

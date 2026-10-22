@@ -205,12 +205,13 @@ func antivirus() *sysAV {
 
 // psUpdates: alle nicht installierten, nicht ausgeblendeten Updates wie in „Windows Update“
 // (online gesucht, inkl. Defender-Signaturen, .NET und Treiber) – Anzahl, davon Treiber, Titel.
-// psSearchFn: sucht bei Windows Update, beim Standarddienst (ggf. WSUS) und bei Microsoft Update
-// („Updates für andere Microsoft-Produkte“, z. B. .NET, PowerShell 7) und führt die Ergebnisse zusammen –
-// so wie die Einstellungen-App mehrere Quellen abfragt.
-const psSearchFn = `function PWSearch($crit){ $s=New-Object -ComObject Microsoft.Update.Session; $s.ClientApplicationID='PingWacht'; $seen=@{}; $list=New-Object System.Collections.ArrayList; $ok=$false
- foreach($mode in 0,2,3){ try{ $q=$s.CreateUpdateSearcher(); $q.Online=$true; if($mode -eq 2){ $q.ServerSelection=2 } elseif($mode -eq 3){ $q.ServerSelection=3; $q.ServiceID='7971f918-a847-4430-9279-4a52d1efe18d' }
-  $r=$q.Search($crit); $ok=$true; foreach($u in $r.Updates){ $id=[string]$u.Identity.UpdateID; if(-not $seen.ContainsKey($id)){ $seen[$id]=1; [void]$list.Add($u) } } }catch{} }
+// psSearchFn: sucht beim Standarddienst (ggf. WSUS) und bei jedem registrierten Update-Dienst
+// (Microsoft Update, Windows Update, DCat …, ohne Store) und führt die Ergebnisse zusammen –
+// so wie die Einstellungen-App mehrere Quellen abfragt (z. B. Defender-Signaturen, .NET 8/10).
+const psSearchFn = `function PWServices(){ $ids=@(''); try{ $sm=New-Object -ComObject Microsoft.Update.ServiceManager; foreach($v in $sm.Services){ $id=([string]$v.ServiceID).ToLower(); if($id -ne '855e8a7c-ecb4-4ca3-b045-1dfa50104289'){ $ids+=$id } } }catch{}; if($ids -notcontains '9482f4b4-e343-43b6-b170-9a65bc822c77'){ $ids+='ws' }; return ,$ids }
+function PWSearchIn($s,$sid,$crit){ $q=$s.CreateUpdateSearcher(); $q.Online=$true; if($sid -eq 'ws'){ $q.ServerSelection=2 } elseif($sid){ $q.ServerSelection=3; $q.ServiceID=$sid }; return ,$q.Search($crit).Updates }
+function PWSearch($crit){ $s=New-Object -ComObject Microsoft.Update.Session; $s.ClientApplicationID='PingWacht'; $seen=@{}; $list=New-Object System.Collections.ArrayList; $ok=$false
+ foreach($sid in (PWServices)){ try{ $us=PWSearchIn $s $sid $crit; $ok=$true; foreach($u in $us){ $id=[string]$u.Identity.UpdateID; if(-not $seen.ContainsKey($id)){ $seen[$id]=1; [void]$list.Add($u) } } }catch{} }
  if(-not $ok){ throw 'Windows Update nicht erreichbar' }; return ,$list }
 `
 
