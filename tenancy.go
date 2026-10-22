@@ -59,6 +59,9 @@ type User struct {
 	Expires   int64        `json:"expires,omitempty"` // Zugang gültig bis (ms), 0 = unbegrenzt
 	Notify    *NotifyPrefs `json:"notify,omitempty"`
 	TempPW    bool         `json:"tempPw,omitempty"` // vorläufiges Passwort, muss noch geändert werden
+	// Zwei-Faktor-Code (TOTP) für Updates/Neustarts: aktives bzw. noch nicht bestätigtes Geheimnis
+	TOTP        string `json:"totp,omitempty"`
+	TOTPPending string `json:"totpPending,omitempty"`
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.

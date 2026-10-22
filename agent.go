@@ -26,6 +26,8 @@ type AgentFile struct {
 	Mode string `json:"mode,omitempty"`
 	// true: dieser Agent startet niemals Dienste neu, auch wenn es im Dashboard erlaubt ist
 	NoSelfHeal bool `json:"noSelfHeal,omitempty"`
+	// true: dieser Agent installiert nie Updates und startet den Rechner nie neu (auch wenn im Dashboard erlaubt)
+	NoActions bool `json:"noActions,omitempty"`
 	// Ordner für Datenbank-Sicherungen (leer = <Datenordner>/backups)
 	BackupDir string `json:"backupDir,omitempty"`
 }
@@ -73,6 +75,7 @@ type Agent struct {
 	machine string
 	// Selbstheilung (nur wenn am Standort erlaubt und nicht in agent.json abgeschaltet)
 	sysHeal    bool
+	sysActions bool // Updates/Neustart erlaubt (Dashboard und agent.json)
 	sysRestart []string
 	invMu      sync.Mutex
 	invBusy    bool
@@ -288,6 +291,7 @@ func (a *Agent) fetchConfig() bool {
 			Services []string `json:"services"`
 			SelfHeal bool     `json:"selfHeal"`
 			Restart  []string `json:"restart"`
+			Updates  bool     `json:"updates"`
 		} `json:"sys"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
@@ -316,6 +320,7 @@ func (a *Agent) fetchConfig() bool {
 		a.siteName += " (nur Rechner)"
 	}
 	a.sysOn, a.sysSvcs, a.sysHeal, a.sysRestart = cfg.Sys != nil && cfg.Sys.On, nil, false, nil
+	a.sysActions = cfg.Sys != nil && cfg.Sys.On && cfg.Sys.Updates && !a.file.NoActions
 	if cfg.Sys != nil {
 		a.sysSvcs = cfg.Sys.Services
 		a.sysHeal, a.sysRestart = cfg.Sys.SelfHeal && !a.file.NoSelfHeal, cfg.Sys.Restart

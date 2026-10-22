@@ -54,11 +54,25 @@ func takeJobs(site string) []agentJob {
 			st.Status = "running"
 		}
 	}
-	// alte Aufträge aufräumen
+	// alte Aufträge aufräumen (Updates/Neustarts warten länger auf ausgeschaltete Rechner)
 	cut := time.Now().Add(-30 * time.Minute).UnixMilli()
+	cutA := time.Now().Add(-actionJobTTL).UnixMilli()
 	for id, st := range jobs.byID {
-		if st.Created < cut {
+		if st.Created < cutA || (st.Created < cut && actionKinds[st.Kind] == "") {
 			delete(jobs.byID, id)
+		}
+	}
+	for k, list := range jobs.queue {
+		keep := list[:0]
+		for _, j := range list {
+			if jobs.byID[j.ID] != nil {
+				keep = append(keep, j)
+			}
+		}
+		if len(keep) == 0 {
+			delete(jobs.queue, k)
+		} else {
+			jobs.queue[k] = keep
 		}
 	}
 	return q
@@ -251,6 +265,9 @@ func (s *Server) handleAgentJob(w http.ResponseWriter, r *http.Request) {
 	} else {
 		st.Status, st.Result = "done", req.Result
 	}
+	if actionKinds[st.Kind] != "" {
+		go s.m.actionJobDone(st.ID, st.Kind, req.Error, req.Result)
+	}
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
@@ -289,6 +306,26 @@ func (a *Agent) runJob(j agentJob) {
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
 		res, err = unifiProbe(j.Params["url"], j.Params["key"], strings.Split(j.Params["paths"], ","))
+	case "winupdate", "reboot":
+		if m := j.Params["machine"]; m == "" || !strings.HasSuffix(m, ":"+a.machine) {
+			err = errors.New("Auftrag gilt für einen anderen Rechner")
+			break
+		}
+		a.mu.Lock()
+		allowed := a.sysActions
+		a.mu.Unlock()
+		switch {
+		case a.file.NoActions:
+			err = errors.New("auf diesem Rechner abgeschaltet (\"noActions\" in der agent.json)")
+		case !allowed:
+			err = errors.New("für diesen Standort nicht erlaubt")
+		case j.Kind == "reboot":
+			if err = rebootMachine(60); err == nil {
+				res = actionResult{Message: "Neustart in 1 Minute"}
+			}
+		default:
+			res, err = installUpdates(j.Params["cat"], j.Params["reboot"])
+		}
 	case "inventory":
 		if m := j.Params["machine"]; m != "" && !strings.HasSuffix(m, ":"+a.machine) {
 			err = errors.New("Auftrag gilt für einen anderen Rechner")

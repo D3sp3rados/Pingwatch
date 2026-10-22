@@ -35,6 +35,8 @@ type SysCfg struct {
 	// Dienst ausdrücklich in Restart steht (Teilmenge von Services). Standard: aus.
 	SelfHeal bool     `json:"selfHeal,omitempty"`
 	Restart  []string `json:"restart,omitempty"`
+	// Updates installieren und Neustarts über PingWacht erlauben (Standard: aus)
+	Updates bool `json:"updates,omitempty"`
 }
 
 // validServiceName: nur harmlose Zeichen in Dienstnamen (für den automatischen Neustart).

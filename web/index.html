@@ -72,6 +72,7 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .seg button.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 /* Übersicht */
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .site-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-weight:600}
 .ov-wrap.has-tree{display:grid;grid-template-columns:270px minmax(0,1fr);gap:18px;align-items:start}
 #ov-tree{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px}
@@ -399,6 +400,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="dot" id="m-dot"></span>
     <h1 id="m-name"></h1>
     <span class="muted" id="m-sub"></span>
+    <button class="btn sm ed" id="m-upd" style="margin-left:auto;display:none">⬆️ Updates</button>
+    <button class="btn sm ed" id="m-reboot" style="display:none">🔄 Neu starten</button>
     <button class="btn sm ed" id="m-mute" style="margin-left:auto">🔕 Stummschalten</button>
     <button class="btn sm ed" id="m-edit">Bearbeiten</button>
   </div>
@@ -427,6 +430,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div><h2>Laufwerke</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-disks"></table></div></div>
     <div><h2>Dienste</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-svcs"></table></div></div>
   </div>
+  <div id="m-actw" style="display:none"><h2>Updates &amp; Neustarts</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-acts"></table></div></div>
   <h2>Ereignisse <span class="sub muted" style="font-weight:400;font-size:12.5px">letzte 7 Tage</span></h2>
   <div class="panel evlist" id="m-events"></div>
   </div>
@@ -475,7 +479,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a></div>
+  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a></div>
   <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
@@ -527,6 +531,14 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="mt-tbl"></table></div>
   <p class="muted" style="font-size:12.5px">Während einer Wartung gibt es keine Alarme, und Ausfälle zählen nicht in die Verfügbarkeit (Monatsbericht).</p>
 
+  </div>
+  <div class="setcat" data-cat="updates">
+  <div class="panel" style="padding:12px 14px;border-left:4px solid var(--warn);font-size:13.5px"><b>Testphase:</b> PingWacht kann auf Windows- und Linux-Rechnern Updates suchen und installieren und – wenn nötig – neu starten, sofort oder per Plan. Nur diese festen Aktionen, keine freien Befehle.<br>
+    Voraussetzungen: am Standort unter <b>💻 Rechner-Überwachung</b> „Updates und Neustarts erlauben“ und die <a href="#/settings/konto">Zwei-Faktor-Anmeldung</a>. Auf einem einzelnen Rechner abschaltbar mit <code>"noActions": true</code> in dessen agent.json. Während Updates mit Neustart sind Meldungen der Rechner 2 Stunden stumm.</div>
+  <h2>Update-Pläne <button class="btn sm pri ed" id="add-uplan">+ Plan</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="up-tbl"></table></div>
+  <h2>Protokoll <span class="sub muted" style="font-weight:400;font-size:12.5px">Updates und Neustarts – wer, wann, was, Ergebnis</span></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="act-tbl"></table></div>
   </div>
   <div class="setcat" data-cat="team">
   <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
@@ -609,6 +621,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <b>Android:</b> Seite in Chrome öffnen → Menü ⋮ → <b>Zum Startbildschirm hinzufügen</b> (bzw. „App installieren“).<br>
     <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWacht vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWacht-App aus TestFlight nutzen.<br><a href="#/install">Alle Installations-Wege (Apps und Agenten) →</a>
   </div>
+  <h2>Zwei-Faktor-Anmeldung</h2>
+  <div class="panel" style="padding:14px" id="tf-box"></div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
   </div>
   <div class="setcat" data-cat="system">
@@ -760,6 +774,30 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-act">
+  <form method="dialog" id="ac-form">
+    <div class="dlg-h" id="ac-title"></div>
+    <div class="dlg-b" style="display:block">
+      <div id="ac-target" style="font-size:13.5px;margin-bottom:10px"></div>
+      <div id="ac-plan" style="display:none">
+        <label class="field">Name<input name="pname" maxlength="80" placeholder="z. B. Patchday Kindergärten"></label>
+        <label class="field">Für<select name="ptarget"></select></label>
+        <div id="ac-days" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 8px"></div>
+        <label class="field">Uhrzeit<input type="time" name="pat" value="22:00"></label>
+        <label class="check"><input type="checkbox" name="pon" checked> <span>Plan aktiv</span></label>
+      </div>
+      <div id="ac-upd">
+        <label class="field">Welche Updates<select name="cat"><option value="security">Sicherheitsupdates (inkl. Defender-Signaturen und Tool gegen Schadsoftware)</option><option value="all">Alle Updates (ohne Funktionsupdates und Treiber)</option></select></label>
+        <label class="field">Neustart<select name="reboot"><option value="ifneeded">wenn nötig – 5 Minuten nach der Installation</option><option value="never">nie – nur melden, dass einer nötig ist</option></select></label>
+      </div>
+      <label class="field">Zwei-Faktor-Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-stelliger Code aus der Authenticator-App"></label>
+      <div class="muted" style="font-size:12.5px" id="ac-hint"></div>
+    </div>
+    <div class="dlg-err" id="ac-err"></div>
+    <div class="dlg-f"><button class="btn danger" type="button" id="ac-del" style="margin-right:auto;display:none">Plan löschen</button><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok" id="ac-ok">Starten</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-group">
   <form method="dialog" id="gr-form">
     <div class="dlg-h" id="gf-title">Gruppe anlegen</div>
@@ -891,6 +929,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       <label class="check"><input type="checkbox" name="on"> <span><b>Rechner überwachen</b> – der Rechner mit dem Agent und weitere Rechner mit dem Agent im Modus „nur Rechner“ melden jede Minute CPU, Arbeitsspeicher, Laufwerke, Dienste, Updates, Virenschutz und ausstehende Neustarts. Es wird nur gemessen, nichts ferngesteuert.</span></label>
       <label class="field" style="margin-top:10px">Überwachte Dienste (einer pro Zeile)<textarea name="services" rows="3" placeholder="Spooler&#10;MSSQLSERVER&#10;smbd"></textarea><small>Windows: Dienstname oder Anzeigename (services.msc). Linux: systemd-Dienst. Mac: launchd-Label. Meldung, wenn ein Dienst nicht läuft.</small></label>
       <label class="check" style="margin-top:4px"><input type="checkbox" name="selfHeal"> <span><b>Selbstheilung erlauben</b> – gestoppte Dienste, die unten markiert sind, startet der Agent automatisch neu (höchstens 3 Versuche im Abstand von 1 Minute). Andere Dienste und Befehle werden nie ausgeführt. Kann auf dem Rechner zusätzlich mit <code>"noSelfHeal": true</code> in der agent.json abgeschaltet werden; unter Windows braucht der Agent dafür Administratorrechte.</span></label>
+      <label class="check" style="margin-top:4px"><input type="checkbox" name="updates"> <span><b>Updates und Neustarts erlauben</b> (Testphase) – Inhaber und Admins können für die Rechner dieses Standorts mit Zwei-Faktor-Code Updates installieren und neu starten, auch per Plan (Einstellungen → Updates). Nur diese festen Aktionen, keine freien Befehle.</span></label>
       <div class="heal-list" id="sy-heal"></div>
       <div class="syscfg-grid" style="margin-top:8px">
         <label class="field">Laufwerk voll ab (%)<input name="diskPct" type="number" min="50" max="99"></label>
@@ -1152,8 +1191,10 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   const selS=OVF.s&&st0.sites.find(x=>x.id===OVF.s), selC=OVF.c&&OVF.c!=='-'&&cs.find(c=>c.id===OVF.c);
   const lbl=selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
   const muteable=selS||selC, canEd=!st0.me||st0.me.role!=='viewer';
-  const ch=lbl?`📍 ${lbl} ${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
+  const actable=muteable&&canEd&&st0.sites.some(x=>siteActOK(x)&&(selS?x.id===selS.id:x.customer===OVF.c));
+  const ch=lbl?`📍 ${lbl} ${actable?'<button class="btn sm" id="crumb-upd" type="button">⬆️ Updates</button>':''}${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
   if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s=''; ovfSave(); ovRerender(); };
+    const ub=$('#crumb-upd'); if(ub) ub.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('winupdate','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('winupdate','customer',OVF.c,co?co.name:''); } };
     const mb=$('#crumb-mute'); if(mb) mb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openMute('site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openMute('customer',OVF.c,co?co.name:''); } }; }
   $('#tr-mob').innerHTML=`<span>☰ ${lbl?lbl.replace(/<[^>]+>/g,''):'Alle Kunden & Standorte'}</span><span>${nb?`<b style="color:var(--bad)">${nb} gestört</b>`:''} ▾</span>`; }
 (()=>{ const el=$('#ov-tree');
@@ -1582,9 +1623,10 @@ $('#s-days').onchange=loadStats;
 function verNewer(a,b){ if(!a||!b) return false; const pa=a.split('.').map(Number), pb=b.split('.').map(Number); for(let i=0;i<3;i++){ const x=pa[i]||0, y=pb[i]||0; if(x!==y) return x>y; } return false; }
 $('#hosts-q').addEventListener('input',()=>renderSettings());
 /* Einstellungen in Reitern: #/settings/<kategorie>, zuletzt gewählte wird gemerkt */
-const SET_CATS=['hosts','sites','alerts','team','status','konto','system'];
+const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','system'];
 function setCat(c){ if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
   try{ localStorage.setItem('pw_setcat',c); }catch(e){}
+  if(c==='updates') loadUpdates(); if(c==='konto') renderTF();
   $$('#v-settings .setcat').forEach(d=>d.style.display=d.dataset.cat===c?'':'none');
   $$('#set-tabs a').forEach(a=>a.classList.toggle('on',a.dataset.cat===c));
   const on=$('#set-tabs a.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'}); }
@@ -2447,13 +2489,16 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(S.
 /* ---------- Rechner: Detailansicht ---------- */
 const MD={id:null,data:null,range:'24h',evs:[]};
 function machineOf(id){ return ((S.state&&S.state.machines)||[]).find(m=>m.id===id); }
-async function loadMachine(){ const id=MD.id; if(!id) return;
+async function loadMachine(){ const id=MD.id; if(!id) return; if(MD.actsId!==id){ MD.acts=[]; MD.actsId=id; }
   try{ const d=await api('/api/machine?id='+encodeURIComponent(id)); if(MD.id!==id) return; MD.data=d; }catch(e){ if(MD.id===id){ $('#m-name').textContent='Rechner nicht gefunden'; } return; }
   try{ const evs=await api('/api/events?limit=200&host='+encodeURIComponent('m:'+id)+'&from='+(Date.now()-7*864e5)); if(MD.id===id){ MD.evs=evs; renderEvents($('#m-events'),evs,true,50); } }catch(e){}
+  try{ const acts=await api('/api/actions?machine='+encodeURIComponent(id)); if(MD.id===id) MD.acts=acts; }catch(e){}
   renderMachine(); }
 function renderMachine(){ const d=MD.data||machineOf(MD.id); if(!d){ $('#m-name').textContent='…'; return; }
   const m=machineOf(MD.id)||d, r=(MD.data&&MD.data.cur)||m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
   $('#m-dot').style.background=`var(${col})`; $('#m-name').textContent='💻 '+m.name;
+  { const so=S.state.sites.find(x=>x.id===m.site), ok=siteActOK(so); $('#m-upd').style.display=ok?'':'none'; $('#m-reboot').style.display=ok?'':'none'; $('#m-mute').style.marginLeft=ok?'0':'auto';
+    const acts=MD.acts||[]; $('#m-actw').style.display=ok||acts.length?'':'none'; const t=$('#m-acts'); t.innerHTML=actRows(acts,false); bindActRows(t,acts); }
   $('#m-sub').textContent=[r.os,m.host&&m.host!==m.name?m.host:'',siteName(m.site),m.sysOnly?'Agent „nur Rechner“':'Standort-Agent',m.at?'Stand '+fmtTime(m.at,false):''].filter(Boolean).join(' · ');
   const probs=m.problems||[]; $('#m-probs').innerHTML=(m.status==='off'?[`<span class="tag bad">Meldet sich nicht${m.at?' seit '+fmtDT(m.at,false):''}</span>`]:[]).concat(probs.map(p=>`<span class="tag ${/Dienst|Virenschutz/.test(p)?'bad':'warn'}">${esc(p)}</span>`)).join('')+(m.status==='disabled'?'<span class="tag">Rechner-Überwachung am Standort ausgeschaltet</span>':'');
   const st=(k,v,c)=>`<div class="panel stat"><span>${k}</span><b class="num" ${c?`style="color:var(${c})"`:''}>${v}</b></div>`, pc=(v,w,b)=>v>=b?'--bad':v>=w?'--warn':'';
@@ -2513,7 +2558,7 @@ const sydlg=$('#dlg-sys'), syf=$('#sy-form'); let SY={site:null};
 function openSys(siteId){ const st=S.state; const s=st&&st.sites.find(x=>x.id===siteId); if(!s) return; SY.site=siteId;
   const c=Object.assign({diskPct:90,diskMinGB:0,cpuPct:95,memPct:95,highMin:15,avSigDays:3,rebootDays:7,evCrit:1,services:[]},s.sys||{});
   $('#sy-title').textContent='Rechner-Überwachung – '+s.name; syf.on.checked=!!(s.sys&&s.sys.on); syf.services.value=(c.services||[]).join('\n');
-  syf.selfHeal.checked=!!c.selfHeal; SY.restart=new Set((c.restart||[]).map(x=>x.toLowerCase())); renderHealList();
+  syf.selfHeal.checked=!!c.selfHeal; syf.updates.checked=!!c.updates; SY.restart=new Set((c.restart||[]).map(x=>x.toLowerCase())); renderHealList();
   for(const k of ['diskPct','diskMinGB','cpuPct','memPct','highMin','avSigDays','rebootDays','evCrit']) syf[k].value=c[k];
   const pl=(st.org&&st.plans||[]).find(p=>p.id===st.org.plan); const lim=pl?pl.machinesPerSite:(st.org&&st.org.plan==='internal'?-1:undefined);
   $('#sy-limit').textContent=lim>0?`(Paket: bis ${lim} Rechner je Standort)`:lim===0?'(im aktuellen Paket nicht enthalten)':'';
@@ -2533,8 +2578,63 @@ function renderSysMachines(){ const st=S.state, ms=((st&&st.machines)||[]).filte
 syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const num=k=>+syf[k].value||0; const svcList=syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean);
   const restart=svcList.filter(x=>SY.restart.has(x.toLowerCase())&&HEAL_OK.test(x));
-  const sys={on:syf.on.checked,selfHeal:syf.selfHeal.checked,restart,services:svcList,diskPct:num('diskPct'),diskMinGB:num('diskMinGB'),cpuPct:num('cpuPct'),memPct:num('memPct'),highMin:num('highMin'),avSigDays:num('avSigDays'),rebootDays:num('rebootDays'),evCrit:num('evCrit')};
+  const sys={on:syf.on.checked,updates:syf.updates.checked,selfHeal:syf.selfHeal.checked,restart,services:svcList,diskPct:num('diskPct'),diskMinGB:num('diskMinGB'),cpuPct:num('cpuPct'),memPct:num('memPct'),highMin:num('highMin'),avSigDays:num('avSigDays'),rebootDays:num('rebootDays'),evCrit:num('evCrit')};
   try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
+
+/* ---------- Updates & Neustarts (Testphase) ---------- */
+let TF={on:false}; const AC={mode:'run',kind:'winupdate',scope:'',id:'',plan:null}; let UP={plans:[],acts:[]};
+const WDN=['So','Mo','Di','Mi','Do','Fr','Sa'];
+function siteActOK(s){ return !!(s&&s.sys&&s.sys.on&&s.sys.updates); }
+function actTargets(scope,id){ const st=S.state; let ss=st.sites.filter(siteActOK); if(scope==='site') ss=ss.filter(s=>s.id===id); if(scope==='customer') ss=ss.filter(s=>s.customer===id); const set=new Set(ss.map(s=>s.id)); return (st.machines||[]).filter(m=>set.has(m.site)&&(scope!=='machine'||m.id===id)); }
+async function loadTF(){ try{ TF=await api('/api/totp'); }catch(e){} return TF; }
+async function renderTF(){ const box=$('#tf-box'); if(!box) return; await loadTF();
+  box.innerHTML=TF.on?`<b>✅ Eingerichtet</b> – nötig für Updates, Neustarts und Update-Pläne. <button class="btn sm" id="tf-off" style="margin-left:8px">Abschalten</button>`
+    :`<p style="margin:0 0 8px;font-size:13.5px">Für Updates und Neustarts über PingWacht braucht es einen Code aus einer Authenticator-App (z. B. Microsoft Authenticator, Google Authenticator, 1Password).</p><button class="btn sm pri" id="tf-setup">Einrichten</button><div id="tf-step" style="margin-top:10px"></div>`;
+  const off=$('#tf-off'); if(off) off.onclick=async()=>{ const c=await uiPrompt('Zum Abschalten den aktuellen Code eingeben:'); if(!c) return; try{ await api('/api/totp',{method:'POST',body:JSON.stringify({action:'disable',code:c})}); toast('Zwei-Faktor-Anmeldung abgeschaltet'); renderTF(); }catch(e){ uiAlert(e.message); } };
+  const su=$('#tf-setup'); if(su) su.onclick=async()=>{ try{ const r=await api('/api/totp',{method:'POST',body:JSON.stringify({action:'setup'})});
+    $('#tf-step').innerHTML=`<ol style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7"><li>In der Authenticator-App „Konto hinzufügen“ → <b>Schlüssel manuell eingeben</b>:<div class="cmdbox" style="margin:4px 0"><pre>${esc(r.secret.match(/.{1,4}/g).join(' '))}</pre><button class="btn sm" type="button" data-copycmd>Kopieren</button></div>Kontoname: PingWacht · zeitbasiert. Auf dem Handy geht auch: <a href="${esc(r.uri)}">In Authenticator-App öffnen</a></li><li>Den angezeigten 6-stelligen Code eingeben: <input id="tf-code" inputmode="numeric" maxlength="6" style="width:110px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)"> <button class="btn sm pri" id="tf-en">Aktivieren</button></li></ol>`;
+    $('#tf-en').onclick=async()=>{ try{ await api('/api/totp',{method:'POST',body:JSON.stringify({action:'enable',code:$('#tf-code').value})}); toast('Zwei-Faktor-Anmeldung aktiv'); renderTF(); }catch(e){ uiAlert(e.message); } }; }catch(e){ uiAlert(e.message); } }; }
+const acf=$('#ac-form'), acdlg=$('#dlg-act');
+function acTargetText(ms,label){ if(!ms.length) return '<span style="color:var(--bad)">Keine Rechner – für diese Auswahl sind Updates und Neustarts nicht erlaubt (Einstellungen → Standorte → 💻 Rechner-Überwachung).</span>';
+  return `<b>${esc(label)}</b> · ${ms.length} Rechner: <span class="muted">${ms.slice(0,12).map(m=>esc(m.name)).join(', ')}${ms.length>12?' …':''}</span>`; }
+async function openAction(kind,scope,id,label){ Object.assign(AC,{mode:'run',kind,scope,id,plan:null}); await loadTF();
+  const ms=actTargets(scope,id); $('#ac-title').textContent=kind==='reboot'?'🔄 Neu starten':'⬆️ Updates installieren'; $('#ac-target').innerHTML=acTargetText(ms,label);
+  $('#ac-plan').style.display='none'; $('#ac-upd').style.display=kind==='winupdate'?'':'none'; $('#ac-del').style.display='none'; $('#ac-err').textContent=''; acf.code.value='';
+  $('#ac-hint').innerHTML=TF.on?(kind==='reboot'?'Der Rechner startet 1 Minute nach Eingang des Auftrags neu. Meldungen sind 2 Stunden stumm.':'Updates werden gesucht, heruntergeladen und installiert – das kann eine Weile dauern. Ausgeschaltete Rechner holen den Auftrag bis zu 12 Stunden später ab. Das Ergebnis kommt als Meldung und steht im Protokoll.'):'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung einrichten.';
+  $('#ac-ok').disabled=!TF.on||!ms.length; $('#ac-ok').textContent=kind==='reboot'?'Neu starten':'Starten'; acdlg.showModal(); }
+function planTargetOpts(){ const st=S.state, cs=st.customers||[], ss=st.sites.filter(s=>s.id!=='cloud'&&s.kind!=='unifi'), ms=st.machines||[];
+  return (cs.length?'<optgroup label="Kunden">'+cs.map(c=>`<option value="customer:${c.id}">${esc(c.name)}</option>`).join('')+'</optgroup>':'')+
+    '<optgroup label="Standorte">'+ss.map(s=>`<option value="site:${s.id}">${esc(s.name)}${siteActOK(s)?'':' (nicht erlaubt)'}</option>`).join('')+'</optgroup>'+
+    (ms.length?'<optgroup label="Einzelne Rechner">'+ms.map(m=>`<option value="machine:${m.id}">${esc(m.name)} · ${esc(siteName(m.site))}</option>`).join('')+'</optgroup>':''); }
+async function openPlan(id){ const x=id&&UP.plans.find(p=>p.id===id); Object.assign(AC,{mode:'plan',kind:'winupdate',plan:x||null}); await loadTF();
+  $('#ac-title').textContent=x?'Update-Plan bearbeiten':'Update-Plan anlegen'; $('#ac-target').innerHTML=''; $('#ac-plan').style.display=''; $('#ac-upd').style.display='';
+  acf.ptarget.innerHTML=planTargetOpts(); acf.pname.value=x?x.name:''; acf.pat.value=x?x.at:'22:00'; acf.pon.checked=x?x.on:true; acf.cat.value=x?x.cat:'security'; acf.reboot.value=x?x.reboot:'ifneeded';
+  if(x) acf.ptarget.value=x.scope+':'+x.target;
+  $('#ac-days').innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="check"><input type="checkbox" value="${d}"${x?(x.weekdays.includes(d)?' checked':''):(d===3?' checked':'')}> ${WDN[d]}</label>`).join('');
+  const upd=()=>{ const [sc,tid]=(acf.ptarget.value||':').split(':'); $('#ac-target').innerHTML=acf.ptarget.value?'Betroffen heute: '+acTargetText(actTargets(sc,tid),acf.ptarget.selectedOptions[0].textContent):''; }; acf.ptarget.onchange=upd; upd();
+  $('#ac-del').style.display=x?'':'none'; $('#ac-err').textContent=''; acf.code.value='';
+  $('#ac-hint').innerHTML=TF.on?'Der Plan läuft zur gewählten Zeit ohne weiteren Code. Zum Anlegen und Ändern ist der Code nötig.':'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung einrichten.';
+  $('#ac-ok').disabled=!TF.on; $('#ac-ok').textContent='Speichern'; acdlg.showModal(); }
+acf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#ac-err').textContent='';
+  try{ if(AC.mode==='plan'){ const [sc,tid]=acf.ptarget.value.split(':');
+      await api('/api/updateplans',{method:'POST',body:JSON.stringify({id:AC.plan?AC.plan.id:'',name:acf.pname.value,scope:sc,target:tid,weekdays:$$('#ac-days input:checked').map(i=>+i.value),at:acf.pat.value,cat:acf.cat.value,reboot:acf.reboot.value,on:acf.pon.checked,code:acf.code.value})});
+      acdlg.close(); toast('Plan gespeichert'); loadUpdates(); }
+    else { const r=await api('/api/actions',{method:'POST',body:JSON.stringify({kind:AC.kind,scope:AC.scope,id:AC.id,cat:acf.cat.value,reboot:acf.reboot.value,code:acf.code.value})});
+      acdlg.close(); toast(`Auftrag an ${r.machines} Rechner – Ergebnis kommt als Meldung`); if(MD.id) loadMachine(); } }catch(err){ $('#ac-err').textContent=err.message; } });
+$('#ac-del').onclick=async()=>{ if(!AC.plan||!await uiConfirm('Plan „'+AC.plan.name+'“ löschen?')) return; try{ await api('/api/updateplans?id='+AC.plan.id,{method:'DELETE'}); acdlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
+$('#add-uplan').onclick=()=>openPlan('');
+const ACST={queued:['wartet auf Rechner','--off'],running:['läuft','--warn'],done:['fertig','--ok'],error:['Fehler','--bad']};
+function actRows(list,withName){ return list.length?'<tr><th>Zeit</th>'+(withName?'<th>Rechner</th>':'')+'<th>Aktion</th><th class="hide-m">Von</th><th>Ergebnis</th></tr>'+list.map((a,i)=>{ const [l,c]=ACST[a.status]||ACST.queued, fail=(a.detail||[]).some(d=>d.startsWith('✗'));
+    return `<tr data-ai="${i}" style="cursor:${(a.detail||[]).length?'pointer':'default'}"><td class="num" style="white-space:nowrap">${fmtDT(a.t,false)}</td>${withName?`<td><b>${esc(a.name)}</b> <span class="muted">${esc(siteName(a.site))}</span></td>`:''}<td>${a.kind==='reboot'?'🔄 Neustart':'⬆️ Updates'}${a.opts?`<div class="muted" style="font-size:12px">${esc(a.opts)}</div>`:''}</td><td class="hide-m" style="font-size:12.5px">${esc(a.by)}</td><td><span style="color:var(${fail?'--warn':c})">${a.status==='done'?esc(a.result||l):a.status==='error'?esc(a.result||l):l}</span>${(a.detail||[]).length?` <a href="#" class="muted" style="font-size:12px">Details</a>`:''}</td></tr>`; }).join(''):'<tr><td class="muted">Noch keine Aktionen.</td></tr>'; }
+function bindActRows(tbl,list){ tbl.querySelectorAll('tr[data-ai]').forEach(tr=>tr.onclick=e=>{ e.preventDefault(); const a=list[+tr.dataset.ai]; if(a&&(a.detail||[]).length) uiAlert(a.name+' · '+fmtDT(a.t,false)+'\n\n'+a.detail.join('\n')); }); }
+async function loadUpdates(){ try{ const [pl,ac]=await Promise.all([api('/api/updateplans'),api('/api/actions')]); UP={plans:pl,acts:ac}; }catch(e){ return; }
+  const tn=p=>{ const st=S.state; if(p.scope==='customer') return '👥 '+(((st.customers||[]).find(c=>c.id===p.target)||{}).name||'?'); if(p.scope==='site') return '📍 '+siteName(p.target); return '💻 '+(((st.machines||[]).find(m=>m.id===p.target)||{}).name||'?'); };
+  $('#up-tbl').innerHTML=UP.plans.length?'<tr><th>Plan</th><th>Für</th><th>Wann</th><th class="hide-m">Was</th><th class="hide-m">Zuletzt</th><th></th></tr>'+UP.plans.map(p=>`<tr><td><b>${esc(p.name)}</b>${p.on?'':' <span class="tag">aus</span>'}</td><td>${esc(tn(p))}</td><td>${[1,2,3,4,5,6,0].filter(d=>p.weekdays.includes(d)).map(d=>WDN[d]).join(', ')} ${esc(p.at)}</td><td class="hide-m" style="font-size:12.5px">${esc(actionOptsTxt(p.cat,p.reboot))}</td><td class="hide-m">${p.lastRun?fmtDT(p.lastRun,false):'–'}</td><td style="text-align:right"><button class="btn sm ed" data-upe="${p.id}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="muted">Noch kein Plan – z. B. „jeden Mittwoch 22:00 Sicherheitsupdates, Neustart wenn nötig“.</td></tr>';
+  $$('#up-tbl [data-upe]').forEach(b=>b.onclick=()=>openPlan(b.dataset.upe));
+  $('#act-tbl').innerHTML=actRows(UP.acts,true); bindActRows($('#act-tbl'),UP.acts); }
+function actionOptsTxt(cat,rb){ return (cat==='all'?'alle Updates':'Sicherheitsupdates')+' · '+(rb==='ifneeded'?'Neustart wenn nötig':'kein Neustart'); }
+$('#m-upd').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('winupdate','machine',m.id,m.name); };
+$('#m-reboot').onclick=()=>{ const m=machineOf(MD.id); if(m) openAction('reboot','machine',m.id,m.name); };
 
 /* ---------- KI-Assistent ---------- */
 const AI={msgs:[],busy:false};

@@ -64,21 +64,26 @@ type SiteCfg struct {
 }
 
 type Config struct {
-	Hosts         []HostCfg         `json:"hosts"`
-	Sites         []SiteCfg         `json:"sites"`
-	RetentionDays int               `json:"retentionDays"`
-	PassHash      string            `json:"passHash"`
-	Devices       []Device          `json:"devices"`
-	Orgs          []Org             `json:"orgs"`
-	Users         []User            `json:"users"`
-	Channels      []Channel         `json:"channels"`
-	Maints        []Maint           `json:"maints"`
-	Groups        []Group           `json:"groups"`
-	Customers     []Customer        `json:"customers,omitempty"` // Kunden je Konto (ordnen Standorte)
-	Requests      []FeatureRequest  `json:"requests,omitempty"`  // Änderungswünsche aus dem KI-Assistenten
-	Machines      []MachineCfg      `json:"machines,omitempty"`  // überwachte Rechner (Rechner-Überwachung)
-	VapidKey      string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
-	UniFiKeys     map[string]string `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
+	Hosts         []HostCfg    `json:"hosts"`
+	Sites         []SiteCfg    `json:"sites"`
+	RetentionDays int          `json:"retentionDays"`
+	PassHash      string       `json:"passHash"`
+	Devices       []Device     `json:"devices"`
+	Orgs          []Org        `json:"orgs"`
+	Users         []User       `json:"users"`
+	Channels      []Channel    `json:"channels"`
+	Maints        []Maint      `json:"maints"`
+	Groups        []Group      `json:"groups"`
+	Customers     []Customer   `json:"customers,omitempty"` // Kunden je Konto (ordnen Standorte)
+	Actions       []ActionLog  `json:"actions,omitempty"`   // Protokoll: Updates und Neustarts über PingWacht
+	UpdatePlans   []UpdatePlan `json:"updatePlans,omitempty"`
+	// Zwei-Faktor-Code des Betreiber-Logins (ADMIN_PASSWORD)
+	AdminTOTP        string            `json:"adminTotp,omitempty"`
+	AdminTOTPPending string            `json:"adminTotpPending,omitempty"`
+	Requests         []FeatureRequest  `json:"requests,omitempty"`  // Änderungswünsche aus dem KI-Assistenten
+	Machines         []MachineCfg      `json:"machines,omitempty"`  // überwachte Rechner (Rechner-Überwachung)
+	VapidKey         string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
+	UniFiKeys        map[string]string `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
 	// Datenbank-Sicherungen auf Agenten (Standort → Einstellung / letzter Stand)
 	BackupTargets map[string]*BackupCfg    `json:"backupTargets,omitempty"`
 	BackupStatus  map[string]*BackupStatus `json:"backupStatus,omitempty"`

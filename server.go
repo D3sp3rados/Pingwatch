@@ -90,6 +90,7 @@ func runServer(args []string) {
 	go m.pushLoop()
 	go m.reportLoop()
 	go m.unifiCloudLoop()
+	go m.updatePlanLoop()
 	if simMode {
 		go m.simMachines()
 	}
@@ -311,6 +312,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
+	mux.HandleFunc("/api/totp", protect(s.handleTOTP))
+	mux.HandleFunc("/api/actions", protect(s.handleActions))
+	mux.HandleFunc("/api/updateplans", protect(s.handleUpdatePlans))
 	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
@@ -1151,6 +1155,9 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 			sysOut["selfHeal"] = true
 			sysOut["restart"] = sc.Restart
 		}
+		if sc.Updates {
+			sysOut["updates"] = true
+		}
 	}
 	if sysOnly {
 		// „Nur Rechner“-Agent: keine Hosts, keine Aufträge, Standort bleibt Sache des Standort-Agenten
@@ -1160,6 +1167,7 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 			if mc, ok := s.m.machineByID(machineKey(site.ID, mid)); ok {
 				s.m.machineSeen(mc)
 				if jb := takeJobs("m:" + mc.ID); len(jb) > 0 {
+					s.m.actionJobsTaken(jb)
 					out["jobs"] = jb
 				}
 			}
@@ -1186,6 +1194,7 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 		out["backup"] = map[string]any{"on": true, "keep": b.keep()}
 	}
 	if jb := takeJobs(site.ID); len(jb) > 0 {
+		s.m.actionJobsTaken(jb)
 		out["jobs"] = jb
 	}
 	writeJSON(w, out)
@@ -1263,6 +1272,7 @@ func (s *Server) handleAgentPush(w http.ResponseWriter, r *http.Request) {
 		out["traces"] = tr
 	}
 	if jb := takeJobs(site.ID); len(jb) > 0 {
+		s.m.actionJobsTaken(jb)
 		out["jobs"] = jb
 	}
 	writeJSON(w, out)

@@ -6,7 +6,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "1.5.3"
+var version = "1.5.4"
 
 func main() {
 	mode := defaultMode
