@@ -197,11 +197,11 @@ func priceSheet(o *Org) string {
 // ---------- Systemprompt ----------
 
 const aiProductHelp = `PRODUKTHILFE PINGWACHT (nur das hier gilt – erfinde keine weiteren Funktionen):
-Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Einstellungen (#/settings), Abo (#/billing). Oben rechts der Knopf „🔔 Meldungen“ zum Stummschalten.
+Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Einstellungen (#/settings, mit Reitern: Hosts & Gruppen, Standorte, Alarme & Wartung, Team, Statusseite, Mein Konto, System), Abo (#/billing). Oben rechts der Knopf „🔔 Meldungen“ zum Stummschalten.
 - Übersicht: alle Hosts als Kacheln oder als Liste (Umschalter oben), Status, Antwortzeiten, Ausfälle.
-- Host anlegen: Einstellungen → Hosts → „+ Host hinzufügen“. Name, Adresse (IP oder Hostname), Standort und Methode wählen. Methoden: ICMP (klassischer Ping), TCP-Verbindung (Port), Webseite HTTP/HTTPS (Pro), DNS-Auflösung (Pro), SNMP für Switches/Router (Pro). Viele Hosts auf einmal: „Liste importieren“ (Liste aus Excel/CSV einfügen).
+- Host anlegen: Einstellungen → Hosts & Gruppen → „+ Host hinzufügen“. Name, Adresse (IP oder Hostname), Standort und Methode wählen. Methoden: ICMP (klassischer Ping), TCP-Verbindung (Port), Webseite HTTP/HTTPS (Pro), DNS-Auflösung (Pro), SNMP für Switches/Router (Pro). Viele Hosts auf einmal: „Liste importieren“ (Liste aus Excel/CSV einfügen).
 - Standort „Cloud“: Prüfung aus dem Rechenzentrum, nur für öffentlich erreichbare Adressen und Webseiten. Kein Standort im Sinne der Abrechnung.
-- Standort mit Agent: für lokale IPs (z. B. 192.168.x.x). Ein Standort = ein lokales Netz mit einem Agent. Einstellungen → Standorte (Agenten) → „+ Standort hinzufügen“, dann „agent.json“ und den Agent herunterladen.
+- Standort mit Agent: für lokale IPs (z. B. 192.168.x.x). Ein Standort = ein lokales Netz mit einem Agent. Einstellungen → Standorte → „+ Standort hinzufügen“, dann „agent.json“ und den Agent herunterladen.
   Windows: agent.json und pingwatch-agent.exe in denselben Ordner legen (z. B. C:\PingWacht) und starten; Symbol im Infobereich, startet automatisch mit Windows.
   Linux/Raspberry Pi: „pingwatch-agent-linux-arm64 agent -config agent.json“ (amd64-Variante für PCs). Mac: Mac-Agent aus derselben Zeile herunterladen.
   Home Assistant: Add-on „PingWacht Agent“ aus dem Repository https://github.com/D3sp3rados/Pingwatch hinzufügen und das Token aus der agent.json eintragen.
@@ -209,13 +209,14 @@ Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Einstel
 - Am Standort: „Netzwerk scannen“ findet Geräte im Netz, „UniFi-Import“ übernimmt UniFi-Geräte als Hosts.
 - UniFi-Livestatus: Standort-Karte → „UniFi-Livestatus“: Adresse der UniFi-Konsole und API-Schlüssel (UniFi Network → Einstellungen → Control Plane → Integrationen → API-Schlüssel erstellen). Geräte werden jede Minute abgefragt, Alarm bei „offline“.
 - Fritzbox (TR-064): Host mit der LAN-IP der Fritzbox (z. B. 192.168.178.1) an einem Agent-Standort anlegen, Methode ICMP oder TCP, Haken „Fritzbox auslesen (TR-064)“, Benutzer, Passwort, Port 49000. In der Fritzbox vorher: System → FRITZ!Box-Benutzer → Benutzer anlegen mit Recht „FRITZ!Box Einstellungen“; Heimnetz → Netzwerk → Netzwerkeinstellungen → „Zugriff für Anwendungen zulassen“. Dann zeigt PingWacht Internet-Status, externe IP, Sync-Rate, Abbrüche und Neustarts und meldet „Internet getrennt“.
-- Gruppen (Kunden): Einstellungen → Gruppen → „+ Gruppe“: Hosts eines Kunden zusammenfassen; je Gruppe Monatsbericht per E-Mail und Stummschalten möglich.
-- Alarme (ab Basis): Einstellungen → Alarme → „+ Alarmweg“: E-Mail, Microsoft Teams, Telegram oder eigener Webhook; auf bestimmte Kunden/Hosts begrenzbar; mit Test-Knopf.
-- Push aufs Handy: iPhone-App oder im Browser/Android über „App installieren“ und Push einschalten. Einstellungen → Benachrichtigungen aufs Handy, dort „Testnachricht senden“.
-- Meine Benachrichtigungen (Einstellungen → Benachrichtigungen): Push an/aus, E-Mail bei Ausfällen, Urlaubsmodus (Pause bis Datum), einzelne Kunden stummschalten.
+- Gruppen (Kunden): Einstellungen → Hosts & Gruppen → Gruppen → „+ Gruppe“: Hosts eines Kunden zusammenfassen; je Gruppe Monatsbericht per E-Mail und Stummschalten möglich.
+- Alarme (ab Basis): Einstellungen → Alarme & Wartung → „+ Alarmweg“: E-Mail, Microsoft Teams, Telegram oder eigener Webhook; auf bestimmte Kunden/Hosts begrenzbar; mit Test-Knopf.
+- Push aufs Handy: iPhone-App oder im Browser/Android über „App installieren“ und Push einschalten. Einstellungen → Mein Konto → Benachrichtigungen aufs Handy, dort „Testnachricht senden“.
+- Meine Benachrichtigungen (Einstellungen → Mein Konto): Push an/aus, E-Mail bei Ausfällen, Urlaubsmodus (Pause bis Datum), einzelne Kunden stummschalten.
+- Eigenes Konto: Einstellungen → Mein Konto: Name und Login-E-Mail ändern (zur Bestätigung aktuelles Passwort), Passwort ändern (aktuelles + neues Passwort zweimal). Vorläufiges Passwort aus der Einladung bitte dort ändern.
 - Stummschalten/Pausieren: „🔔 Meldungen“ oben oder „⏸ Pause“ in der Hosts-Tabelle: alles, ein Kunde oder ein Host, für einen Zeitraum oder dauerhaft. Pausierte Hosts werden nicht geprüft.
-- Wartungsfenster: Einstellungen → Wartungsfenster → „+ Wartung planen“ (einmalig oder wöchentlich): keine Alarme, zählt nicht in die Verfügbarkeit.
-- Öffentliche Statusseite (Pro): Einstellungen → Öffentliche Statusseite (nur Name und Status, keine IP-Adressen).
+- Wartungsfenster: Einstellungen → Alarme & Wartung → Wartungsfenster → „+ Wartung planen“ (einmalig oder wöchentlich): keine Alarme, zählt nicht in die Verfügbarkeit.
+- Öffentliche Statusseite (Pro): Einstellungen → Statusseite (nur Name und Status, keine IP-Adressen).
 - Monatsbericht PDF (Pro, Partner): Statistik → Monatsbericht; automatisch am 1. per E-Mail über einen Alarmweg mit Haken „Monatsbericht“ oder je Gruppe.
 - Team: Einstellungen → Team → „+ Benutzer einladen“. Rollen: Inhaber (alles inkl. Abo), Admin (Hosts, Standorte, Benutzer), Nur lesen.
 - Abo: Menü „Abo“ zeigt Paket, Standorte und Preise.

@@ -20,6 +20,7 @@ var readOnlyOK = map[string]bool{
 	"/api/app/pushtest":   true,
 	"/api/webpush":        true,
 	"/api/me/notify":      true,
+	"/api/me/profile":     true, // eigenes Konto
 	"/api/assistant":      true, // Fragen stellen darf jeder
 	"/api/billing/portal": false,
 }
@@ -33,6 +34,7 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/users", protect(s.handleUsers))
 	mux.HandleFunc("/api/users/mail", protect(s.handleUserMail))
 	mux.HandleFunc("/api/me/notify", protect(s.handleMyNotify))
+	mux.HandleFunc("/api/me/profile", protect(s.handleMyProfile))
 	mux.HandleFunc("/api/assistant", protect(s.handleAssistant))
 	mux.HandleFunc("/api/requests", protect(s.handleRequests))
 	mux.HandleFunc("/api/admin/orgs", super(s.handleAdminOrgs))

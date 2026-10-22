@@ -66,6 +66,8 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px;flex-wrap:wrap}
 .seg button{border:0;background:none;padding:5px 10px;border-radius:7px;cursor:pointer;color:var(--mut);font-size:13px;font-weight:500}
 .seg a{padding:5px 10px;border-radius:7px;color:var(--mut);font-size:13px;font-weight:500;text-decoration:none}.seg a:hover{color:var(--fg)}
+.seg a.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
+.settabs{display:flex;flex-wrap:nowrap;overflow-x:auto;max-width:100%;margin:4px 0 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.settabs::-webkit-scrollbar{display:none}.settabs a{white-space:nowrap;flex:0 0 auto;padding:7px 12px}
 #hosts-box[open] #hosts-tog::after{content:''}
 .seg button.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
@@ -359,17 +361,20 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg" id="set-nav" style="margin:4px 0 6px"><a href="#" data-to="hosts-box">Hosts</a><a href="#" data-to="grp-tbl">Gruppen</a><a href="#" data-to="sites">Standorte</a><a href="#" data-to="al-tbl">Alarme</a><a href="#" data-to="my-notify">Benachrichtigungen</a></div>
+  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a></div>
+  <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
-  <details class="panel" id="hosts-box" style="padding:0">
-    <summary style="padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="hosts-sum">Hosts</b><span class="muted" style="font-size:13px" id="hosts-sub"></span><span style="margin-left:auto;font-size:13px;color:var(--acc)" id="hosts-tog">anzeigen ▾</span></summary>
+  <div class="panel" id="hosts-box" style="padding:0">
+    <div style="padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="hosts-sum">Hosts</b><span class="muted" style="font-size:13px" id="hosts-sub"></span><span id="hosts-tog" style="display:none"></span></div>
     <div style="padding:0 14px 10px"><input type="search" id="hosts-q" placeholder="Hosts filtern (Name, Adresse, Kunde) …" style="width:100%;max-width:360px;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)"></div>
     <div style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
-  </details>
+  </div>
 
   <h2>Gruppen <button class="btn sm pri ed" id="add-group">+ Gruppe</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="grp-tbl"></table></div>
 
+  </div>
+  <div class="setcat" data-cat="sites">
   <h2>Standorte (Agenten) <button class="btn sm pri ed" id="add-site">+ Standort hinzufügen</button></h2>
   <div class="sites" id="sites"></div>
   <div class="panel help" style="margin-top:12px">
@@ -383,24 +388,24 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     Fällt das Internet am Standort aus, puffert der Agent die Messwerte und schickt sie nach. Für einen Raspberry Pi gibt es den Linux-Agent (<code>pingwatch-agent-linux-arm64 agent -config agent.json</code>).
   </div>
 
-  <h2 class="ed">Daten zurücksetzen</h2>
-  <div class="panel ed">
-    <div class="formrow">
-      <label class="field">Host<select id="r-host"><option value="">Alle Hosts</option></select></label>
-      <label class="field">Zeitraum<select id="r-range">
-        <option value="24">Letzte 24 Stunden</option><option value="48">Letzte 48 Stunden</option><option value="72">Letzte 72 Stunden</option>
-        <option value="168">Letzte Woche</option><option value="336">Letzte 2 Wochen</option><option value="day">Bestimmter Tag / Zeitraum …</option>
-      </select></label>
-      <label class="field" id="r-fromf" style="display:none">Von<input type="date" id="r-from"></label>
-      <label class="field" id="r-tof" style="display:none">Bis (leer = nur ein Tag)<input type="date" id="r-to"></label>
-    </div>
-    <div class="formrow" style="padding-top:0;align-items:center">
-      <label class="check"><input type="checkbox" id="r-events" checked> Ereignisse (Ausfälle, Paketverlust, Spitzen)</label>
-      <label class="check"><input type="checkbox" id="r-samples"> Messwerte (Zeitleiste und Statistik)</label>
-      <button class="btn danger" id="r-go" style="margin-left:auto">Löschen</button>
-    </div>
   </div>
+  <div class="setcat" data-cat="alerts">
+  <h2>Alarme <button class="btn sm pri ed" id="add-alert">+ Alarmweg</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="al-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px" id="al-info">Zusätzlich zu den Push-Meldungen aufs iPhone: E-Mail, Microsoft Teams, Telegram oder eigener Webhook.</p>
 
+  <h2>Wartungsfenster <button class="btn sm pri ed" id="add-maint">+ Wartung planen</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="mt-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px">Während einer Wartung gibt es keine Alarme, und Ausfälle zählen nicht in die Verfügbarkeit (Monatsbericht).</p>
+
+  </div>
+  <div class="setcat" data-cat="team">
+  <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="users-tbl"></table></div>
+  <p class="muted" style="font-size:12.5px">Rollen: <b>Inhaber</b> = alles inkl. Abo · <b>Admin</b> = Hosts, Standorte, Benutzer · <b>Nur lesen</b> = sieht alles, ändert nichts.</p>
+
+  </div>
+  <div class="setcat" data-cat="status">
   <h2>Öffentliche Statusseite</h2>
   <div class="panel empty" id="sp-na" style="display:none">Eine öffentliche Statusseite für Ihre Kunden gibt es im Paket <b>Pro</b>. <a href="#/billing">Paket ansehen →</a></div>
   <div class="panel" id="sp-box"><div class="formrow" style="flex-wrap:wrap;align-items:flex-end">
@@ -413,30 +418,29 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field" style="margin-top:10px">Hinweis oben auf der Seite (optional)<input id="sp-note" maxlength="500" placeholder="z. B. Bei Störungen: 07753 …"></label></div>
   </div>
 
-  <h2>Wartungsfenster <button class="btn sm pri ed" id="add-maint">+ Wartung planen</button></h2>
-  <div class="panel" style="overflow-x:auto"><table class="tbl" id="mt-tbl"></table></div>
-  <p class="muted" style="font-size:12.5px">Während einer Wartung gibt es keine Alarme, und Ausfälle zählen nicht in die Verfügbarkeit (Monatsbericht).</p>
-
-  <h2>Alarme <button class="btn sm pri ed" id="add-alert">+ Alarmweg</button></h2>
-  <div class="panel" style="overflow-x:auto"><table class="tbl" id="al-tbl"></table></div>
-  <p class="muted" style="font-size:12.5px" id="al-info">Zusätzlich zu den Push-Meldungen aufs iPhone: E-Mail, Microsoft Teams, Telegram oder eigener Webhook.</p>
-
-  <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
-  <div class="panel" style="overflow-x:auto"><table class="tbl" id="users-tbl"></table></div>
-  <p class="muted" style="font-size:12.5px">Rollen: <b>Inhaber</b> = alles inkl. Abo · <b>Admin</b> = Hosts, Standorte, Benutzer · <b>Nur lesen</b> = sieht alles, ändert nichts.</p>
-
-  <h2>Allgemein</h2>
-  <div class="panel">
-    <div class="formrow" id="g-retrow">
-      <label class="field">Messwerte aufbewahren (Tage)<input type="number" id="g-ret" min="7" max="730"></label>
-      <button class="btn" id="g-save">Speichern</button>
+  </div>
+  <div class="setcat" data-cat="konto">
+  <div class="panel empty" id="pf-admin" style="display:none;text-align:left">Sie sind mit dem <b>Betreiber-Zugang (admin)</b> angemeldet – dafür gibt es kein eigenes Konto. Legen Sie sich unter <a href="#/settings/team">Team</a> einen eigenen Benutzer mit Ihrer E-Mail-Adresse an (Haken „Betreiber“), dann können Sie hier E-Mail, Passwort und Benachrichtigungen pflegen.</div>
+  <div id="pf-wrap">
+  <h2>Mein Konto</h2>
+  <div class="panel" id="pf-box">
+    <div class="formrow" style="flex-wrap:wrap;align-items:flex-end">
+      <label class="field">Name<input id="pf-name" maxlength="60" autocomplete="name"></label>
+      <label class="field">E-Mail-Adresse (Login)<input id="pf-email" type="email" autocomplete="email"></label>
+      <label class="field" id="pf-curf" style="display:none">Aktuelles Passwort (zur Bestätigung)<input id="pf-cur" type="password" autocomplete="current-password"></label>
+      <button class="btn pri" id="pf-save">Speichern</button>
     </div>
-    <div class="formrow" id="g-pw" style="border-top:1px solid var(--line)">
-      <label class="field">Altes Passwort<input type="password" id="g-old" autocomplete="current-password"></label>
+    <div class="help" style="border-top:1px solid var(--line)">Nach einer Änderung der E-Mail-Adresse melden Sie sich künftig mit der neuen Adresse an.</div>
+  </div>
+  </div>
+  <h2 id="g-pwh">Passwort ändern</h2>
+  <div class="panel" id="g-pwbox">
+    <div class="formrow" id="g-pw" style="flex-wrap:wrap;align-items:flex-end">
+      <label class="field">Aktuelles Passwort<input type="password" id="g-old" autocomplete="current-password"></label>
       <label class="field">Neues Passwort (min. 8 Zeichen)<input type="password" id="g-new" autocomplete="new-password"></label>
-      <button class="btn" id="g-pwsave">Passwort ändern</button>
+      <label class="field">Neues Passwort wiederholen<input type="password" id="g-new2" autocomplete="new-password"></label>
+      <button class="btn pri" id="g-pwsave">Passwort ändern</button>
     </div>
-    <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
   </div>
   <h2>Benachrichtigungen aufs Handy <button class="btn sm" id="push-test">Testnachricht senden</button></h2>
   <div class="panel" id="my-notify" style="padding:14px;margin-bottom:10px">
@@ -477,6 +481,35 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <b>iPhone:</b> Seite in Safari öffnen → Teilen-Symbol → <b>Zum Home-Bildschirm</b>. Danach PingWacht vom Home-Bildschirm starten und hier die Benachrichtigungen aktivieren – oder die PingWacht-App aus TestFlight nutzen.
   </div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
+  </div>
+  <div class="setcat" data-cat="system">
+  <h2>Allgemein</h2>
+  <div class="panel">
+    <div class="formrow" id="g-retrow">
+      <label class="field">Messwerte aufbewahren (Tage)<input type="number" id="g-ret" min="7" max="730"></label>
+      <button class="btn" id="g-save">Speichern</button>
+    </div>
+    <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
+  </div>
+  <h2 class="ed">Daten zurücksetzen</h2>
+  <div class="panel ed">
+    <div class="formrow">
+      <label class="field">Host<select id="r-host"><option value="">Alle Hosts</option></select></label>
+      <label class="field">Zeitraum<select id="r-range">
+        <option value="24">Letzte 24 Stunden</option><option value="48">Letzte 48 Stunden</option><option value="72">Letzte 72 Stunden</option>
+        <option value="168">Letzte Woche</option><option value="336">Letzte 2 Wochen</option><option value="day">Bestimmter Tag / Zeitraum …</option>
+      </select></label>
+      <label class="field" id="r-fromf" style="display:none">Von<input type="date" id="r-from"></label>
+      <label class="field" id="r-tof" style="display:none">Bis (leer = nur ein Tag)<input type="date" id="r-to"></label>
+    </div>
+    <div class="formrow" style="padding-top:0;align-items:center">
+      <label class="check"><input type="checkbox" id="r-events" checked> Ereignisse (Ausfälle, Paketverlust, Spitzen)</label>
+      <label class="check"><input type="checkbox" id="r-samples"> Messwerte (Zeitleiste und Statistik)</label>
+      <button class="btn danger" id="r-go" style="margin-left:auto">Löschen</button>
+    </div>
+  </div>
+
+  </div>
 </section>
 
 <section id="v-billing">
@@ -1100,11 +1133,14 @@ $('#s-days').onchange=loadStats;
 
 /* ---------- Einstellungen ---------- */
 function verNewer(a,b){ if(!a||!b) return false; const pa=a.split('.').map(Number), pb=b.split('.').map(Number); for(let i=0;i<3;i++){ const x=pa[i]||0, y=pb[i]||0; if(x!==y) return x>y; } return false; }
-(function(){ const box=$('#hosts-box'); try{ box.open=localStorage.getItem('pw_hostsopen')==='1'; }catch(e){}
-  box.addEventListener('toggle',()=>{ try{ localStorage.setItem('pw_hostsopen',box.open?'1':'0'); }catch(e){} $('#hosts-tog').textContent=box.open?'ausblenden ▴':'anzeigen ▾'; });
-  $('#hosts-q').addEventListener('input',()=>renderSettings());
-  $$('#set-nav [data-to]').forEach(a=>a.onclick=e=>{ e.preventDefault(); const el=$('#'+a.dataset.to); if(!el) return; if(el.tagName==='DETAILS') el.open=true; el.scrollIntoView({behavior:'smooth',block:'start'}); });
-})();
+$('#hosts-q').addEventListener('input',()=>renderSettings());
+/* Einstellungen in Reitern: #/settings/<kategorie>, zuletzt gewählte wird gemerkt */
+const SET_CATS=['hosts','sites','alerts','team','status','konto','system'];
+function setCat(c){ if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
+  try{ localStorage.setItem('pw_setcat',c); }catch(e){}
+  $$('#v-settings .setcat').forEach(d=>d.style.display=d.dataset.cat===c?'':'none');
+  $$('#set-tabs a').forEach(a=>a.classList.toggle('on',a.dataset.cat===c));
+  const on=$('#set-tabs a.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'}); }
 function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
 function renderSettings(){
   const st=S.state; if(!st) return;
@@ -1112,7 +1148,6 @@ function renderSettings(){
   const hs=q?st.hosts.filter(h=>(h.name+' '+h.addr+' '+gname(h)).toLowerCase().includes(q)):st.hosts;
   const np=st.hosts.filter(h=>h.paused).length, nd=st.hosts.filter(h=>!h.paused&&h.status==='down').length;
   $('#hosts-sum').textContent=st.hosts.length+' Hosts'; $('#hosts-sub').innerHTML=`${st.hosts.length-np} aktiv · ${np} pausiert${nd?` · <b style="color:var(--bad)">${nd} ohne Antwort</b>`:''}${q?` · ${hs.length} gefiltert`:''}`;
-  $('#hosts-tog').textContent=$('#hosts-box').open?'ausblenden ▴':'anzeigen ▾';
   $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}${h.fritz?' · Fritzbox':''}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> ${h.paused?`<button class="btn sm ed" data-pause="${h.id}" title="${h.pauseUntil?'pausiert bis '+fmtDT(h.pauseUntil,false):'dauerhaft pausiert'}">▶ Starten</button>`:`<button class="btn sm ed" data-hmute="${h.id}">⏸ Pause ▾</button>`}</td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:false})}); refreshState(); });
@@ -1143,7 +1178,11 @@ function renderSettings(){
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
   const sup=st.me&&st.me.super;
   $('#g-retrow').style.display=sup?'flex':'none';
-  $('#g-pw').style.display=sup&&st.envPassword?'none':'flex';
+  const hasUser=!!(st.me&&st.me.id);
+  $('#pf-admin').style.display=hasUser?'none':''; $('#pf-wrap').style.display=hasUser?'':'none';
+  const pwOk=hasUser||(sup&&!st.envPassword); $('#g-pwh').style.display=pwOk?'':'none'; $('#g-pwbox').style.display=pwOk?'':'none';
+  if(hasUser){ const sig=(st.me.name||'')+'|'+(st.me.email||''); const pn=$('#pf-name'), pe=$('#pf-email');
+    if(pn.dataset.sig!==sig&&document.activeElement!==pn&&document.activeElement!==pe){ pn.value=st.me.name||''; pe.value=st.me.email||''; pn.dataset.sig=sig; $('#pf-curf').style.display='none'; } }
   if(st.org) $('#team-sub').textContent=st.org.name;
   loadUsers(); loadAlerts(); loadMaint(); loadStatusPage(); renderGroups();
   const icmp={raw:'verfügbar',dgram:'verfügbar',none:'<b style="color:var(--bad)">im Container nicht erlaubt</b> – Cloud-Hosts mit Methode TCP anlegen',sim:'Simulationsmodus'}[st.icmp]||st.icmp;
@@ -1154,7 +1193,14 @@ function renderSettings(){
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0}; }
 $('#add-site').onclick=async()=>{ const n=prompt('Name des Standorts (z. B. „Büro Albbruck“ oder Kundenname):'); if(!n) return; try{ await api('/api/sites',{method:'POST',body:JSON.stringify({name:n})}); toast('Standort angelegt – jetzt agent.json und Agent herunterladen'); refreshState(); }catch(e){ alert(e.message); } };
 $('#g-save').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({retentionDays:+$('#g-ret').value})}); toast('Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
-$('#g-pwsave').onclick=async()=>{ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:$('#g-new').value})}); $('#g-old').value=$('#g-new').value=''; toast('Passwort geändert'); refreshState(); }catch(e){ alert(e.message); } };
+$('#g-pwsave').onclick=async()=>{ const nw=$('#g-new').value;
+  if(nw.length<8){ alert('Das neue Passwort braucht mindestens 8 Zeichen.'); return; }
+  if(nw!==$('#g-new2').value){ alert('Die beiden neuen Passwörter stimmen nicht überein.'); $('#g-new2').focus(); return; }
+  try{ await api('/api/settings',{method:'POST',body:JSON.stringify({oldPassword:$('#g-old').value,newPassword:nw})}); $('#g-old').value=$('#g-new').value=$('#g-new2').value=''; toast('Passwort geändert'); refreshState(); }catch(e){ alert(e.message); } };
+$('#pf-email').addEventListener('input',()=>{ const cur=(S.state&&S.state.me&&S.state.me.email)||''; $('#pf-curf').style.display=$('#pf-email').value.trim().toLowerCase()!==cur.toLowerCase()?'':'none'; });
+$('#pf-save').onclick=async()=>{ const me=(S.state&&S.state.me)||{}; const body={name:$('#pf-name').value.trim()}; const em=$('#pf-email').value.trim();
+  if(em.toLowerCase()!==(me.email||'').toLowerCase()){ body.email=em; body.currentPassword=$('#pf-cur').value; if(!body.currentPassword){ alert('Bitte zur Bestätigung das aktuelle Passwort eingeben.'); $('#pf-cur').focus(); return; } }
+  try{ await api('/api/me/profile',{method:'POST',body:JSON.stringify(body)}); $('#pf-cur').value=''; $('#pf-name').dataset.sig=''; toast(body.email?'E-Mail-Adresse geändert – künftig damit anmelden':'Gespeichert'); refreshState(); }catch(e){ alert(e.message); } };
 
 /* Übersicht: Gruppen oder Standorte */
 function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
@@ -1335,10 +1381,10 @@ function renderMutes(){ const ms=(S.state&&S.state.mutes)||[]; const el=$('#mute
   el.innerHTML='<div class="mute-banner">'+ms.map(m=>`<span>${m.all?'<b>🔕 Alle Meldungen stumm</b>':esc(m.name)+(m.hosts>1?` (${m.hosts} Hosts)`:'')} ${m.forever?'– dauerhaft':'bis '+fmtDT(m.end,false)} <button class="btn sm ed" data-unmute="${m.id}">Wieder einschalten</button></span>`).join('<span class="muted">·</span>')+'</div>';
   $$('#mute-banner [data-unmute]').forEach(b=>b.onclick=async()=>{ await api('/api/maint?id='+b.dataset.unmute,{method:'DELETE'}); toast('Meldungen wieder an'); refreshState(); }); }
 /* Vorläufiges Passwort: Hinweis-Dialog einmal je Sitzung + roter Balken bis zur Änderung */
-function goPw(){ location.hash='#/settings'; setTimeout(()=>{ const r=$('#g-pw'); if(r){ r.scrollIntoView({behavior:'smooth',block:'center'}); $('#g-old').focus(); } },250); }
+function goPw(){ location.hash='#/settings/konto'; setTimeout(()=>{ const r=$('#g-pw'); if(r){ r.scrollIntoView({behavior:'smooth',block:'center'}); $('#g-old').focus(); } },250); }
 function renderTempPw(){ const me=(S.state&&S.state.me)||{}; const el=$('#pw-banner');
   if(!me.tempPw){ el.innerHTML=''; return; }
-  el.innerHTML='<div class="pw-banner">⚠️ <b>Achtung:</b> Sie nutzen noch das vorläufige Passwort. <a href="#/settings" id="pw-go">Hier ändern →</a></div>';
+  el.innerHTML='<div class="pw-banner">⚠️ <b>Achtung:</b> Sie nutzen noch das vorläufige Passwort. <a href="#/settings/konto" id="pw-go">Hier ändern →</a></div>';
   $('#pw-go').onclick=e=>{ e.preventDefault(); goPw(); };
   let shown=false; try{ shown=sessionStorage.getItem('pw_temp_shown')==='1'; }catch(e){}
   if(!shown && !$('#dlg-pw').open){ try{ sessionStorage.setItem('pw_temp_shown','1'); }catch(e){} $('#dlg-pw').showModal(); } }
@@ -1772,7 +1818,7 @@ function route(){
   else S.hostId=null;
   if(v==='events') loadEvents();
   if(v==='stats'){ fillHostSelects(); renderReportBox(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
-  if(v==='settings') renderSettings();
+  if(v==='settings'){ setCat(parts[1]); renderSettings(); }
   if(v==='billing') renderBilling();
   if(v==='admin') loadAdmin();
   if(v==='requests') loadRequests();
