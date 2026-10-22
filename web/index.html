@@ -65,6 +65,8 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .btn.danger{color:var(--bad)}
 .seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px;flex-wrap:wrap}
 .seg button{border:0;background:none;padding:5px 10px;border-radius:7px;cursor:pointer;color:var(--mut);font-size:13px;font-weight:500}
+.seg a{padding:5px 10px;border-radius:7px;color:var(--mut);font-size:13px;font-weight:500;text-decoration:none}.seg a:hover{color:var(--fg)}
+#hosts-box[open] #hosts-tog::after{content:''}
 .seg button.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
 /* Übersicht */
@@ -323,8 +325,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
+  <div class="seg" id="set-nav" style="margin:4px 0 6px"><a href="#" data-to="hosts-box">Hosts</a><a href="#" data-to="grp-tbl">Gruppen</a><a href="#" data-to="sites">Standorte</a><a href="#" data-to="al-tbl">Alarme</a><a href="#" data-to="my-notify">Benachrichtigungen</a></div>
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
-  <div class="panel" style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
+  <details class="panel" id="hosts-box" style="padding:0">
+    <summary style="padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="hosts-sum">Hosts</b><span class="muted" style="font-size:13px" id="hosts-sub"></span><span style="margin-left:auto;font-size:13px;color:var(--acc)" id="hosts-tog">anzeigen ▾</span></summary>
+    <div style="padding:0 14px 10px"><input type="search" id="hosts-q" placeholder="Hosts filtern (Name, Adresse, Kunde) …" style="width:100%;max-width:360px;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)"></div>
+    <div style="overflow-x:auto"><table class="tbl" id="hosts-tbl"></table></div>
+  </details>
 
   <h2>Gruppen <button class="btn sm pri ed" id="add-group">+ Gruppe</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="grp-tbl"></table></div>
@@ -1027,10 +1034,19 @@ $('#s-days').onchange=loadStats;
 
 /* ---------- Einstellungen ---------- */
 function verNewer(a,b){ if(!a||!b) return false; const pa=a.split('.').map(Number), pb=b.split('.').map(Number); for(let i=0;i<3;i++){ const x=pa[i]||0, y=pb[i]||0; if(x!==y) return x>y; } return false; }
+(function(){ const box=$('#hosts-box'); try{ box.open=localStorage.getItem('pw_hostsopen')==='1'; }catch(e){}
+  box.addEventListener('toggle',()=>{ try{ localStorage.setItem('pw_hostsopen',box.open?'1':'0'); }catch(e){} $('#hosts-tog').textContent=box.open?'ausblenden ▴':'anzeigen ▾'; });
+  $('#hosts-q').addEventListener('input',()=>renderSettings());
+  $$('#set-nav [data-to]').forEach(a=>a.onclick=e=>{ e.preventDefault(); const el=$('#'+a.dataset.to); if(!el) return; if(el.tagName==='DETAILS') el.open=true; el.scrollIntoView({behavior:'smooth',block:'start'}); });
+})();
 function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
 function renderSettings(){
   const st=S.state; if(!st) return;
-  const hs=st.hosts;
+  const q=($('#hosts-q').value||'').toLowerCase().trim(); const gname=h=>(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'');
+  const hs=q?st.hosts.filter(h=>(h.name+' '+h.addr+' '+gname(h)).toLowerCase().includes(q)):st.hosts;
+  const np=st.hosts.filter(h=>h.paused).length, nd=st.hosts.filter(h=>!h.paused&&h.status==='down').length;
+  $('#hosts-sum').textContent=st.hosts.length+' Hosts'; $('#hosts-sub').innerHTML=`${st.hosts.length-np} aktiv · ${np} pausiert${nd?` · <b style="color:var(--bad)">${nd} ohne Antwort</b>`:''}${q?` · ${hs.length} gefiltert`:''}`;
+  $('#hosts-tog').textContent=$('#hosts-box').open?'ausblenden ▴':'anzeigen ▾';
   $('#hosts-tbl').innerHTML=hs.length? '<tr><th>Name</th><th>Adresse</th><th class="hide-m">Gruppe</th><th>Pingt von</th><th class="hide-m">Methode</th><th class="hide-m">Intervall</th><th class="hide-m">Spitze ab</th><th class="hide-m">Ausfall ab</th><th></th></tr>'+hs.map(h=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:var(${(STATUS[h.status]||STATUS.unknown)[1]})"></span><b>${esc(h.name)}</b></td><td class="num">${esc(h.addr)}</td><td class="hide-m">${esc(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'–')}</td><td>${esc(siteName(h.site))}</td><td class="hide-m">${{tcp:'TCP '+h.port,http:'Webseite',dns:'DNS',snmp:'SNMP'}[h.method]||'ICMP'}</td><td class="hide-m num">${(h.intervalMs/1000).toLocaleString('de-DE')} s</td><td class="hide-m num">${h.thresholdMs?h.thresholdMs+' ms':'auto'+(h.threshold?' ('+fmtMs(h.threshold)+')':'')}</td><td class="hide-m num">${h.outageCount}×</td><td class="act"><button class="btn sm ed" data-edit="${h.id}">Bearbeiten</button> ${h.paused?`<button class="btn sm ed" data-pause="${h.id}" title="${h.pauseUntil?'pausiert bis '+fmtDT(h.pauseUntil,false):'dauerhaft pausiert'}">▶ Starten</button>`:`<button class="btn sm ed" data-hmute="${h.id}">⏸ Pause ▾</button>`}</td></tr>`).join('') : '<tr><td class="empty">Noch keine Hosts angelegt.</td></tr>';
   $$('#hosts-tbl [data-edit]').forEach(b=>b.onclick=()=>openHost(b.dataset.edit));
   $$('#hosts-tbl [data-pause]').forEach(b=>b.onclick=async()=>{ const h=hs.find(x=>x.id===b.dataset.pause); await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:false})}); refreshState(); });

@@ -20,7 +20,7 @@ func legal() legalInfo {
 		City:      envOr("LEGAL_CITY", "79804 Dogern"),
 		Phone:     envOr("LEGAL_PHONE", "+49 172 4147503"),
 		Email:     envOr("LEGAL_EMAIL", "info@ict-dienstleistungen.de"),
-		Tax:       envOr("LEGAL_TAX", "Steuernummer 20356/10194 (Finanzamt Waldshut-Tiengen)"),
+		Tax:       envOr("LEGAL_TAX", "Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: DE369147660"),
 		Host:      envOr("LEGAL_HOST", "RST-Datentechnik GmbH, Albbruck"),
 		HostCity:  envOr("LEGAL_HOST_LOCATION", "Rechenzentrum in Frankfurt am Main, Deutschland"),
 		Authority: envOr("LEGAL_AUTHORITY", "Der Landesbeauftragte für den Datenschutz und die Informationsfreiheit Baden-Württemberg, Lautenschlagerstraße 20, 70173 Stuttgart"),
