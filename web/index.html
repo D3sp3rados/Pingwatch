@@ -728,6 +728,14 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
   </form>
 </dialog>
 
+<dialog id="dlg-orgusers">
+  <form method="dialog">
+    <div class="dlg-h" id="ou-title">Zugänge</div>
+    <div class="dlg-b" style="display:block"><div id="ou-list"></div><p class="muted" style="font-size:12.5px;margin:10px 0 0">Der Benutzer bekommt ein vorläufiges Passwort und wird beim nächsten Login aufgefordert, es zu ändern.</p></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Schließen</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-mute">
   <form method="dialog" id="mu-form">
     <div class="dlg-h" id="mu-title">Meldungen pausieren</div>
@@ -1859,6 +1867,13 @@ function renderBilling(){ const st=S.state; if(!st||!st.org) return; const o=st.
 $('#b-sites').oninput=()=>{ $('#b-sites').dataset.touched='1'; renderBilling(); };
 
 /* Betreiber: Kunden */
+async function openOrgUsers(orgId){ const o=ORGS.find(x=>x.id===orgId)||{name:''}; let us=[];
+  try{ us=await api('/api/admin/users?org='+encodeURIComponent(orgId)); }catch(e){ alert(e.message); return; }
+  $('#ou-title').textContent='Zugänge – '+o.name;
+  $('#ou-list').innerHTML=us.length?'<table class="tbl"><tr><th>Benutzer</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.email)}</b>${u.name?'<br><span class="muted" style="font-size:12px">'+esc(u.name)+'</span>':''}${u.super?' <span class="tag ok">Betreiber</span>':''}</td><td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td><td class="act"><button class="btn sm" data-ourst="${u.id}">Passwort zurücksetzen</button></td></tr>`).join('')+'</table>':'<p class="muted">Dieser Kunde hat noch keine Benutzer.</p>';
+  $$('#ou-list [data-ourst]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.ourst); if(!confirm(`Neues vorläufiges Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
+    try{ const r=await api('/api/admin/users',{method:'POST',body:JSON.stringify({id:u.id})}); $('#dlg-orgusers').close(); showTemp(r.email,r.tempPassword); }catch(e){ alert(e.message); } });
+  $('#dlg-orgusers').showModal(); }
 let ORGS=[];
 async function loadAdmin(){ try{ ORGS=await api('/api/admin/orgs'); }catch(e){ return; } renderAdmin(); }
 function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
@@ -1871,9 +1886,10 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
     return `<tr><td><b>${esc(o.name)}</b>${o.id===cur?' <span class="tag ok">geöffnet</span>':''}<br><span class="muted" style="font-size:12px">${esc(o.owner||o.email||'')}</span></td>
     <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="tag">Stripe</span>':o.billing==='invoice'?' <span class="tag">Rechnung</span>':''}</td><td><span class="tag ${c}">${t}</span>${o.expires&&o.expires>=Date.now()?`<br><span class="tag warn">Test bis ${fmtDate(o.expires)}</span>`:''}</td>
     <td class="num">${o.usedSites} / ${o.sites||(o.plan==='free'?1:'∞')}</td><td class="hide-m num">${o.usedHosts}</td><td class="hide-m num">${o.users}</td><td class="hide-m num">${o.mrr?eur(o.mrr):'–'}</td><td class="hide-m">${fmtDay(o.created)}</td>
-    <td class="act"><button class="btn sm pri" data-open="${o.id}">Öffnen</button> <button class="btn sm" data-oed="${o.id}">Bearbeiten</button></td></tr>`; }).join(''):'<tr><td class="empty">Keine Kunden gefunden.</td></tr>';
+    <td class="act"><button class="btn sm pri" data-open="${o.id}">Öffnen</button> <button class="btn sm" data-oed="${o.id}">Bearbeiten</button> <button class="btn sm" data-opw="${o.id}">Passwort</button></td></tr>`; }).join(''):'<tr><td class="empty">Keine Kunden gefunden.</td></tr>';
   $$('#a-tbl [data-open]').forEach(b=>b.onclick=()=>switchOrg(b.dataset.open,'#/'));
   $$('#a-tbl [data-oed]').forEach(b=>b.onclick=()=>openOrg(b.dataset.oed));
+  $$('#a-tbl [data-opw]').forEach(b=>b.onclick=()=>openOrgUsers(b.dataset.opw));
 }
 $('#a-q').oninput=renderAdmin;
 async function switchOrg(id,go){ try{ await api('/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ alert(e.message); return; }

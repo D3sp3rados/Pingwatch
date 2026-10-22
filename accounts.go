@@ -39,6 +39,7 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/requests", protect(s.handleRequests))
 	mux.HandleFunc("/api/admin/orgs", super(s.handleAdminOrgs))
 	mux.HandleFunc("/api/admin/switch", super(s.handleAdminSwitch))
+	mux.HandleFunc("/api/admin/users", super(s.handleAdminUsers))
 	mux.HandleFunc("/api/admin/events", super(s.handleAdminEvents))
 	mux.HandleFunc("/api/billing/checkout", protect(s.handleBillingCheckout))
 	mux.HandleFunc("/api/billing/change", protect(s.handleBillingChange))
@@ -727,4 +728,60 @@ func (s *Server) handleAdminEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	s.m.mu.RUnlock()
 	writeJSON(w, map[string]any{"events": evs, "orgs": names})
+}
+
+// ---------- Betreiber: Benutzer eines Kunden anzeigen / Passwort zurücksetzen ----------
+// GET /api/admin/users?org=<id> · POST /api/admin/users {id} → neues vorläufiges Passwort
+func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
+	m := s.m
+	switch r.Method {
+	case http.MethodGet:
+		org := r.URL.Query().Get("org")
+		type uv struct {
+			ID        string `json:"id"`
+			Email     string `json:"email"`
+			Name      string `json:"name"`
+			Role      string `json:"role"`
+			LastLogin int64  `json:"lastLogin"`
+			Super     bool   `json:"super"`
+		}
+		out := []uv{}
+		m.mu.RLock()
+		for _, u := range m.cfg.Users {
+			if u.Org == org {
+				out = append(out, uv{u.ID, u.Email, u.Name, u.Role, u.LastLogin, u.Super})
+			}
+		}
+		m.mu.RUnlock()
+		writeJSON(w, out)
+	case http.MethodPost:
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !readJSON(w, r, &req) {
+			return
+		}
+		temp := tempPassword()
+		email := ""
+		m.mu.Lock()
+		for i := range m.cfg.Users {
+			if m.cfg.Users[i].ID == req.ID {
+				m.cfg.Users[i].PassHash = hashPassword(temp)
+				m.cfg.Users[i].TempPW = true
+				email = m.cfg.Users[i].Email
+			}
+		}
+		if email != "" {
+			m.saveConfigLocked()
+		}
+		m.mu.Unlock()
+		if email == "" {
+			http.Error(w, "Benutzer unbekannt", 404)
+			return
+		}
+		log.Printf("Betreiber: Passwort für %s zurückgesetzt", email)
+		writeJSON(w, map[string]any{"ok": true, "email": email, "tempPassword": temp})
+	default:
+		http.Error(w, "Methode nicht erlaubt", 405)
+	}
 }
