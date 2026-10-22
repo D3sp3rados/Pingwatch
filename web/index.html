@@ -1553,7 +1553,7 @@ function renderUniFi(el,s){ const u=s.unifi||{}; const devs=u.devices||[];
   el.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud)));
 }
 function showUDev(s,d){ if(!d) return; const rows=[['Status',d.state==='ONLINE'?'online':d.state.toLowerCase()],['seit',fmtDT(d.since,false)],['Modell',d.model],['IP',d.ip||'–'],['MAC',d.mac||'–'],['Firmware',d.fw||'–'],
-  ['Laufzeit',fmtUp(d.uptime)],['CPU / RAM',d.cpu||d.mem?`${Math.round(d.cpu)} % / ${Math.round(d.mem)} %`:'–'],['Uplink',d.tx||d.rx?`↑ ${fmtBit(d.tx)} · ↓ ${fmtBit(d.rx)}`:'–'],
+  ['Laufzeit',fmtUp(d.uptime)],['CPU / RAM',d.cpu||d.mem?`${Math.round(d.cpu)} % / ${Math.round(d.mem)} %`:'–'],['Datenverkehr Uplink (aktuell)',d.tx||d.rx?`↑ ${fmtBit(d.tx)} · ↓ ${fmtBit(d.rx)}`:'–'],
   ['Ping (1 h)',d.pingAvg>=0?`Ø ${d.pingAvg.toFixed(1)} ms · max ${d.pingMax.toFixed(1)} ms · ${d.loss.toFixed(0)} % Verlust`:'–'],['Verfügbar (24 h)',d.avail>=0?d.avail.toFixed(2)+' %':'–'],
   ['Neustarts (24 h)',d.boots.length?d.boots.map(b=>fmtTime(b,false)).join(', '):'keine']];
   for(const w of d.wan||[]) rows.push([w.name+(w.active?' (aktiv)':''),`${w.up?'verbunden':'<b style="color:var(--bad)">getrennt</b>'}${w.ip?' · '+esc(w.ip):''}${w.latency?' · '+w.latency.toFixed(1)+' ms':''}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}${w.avail?' · '+w.avail.toFixed(2)+' % verfügbar':''}`]);
