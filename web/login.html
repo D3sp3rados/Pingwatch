@@ -16,16 +16,19 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 </style></head><body>
 <form method="post" action="/login">
 <div class="brand"><img src="/icon.svg" alt=""><span>Ping<span style="color:var(--acc)">Wacht</span></span></div>
-<label for="em">E-Mail</label>
+<div id="cred"><label for="em">E-Mail</label>
 <input id="em" name="email" type="text" inputmode="email" autocapitalize="none" autocomplete="username" placeholder="name@firma.de" required>
 <label for="pw">Passwort</label>
-<input id="pw" name="password" type="password" autocomplete="current-password" required>
+<input id="pw" name="password" type="password" autocomplete="current-password" required></div>
+<div id="tfa" style="display:none"><input type="hidden" name="step" value="2fa"><label for="code">Zwei-Faktor-Code</label>
+<input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-stelliger Code aus der Authenticator-App"></div>
 <div class="err" id="err">E-Mail oder Passwort falsch.</div>
 <button type="submit">Anmelden</button>
 <div id="su" style="display:none;margin-top:14px;font-size:13px;text-align:center;color:var(--mut)">Noch kein Konto? <a href="/signup" style="color:var(--acc)">Kostenlos registrieren</a></div>
 <p style="text-align:center;font-size:12px;margin:16px 0 0"><a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></p>
 </form>
 <script>const q=new URLSearchParams(location.search); if(q.get('f')){ const e=document.getElementById('err'); e.style.display='block'; if(q.get('m')) e.textContent=q.get('m'); }
-document.getElementById('em').focus();
+if(q.get('step')==='2fa'){ document.getElementById('cred').remove(); document.getElementById('tfa').style.display='block'; document.getElementById('code').required=true; document.getElementById('code').focus(); }
+else { document.getElementById('tfa').remove(); document.getElementById('em').focus(); }
 fetch('/api/plans').then(r=>r.json()).then(d=>{ if(d.provider&&d.provider.signup==='true') document.getElementById('su').style.display='block'; }).catch(()=>{});</script>
 </body></html>

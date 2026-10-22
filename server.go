@@ -353,7 +353,30 @@ func (s *Server) routes() http.Handler {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		r.ParseForm()
-		tok, _, err := s.login(r.FormValue("email"), r.FormValue("password"))
+		dev := loginDevice(w, r)
+		if r.FormValue("step") == "2fa" {
+			email := s.pending2FA(r)
+			if email == "" {
+				http.Redirect(w, r, "/login?f=1&m="+url.QueryEscape("Anmeldung abgelaufen – bitte erneut anmelden"), http.StatusFound)
+				return
+			}
+			tok, err := s.finish2FA(email, r.FormValue("code"), dev, r)
+			if err != nil {
+				time.Sleep(800 * time.Millisecond)
+				http.Redirect(w, r, "/login?step=2fa&f=1&m="+url.QueryEscape(err.Error()), http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "pw_2fa", Value: "", Path: "/login", MaxAge: -1})
+			s.setSession(w, r, tok)
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		tok, _, err := s.loginSecure(r.FormValue("email"), r.FormValue("password"), "", dev, r)
+		if err == errNeed2FA {
+			s.set2FAPending(w, r, r.FormValue("email"))
+			http.Redirect(w, r, "/login?step=2fa", http.StatusFound)
+			return
+		}
 		if err == nil {
 			s.setSession(w, r, tok)
 			http.Redirect(w, r, "/", http.StatusFound)
@@ -1465,9 +1488,18 @@ func (s *Server) handleAppLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Code     string `json:"code"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	tok, _, err := s.login(req.Email, req.Password)
+	dev := r.Header.Get("X-Device")
+	if dev == "" {
+		dev = r.UserAgent()
+	}
+	tok, _, err := s.loginSecure(req.Email, req.Password, req.Code, "app:"+dev, r)
+	if err == errNeed2FA {
+		http.Error(w, "Zwei-Faktor-Code fehlt – bitte das Passwort und direkt dahinter (ohne Leerzeichen) den 6-stelligen Code aus der Authenticator-App eingeben", 401)
+		return
+	}
 	if err != nil {
 		time.Sleep(800 * time.Millisecond)
 		http.Error(w, err.Error(), 401)

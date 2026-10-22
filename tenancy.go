@@ -62,9 +62,10 @@ type User struct {
 	Notify    *NotifyPrefs `json:"notify,omitempty"`
 	TempPW    bool         `json:"tempPw,omitempty"` // vorläufiges Passwort, muss noch geändert werden
 	// Zwei-Faktor-Code (TOTP) für Updates/Neustarts: aktives bzw. noch nicht bestätigtes Geheimnis
-	TOTP        string `json:"totp,omitempty"`
-	TOTPPending string `json:"totpPending,omitempty"`
-	Terms *Consent `json:"terms,omitempty"` // Zustimmung zu den Nutzungsbedingungen
+	TOTP        string   `json:"totp,omitempty"`
+	TOTPPending string   `json:"totpPending,omitempty"`
+	Terms       *Consent `json:"terms,omitempty"`   // Zustimmung zu den Nutzungsbedingungen
+	Devices     []string `json:"devices,omitempty"` // bekannte Geräte (Hash) für die Neu-Anmelde-Mail
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.
