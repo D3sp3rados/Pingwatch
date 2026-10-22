@@ -52,9 +52,10 @@ type Agent struct {
 	changed  func()
 	client   *http.Client
 	// Aktualisierung
-	latest      string // Version auf dem Server
-	autoUpdate  bool
-	requestExit func() // Oberfläche beenden (Windows-Tray)
+	latest        string // Version auf dem Server
+	autoUpdate    bool
+	requestExit   func() // Oberfläche beenden (Windows-Tray)
+	lastAutoCheck time.Time
 }
 
 const maxBuffer = 2_000_000
@@ -242,8 +243,12 @@ func (a *Agent) fetchConfig() bool {
 	a.autoUpdate = cfg.Auto == nil || *cfg.Auto
 	auto := a.autoUpdate
 	a.mu.Unlock()
-	if auto && cfg.Latest != "" && newerVersion(cfg.Latest, version) {
-		go a.selfUpdate(cfg.Latest, false)
+	// automatische Updates nur stündlich prüfen (manuell per Knopf sofort)
+	if auto && cfg.Latest != "" && time.Since(a.lastAutoCheck) >= time.Hour {
+		a.lastAutoCheck = time.Now()
+		if newerVersion(cfg.Latest, version) {
+			go a.selfUpdate(cfg.Latest, false)
+		}
 	}
 	a.setServer(true, "")
 	a.mu.Lock()
