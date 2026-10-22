@@ -178,3 +178,14 @@ func TestAlertsAndReport(t *testing.T) {
 		t.Fatal(code, body)
 	}
 }
+
+func TestMailFromRename(t *testing.T) {
+	t.Setenv("SMTP_FROM", "PingWatch <pingwatch@rst.de>")
+	if got := mailFrom(); got != "PingWacht <pingwatch@rst.de>" {
+		t.Fatal(got)
+	}
+	t.Setenv("SMTP_FROM", "Support <x@y.de>")
+	if got := mailFrom(); got != "Support <x@y.de>" {
+		t.Fatal(got)
+	}
+}

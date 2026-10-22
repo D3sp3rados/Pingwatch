@@ -375,7 +375,12 @@ func sendMail(to []string, subject, text, htmlBody string, att *attachment) erro
 }
 
 func mailFrom() string {
-	return envOr("SMTP_FROM", "PingWacht <pingwatch@"+envOr("SMTP_DOMAIN", "rst.de")+">")
+	f := envOr("SMTP_FROM", "PingWacht <pingwatch@"+envOr("SMTP_DOMAIN", "rst.de")+">")
+	// alter Produktname im Anzeigenamen → neuer Name (Adresse bleibt)
+	if i := strings.Index(f, "<"); i > 0 && strings.EqualFold(strings.Trim(strings.TrimSpace(f[:i]), `"`), "PingWatch") {
+		f = "PingWacht " + f[i:]
+	}
+	return f
 }
 
 func addrOnly(s string) string {
