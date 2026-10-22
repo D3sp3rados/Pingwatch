@@ -90,7 +90,7 @@ Unter **Einstellungen → Alarme** legt jeder Kunde eigene Alarmwege an (ab Pake
 | `SMTP_FROM` | Absender, z. B. `PingWacht <pingwatch@rst.de>` |
 | `SMTP_INSECURE=1` | Zertifikat nicht prüfen (interner Server mit eigenem Zertifikat) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_NAME` | gemeinsamer Bot des Anbieters (sonst trägt jeder Kunde seinen eigenen Bot ein) |
-| `PUBLIC_URL` | Link in Alarmen, z. B. `https://pingwatch-a4029c.apps.rstcloud.de` |
+| `PUBLIC_URL` | Link in Alarmen, z. B. `https://app.pingwacht.de` (Standard auf rstcloud) |
 
 Hinweis rstcloud: ausgehende Verbindungen auf 25/465/587 sind dort gesperrt – den Mailserver über einen freigegebenen Port oder das interne Netz ansprechen.
 

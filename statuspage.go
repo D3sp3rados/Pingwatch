@@ -250,7 +250,7 @@ func (s *Server) handleStatusConfig(w http.ResponseWriter, r *http.Request) {
 	statusCache.Lock()
 	delete(statusCache.m, p.Org)
 	statusCache.Unlock()
-	writeJSON(w, map[string]any{"ok": true, "url": baseURL(r) + "/status/" + sp.Slug})
+	writeJSON(w, map[string]any{"ok": true, "url": publicBase(r) + "/status/" + sp.Slug})
 }
 
 func availColor(a float64) string {

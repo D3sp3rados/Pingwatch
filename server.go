@@ -187,6 +187,21 @@ func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
+// publicBase: Adresse für Links nach außen (Einladungen, agent.json, Statusseite).
+// PUBLIC_URL hat Vorrang; auf der rstcloud-Adresse wird die eigene Domain verwendet.
+func publicBase(r *http.Request) string {
+	if u := strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"); u != "" {
+		return u
+	}
+	b := baseURL(r)
+	if strings.Contains(b, ".rstcloud.de") {
+		return defaultPublicURL
+	}
+	return b
+}
+
+const defaultPublicURL = "https://app.pingwacht.de"
+
 func baseURL(r *http.Request) string {
 	scheme := "http"
 	if isHTTPS(r) {
@@ -415,7 +430,7 @@ func (m *Monitor) siteOnline(id string) (bool, *siteState) {
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.Host, "localhost") && !strings.HasPrefix(r.Host, "127.") {
-		lastBase.Store("u", baseURL(r))
+		lastBase.Store("u", publicBase(r))
 	}
 	m := s.m
 	now := time.Now().UnixMilli()
@@ -1027,7 +1042,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Disposition", `attachment; filename="agent.json"`)
 		w.Header().Set("Content-Type", "application/json")
-		af := map[string]string{"server": baseURL(r), "token": site.Token, "site": site.Name}
+		af := map[string]string{"server": publicBase(r), "token": site.Token, "site": site.Name}
 		if r.URL.Query().Get("mode") == "sysonly" {
 			af["mode"] = "sysonly"
 		}

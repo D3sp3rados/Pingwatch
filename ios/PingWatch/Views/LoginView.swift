@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("lastServer") private var server = "pingwatch-a4029c.apps.rstcloud.de"
+    @AppStorage("lastServer") private var server = "app.pingwacht.de"
     @AppStorage("lastEmail") private var email = ""
     @State private var password = ""
     @State private var busy = false

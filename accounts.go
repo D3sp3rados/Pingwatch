@@ -681,7 +681,7 @@ func (s *Server) handleUserMail(w http.ResponseWriter, r *http.Request) {
 	if o != nil {
 		orgName = o.Name
 	}
-	link := baseURL(r) + "/login"
+	link := publicBase(r) + "/login"
 	from := "Ihr Administrator"
 	if p.User != nil {
 		from = p.User.Email

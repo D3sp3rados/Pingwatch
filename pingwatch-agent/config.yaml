@@ -12,7 +12,7 @@ host_network: true
 privileged:
   - NET_RAW
 options:
-  server: https://pingwatch-a4029c.apps.rstcloud.de
+  server: https://app.pingwacht.de
   token: ""
 schema:
   server: url
