@@ -284,6 +284,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 .invch{font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
 .invch:first-child{border-top:0}
 .heal-list{display:grid;gap:4px;margin:6px 0 0 26px}
+.trial-banner{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.trial-banner a{font-weight:700;margin-left:6px;color:var(--acc)}
 </style>
 </head>
 <body>
@@ -308,6 +309,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <main>
 <div id="mute-banner"></div>
 <div id="pw-banner"></div>
+<div id="trial-banner"></div>
 <section id="v-overview"><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button></div><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></section>
 
 <section id="v-host">
@@ -655,6 +657,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Abrechnung<select name="billing"><option value="invoice">Rechnung (manuell)</option><option value="stripe">Stripe (online)</option><option value="free">Kostenlos</option></select></label>
       <label class="field" id="of-ownerf">E-Mail des Inhabers (bekommt Zugang)<input name="ownerEmail" type="email" placeholder="kunde@firma.de"></label>
       <label class="field" id="of-ownernf">Name des Inhabers<input name="ownerName" maxlength="60"></label>
+      <label class="field">Testphase (Pro) bis<input type="date" name="trial"><small>Selbst registrierte Kunden testen Pro bis zu diesem Datum und werden danach automatisch auf Free gestuft. Datum ändern = verlängern; leer = Testphase beenden (Paket oben gilt regulär).</small></label>
       <label class="field">Zugang befristet bis (nur für Tester)<input type="date" name="expires"><small>Für normale, zahlende Kunden leer lassen. Mit Datum ist danach keine Anmeldung mehr möglich, die Überwachung läuft weiter.</small></label>
       <label class="check" id="of-disf"><input type="checkbox" name="disabled"> Zugang gesperrt</label>
       <div class="err" id="of-err" style="color:var(--bad);font-size:13px"></div>
@@ -1691,6 +1694,12 @@ function renderMutes(){ const ms=(S.state&&S.state.mutes)||[]; const el=$('#mute
   $$('#mute-banner [data-unmute]').forEach(b=>b.onclick=async()=>{ await api('/api/maint?id='+b.dataset.unmute,{method:'DELETE'}); toast('Meldungen wieder an'); refreshState(); }); }
 /* Vorläufiges Passwort: Hinweis-Dialog einmal je Sitzung + roter Balken bis zur Änderung */
 function goPw(){ location.hash='#/settings/konto'; setTimeout(()=>{ const r=$('#g-pw'); if(r){ r.scrollIntoView({behavior:'smooth',block:'center'}); $('#g-old').focus(); } },250); }
+function renderTrial(){ const st=S.state||{}, o=st.org||{}, me=st.me||{}, el=$('#trial-banner'); if(!el) return;
+  const own=me.role==='owner'||me.role==='admin';
+  if(!own||!o.trialUntil||(o.trialEnded&&o.plan!=='free')){ el.innerHTML=''; return; }
+  if(o.trialEnded){ el.innerHTML='<div class="trial-banner">Die Testphase ist beendet – Ihr Konto läuft im kostenlosen Paket Free weiter. <a href="#/billing">Paket wählen →</a></div>'; return; }
+  const d=Math.max(0,Math.ceil((o.trialUntil-Date.now())/864e5));
+  el.innerHTML=`<div class="trial-banner">🧪 <b>Testphase:</b> noch ${d===1?'1 Tag':d+' Tage'} (bis ${fmtDate(o.trialUntil)}) – alle Funktionen von Pro. <a href="#/billing">Paket wählen →</a></div>`; }
 function renderTempPw(){ const me=(S.state&&S.state.me)||{}; const el=$('#pw-banner');
   if(!me.tempPw){ el.innerHTML=''; return; }
   el.innerHTML='<div class="pw-banner">⚠️ <b>Achtung:</b> Sie nutzen noch das vorläufige Passwort. <a href="#/settings/konto" id="pw-go">Hier ändern →</a></div>';
@@ -2020,7 +2029,7 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
   const list=ORGS.filter(o=>!q||(o.name+' '+(o.owner||'')+' '+(o.email||'')).toLowerCase().includes(q));
   $('#a-tbl').innerHTML=list.length?'<tr><th>Kunde</th><th>Paket</th><th>Status</th><th>Standorte</th><th class="hide-m">Hosts</th><th class="hide-m">Benutzer</th><th class="hide-m">€/Monat</th><th class="hide-m">Seit</th><th></th></tr>'+list.map(o=>{ const [t,c]=o.disabled?['gesperrt','bad']:o.expires&&o.expires<Date.now()?['abgelaufen','bad']:(STAT[o.status||'active']||[o.status,'']);
     return `<tr><td><b>${esc(o.name)}</b>${o.id===cur?' <span class="tag ok">geöffnet</span>':''}<br><span class="muted" style="font-size:12px">${esc(o.owner||o.email||'')}</span></td>
-    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="tag">Stripe</span>':o.billing==='invoice'?' <span class="tag">Rechnung</span>':''}</td><td><span class="tag ${c}">${t}</span>${o.expires&&o.expires>=Date.now()?`<br><span class="tag warn">Test bis ${fmtDate(o.expires)}</span>`:''}</td>
+    <td>${esc(o.planName)}${o.billing==='stripe'?' <span class="tag">Stripe</span>':o.billing==='invoice'?' <span class="tag">Rechnung</span>':''}</td><td><span class="tag ${c}">${t}</span>${o.trialUntil&&!o.trialEnded?`<br><span class="tag warn">Testphase bis ${fmtDate(o.trialUntil)}</span>`:o.trialEnded?'<br><span class="tag">Test beendet</span>':''}${o.expires&&o.expires>=Date.now()?`<br><span class="tag warn">Zugang bis ${fmtDate(o.expires)}</span>`:''}</td>
     <td class="num">${o.usedSites} / ${o.sites||(o.plan==='free'?1:'∞')}</td><td class="hide-m num">${o.usedHosts}</td><td class="hide-m num">${o.users}</td><td class="hide-m num">${o.mrr?eur(o.mrr):'–'}</td><td class="hide-m">${fmtDay(o.created)}</td>
     <td class="act"><button class="btn sm pri" data-open="${o.id}">Öffnen</button> <button class="btn sm" data-oed="${o.id}">Bearbeiten</button> <button class="btn sm" data-opw="${o.id}">Passwort</button></td></tr>`; }).join(''):'<tr><td class="empty">Keine Kunden gefunden.</td></tr>';
   $$('#a-tbl [data-open]').forEach(b=>b.onclick=()=>switchOrg(b.dataset.open,'#/'));
@@ -2038,12 +2047,14 @@ function openOrg(id){ const o=id&&ORGS.find(x=>x.id===id);
   of.dataset.id=o?o.id:''; of.name.value=o?o.name:''; of.plan.value=o?o.plan:'basis'; of.sites.value=o?o.sites:1; of.billing.value=o?(o.billing||'free'):'invoice';
   of.ownerEmail.value=''; of.ownerName.value=''; of.disabled.checked=o?!!o.disabled:false;
   of.expires.value=o&&o.expires?new Date(o.expires-new Date(o.expires).getTimezoneOffset()*6e4).toISOString().slice(0,10):'';
+  const tu=o&&o.trialUntil&&!o.trialEnded?o.trialUntil:0; of.trial.value=tu?new Date(tu-new Date(tu).getTimezoneOffset()*6e4).toISOString().slice(0,10):''; of.dataset.trial=of.trial.value;
   $('#of-ownerf').style.display=$('#of-ownernf').style.display=o?'none':''; $('#of-disf').style.display=o&&o.id!=='default'?'':'none';
   $('#of-del').style.display=o&&o.id!=='default'?'':'none'; odlg.showModal(); }
 of.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:of.dataset.id,name:of.name.value.trim(),plan:of.plan.value,sites:+of.sites.value||0,billing:of.billing.value||'free',ownerEmail:of.ownerEmail.value.trim(),ownerName:of.ownerName.value.trim()};
   if(of.dataset.id) body.disabled=of.disabled.checked;
   body.expires=of.expires.value?new Date(of.expires.value+'T23:59:59').getTime():0;
+  if(of.dataset.id&&of.trial.value!==(of.dataset.trial||'')) body.trialUntil=of.trial.value?new Date(of.trial.value+'T23:59:59').getTime():0;
   try{ const r=await api('/api/admin/orgs',{method:'POST',body:JSON.stringify(body)}); odlg.close(); toast('Gespeichert'); if(r.tempPassword) showTemp(body.ownerEmail,r.tempPassword); loadAdmin(); refreshState(); }catch(err){ $('#of-err').textContent=err.message; } });
 $('#of-del').onclick=async()=>{ const o=ORGS.find(x=>x.id===of.dataset.id); if(!o) return;
   if(await uiPrompt(`Kunde „${o.name}“ mit allen Hosts, Standorten, Messwerten und Benutzern endgültig löschen?\n\nZur Bestätigung den Namen eingeben:`)!==o.name) return;
@@ -2181,7 +2192,7 @@ function route(){
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderAI();
+  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderTrial(); renderAI();
   if(S.view==='billing') renderBilling();
   if(S.view==='install') renderInstall();
   if(S.view==='overview') renderOverview();

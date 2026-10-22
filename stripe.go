@@ -401,6 +401,7 @@ func (s *Server) applySubscription(sub map[string]any) {
 			o.Status = "active"
 			if plan != "" {
 				o.Plan = plan
+				o.TrialUntil, o.TrialEnded = 0, false // bezahltes Abo beendet die Testphase
 			}
 			if qty > 0 {
 				o.Sites = int(qty)

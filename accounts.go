@@ -87,7 +87,7 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 			"siteLimit": o.siteLimit(), "hostLimit": o.hostLimit(), "usedSites": sites, "usedHosts": hosts,
 			"status": o.Status, "billing": o.Billing, "retention": o.retention(s.m.cfg.RetentionDays),
 			"features": pl.Features, "minInterval": pl.MinInterval, "paidUntil": o.PaidUntil,
-			"hasStripe": o.StripeCustomer != "", "email": o.Email,
+			"hasStripe": o.StripeCustomer != "", "email": o.Email, "trialUntil": o.TrialUntil, "trialEnded": o.TrialEnded,
 		}
 	}
 	s.aiAccountInfo(p, s.m.orgByID(p.Org), out)
@@ -262,35 +262,44 @@ func (m *Monitor) ownerCountLocked(org string) int {
 // ---------- Registrierung ----------
 
 var signupTmpl = template.Must(template.New("s").Parse(`<!doctype html><html lang="de"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>PingWacht – Konto erstellen</title>
-<link rel="icon" href="/favicon.ico"><style>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>PingWacht – 14 Tage kostenlos testen</title>
+<link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/icon-180.png"><meta name="theme-color" content="#0b1120"><meta name="robots" content="noindex"><style>
 :root{--bg:#f3f5f9;--card:#fff;--fg:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#059669}
 @media (prefers-color-scheme:dark){:root{--bg:#0b1120;--card:#111a2e;--fg:#e2e8f0;--mut:#8b9ab4;--line:#1e2a44;--acc:#34d399}}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px}
 form{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;width:100%;max-width:400px}
-h1{font-size:20px;margin:0 0 4px}p{color:var(--mut);font-size:13.5px;margin:0 0 18px}label{font-size:13px;color:var(--mut)}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-weight:700;font-size:20px;text-decoration:none;color:var(--fg)}.brand img{width:36px;height:36px}
+h1{font-size:20px;margin:0 0 6px}p.lead{color:var(--mut);font-size:13.5px;margin:0 0 6px}
+ul.ok{list-style:none;padding:0;margin:0 0 18px;font-size:13px;color:var(--mut)}ul.ok li:before{content:"✓ ";color:var(--acc);font-weight:700}
+label{font-size:13px;color:var(--mut)}
 input{width:100%;margin:5px 0 14px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-size:16px}
 button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc);color:#04130c;font-weight:600;font-size:15px;cursor:pointer}
 .err{color:#ef4444;font-size:13px;margin:-4px 0 12px}.small{font-size:12px;color:var(--mut);margin-top:14px;text-align:center}a{color:var(--acc)}
 .chk{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--mut);margin:-4px 0 14px}.chk input{width:auto;margin:3px 0 0}
-</style></head><body><form method="post">
-<h1>PingWacht – kostenlos starten</h1><p>Free-Paket: 1 Standort, 5 Hosts. Jederzeit erweiterbar.</p>
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+</style></head><body><form method="post" action="/signup">
+<a class="brand" href="/"><img src="/icon.svg" alt=""><span>Ping<span style="color:var(--acc)">Wacht</span></span></a>
+<h1>{{.Days}} Tage kostenlos testen</h1><p class="lead">Ohne Kreditkarte – die Testphase endet automatisch.</p>
+<ul class="ok"><li>Alle Funktionen des Pakets Pro</li><li>Danach weiter im kostenlosen Paket Free oder Paket wählen</li><li>Server in Deutschland, kein Tracking</li></ul>
 {{if .Err}}<div class="err">{{.Err}}</div>{{end}}
-<label>Firma</label><input name="org" required maxlength="80" value="{{.Org}}">
-<label>Ihr Name</label><input name="name" maxlength="80" value="{{.Name}}">
+<label>Firma</label><input name="org" required maxlength="80" value="{{.Org}}" autocomplete="organization">
+<label>Ihr Name</label><input name="name" maxlength="80" value="{{.Name}}" autocomplete="name">
 <label>E-Mail</label><input name="email" type="email" required value="{{.Email}}" autocomplete="email">
 <label>Passwort (mind. 8 Zeichen)</label><input name="password" type="password" required minlength="8" autocomplete="new-password">
-<label class="chk"><input type="checkbox" name="terms" required> <span>Ich akzeptiere die {{if .P.terms}}<a href="{{.P.terms}}" target="_blank">AGB</a> und die {{end}}<a href="{{.P.privacy}}" target="_blank">Datenschutzerklärung</a>.</span></label>
-<button>Konto erstellen</button>
+<div class="hp" aria-hidden="true"><label>Website</label><input name="website" tabindex="-1" autocomplete="off"></div>
+<label class="chk"><input type="checkbox" name="terms" required> <span>Ich akzeptiere {{if .P.terms}}die <a href="{{.P.terms}}" target="_blank">AGB</a> und {{end}}die <a href="{{.P.privacy}}" target="_blank">Datenschutzerklärung</a>.</span></label>
+<button>Test starten</button>
 <div class="small">Schon registriert? <a href="/login">Anmelden</a> · Anbieter: {{.P.name}} · <a href="{{.P.imprint}}" target="_blank">Impressum</a></div>
 </form></body></html>`))
 
+// /signup – Selbst-Registrierung mit Testphase (ALLOW_SIGNUP=1, TRIAL_DAYS, siehe trial.go).
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	if providerInfo()["signup"] != "true" {
 		http.Error(w, "Registrierung ist deaktiviert", 404)
 		return
 	}
-	data := map[string]any{"P": providerInfo()}
+	days := trialDays()
+	data := map[string]any{"P": providerInfo(), "Days": days}
 	if r.Method == http.MethodPost {
 		r.ParseForm()
 		org := strings.TrimSpace(r.FormValue("org"))
@@ -300,6 +309,11 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		data["Org"], data["Name"], data["Email"] = org, name, email
 		var err string
 		switch {
+		case !signupAllowed(clientIP(r), time.Now()):
+			err = "Zu viele Registrierungen von diesem Anschluss. Bitte später erneut versuchen."
+		case r.FormValue("website") != "":
+			log.Printf("Registrierung verworfen (Honeypot) von %s", clientIP(r))
+			err = "Registrierung nicht möglich."
 		case org == "":
 			err = "Bitte Firmennamen angeben."
 		case !validEmail(email):
@@ -307,21 +321,35 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		case len(pw) < 8:
 			err = "Passwort zu kurz (mind. 8 Zeichen)."
 		case r.FormValue("terms") == "":
-			err = "Bitte AGB und Datenschutz bestätigen."
+			err = "Bitte Datenschutzerklärung bestätigen."
 		case s.m.userByEmail(email) != nil:
 			err = "Diese E-Mail ist bereits registriert."
 		}
 		if err == "" {
-			o := Org{ID: randHex(5), Name: org, Plan: "free", Created: time.Now().UnixMilli(), Email: email, Status: "active"}
+			now := time.Now()
+			o := Org{ID: randHex(5), Name: org, Plan: "pro", Sites: 1, Created: now.UnixMilli(), Email: email, Status: "active",
+				TrialUntil: now.Add(time.Duration(days) * 24 * time.Hour).UnixMilli()}
 			u := User{ID: randHex(6), Email: email, Name: name, Org: o.ID, Role: "owner", PassHash: hashPassword(pw), Created: o.Created}
 			s.m.mu.Lock()
 			s.m.cfg.Orgs = append(s.m.cfg.Orgs, o)
 			s.m.cfg.Users = append(s.m.cfg.Users, u)
 			s.m.saveConfigLocked()
 			s.m.mu.Unlock()
-			log.Printf("Neue Registrierung: %s (%s)", org, email)
+			log.Printf("Neue Registrierung (Test bis %s): %s (%s)", time.UnixMilli(o.TrialUntil).Format("02.01.2006"), org, email)
+			base := publicBase(r)
+			until := time.UnixMilli(o.TrialUntil).Format("02.01.2006")
+			go func() {
+				hello := name
+				if hello == "" {
+					hello = "Guten Tag"
+				} else {
+					hello = "Hallo " + hello
+				}
+				trialMail([]string{email}, "Willkommen bei PingWacht", fmt.Sprintf("%s,\n\nIhr Testzugang für „%s“ ist eingerichtet. Sie können alle Funktionen des Pakets Pro bis zum %s kostenlos nutzen – ohne Kreditkarte, die Testphase endet automatisch.\n\nAnmelden: %s/login\nE-Mail: %s\n\nErste Schritte:\n1. Unter „Installieren“ den Agent für Ihr Netz herunterladen (Windows, Mac, Linux/Raspberry Pi, Home Assistant).\n2. Hosts anlegen – oder UniFi über die UniFi-Cloud verbinden.\n3. Unter „Mein Konto“ Push-Benachrichtigungen einschalten.\n\nFragen? Antworten Sie einfach auf diese E-Mail.\n", hello, org, until, base, email))
+				trialMail(operatorEmails(), "PingWacht: neue Registrierung – "+org, fmt.Sprintf("Neue Registrierung mit Testphase bis %s:\n\nFirma: %s\nName: %s\nE-Mail: %s\n\n%s/#/admin\n", until, org, name, email, base))
+			}()
 			s.setSession(w, r, s.makeToken(u.ID, userRef(&u)))
-			http.Redirect(w, r, "/#/settings", http.StatusFound)
+			http.Redirect(w, r, "/#/install", http.StatusFound)
 			return
 		}
 		data["Err"] = err
@@ -394,6 +422,7 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			Sites                                                 int
 			Disabled                                              *bool
 			Expires                                               *int64 // Testzugang bis (ms), 0 = unbegrenzt
+			TrialUntil                                            *int64 // Testphase (Pro) bis (ms), 0 = keine bzw. beenden
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -463,6 +492,16 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Expires != nil && o.ID != defaultOrgID {
 				o.Expires = *req.Expires
+			}
+			if req.TrialUntil != nil && o.ID != defaultOrgID && *req.TrialUntil != o.TrialUntil {
+				// verlängern (neues Datum) oder beenden (0 = Paket wird regulär zugewiesen)
+				o.TrialUntil, o.TrialWarned, o.TrialEnded = *req.TrialUntil, false, false
+				if o.TrialUntil > 0 && o.TrialUntil > time.Now().UnixMilli() && req.Plan == "" {
+					o.Plan = "pro"
+					if o.Sites < 1 {
+						o.Sites = 1
+					}
+				}
 			}
 			m.saveConfigLocked()
 			writeJSON(w, map[string]bool{"ok": true})

@@ -536,6 +536,7 @@ func (m *Monitor) housekeeping() {
 		nowMs := now.UnixMilli()
 		m.store.Flush()
 		m.resumePaused(nowMs)
+		m.trialCheck(now)
 		m.mu.RLock()
 		hosts := make([]*Host, 0, len(m.hosts))
 		for _, h := range m.hosts {

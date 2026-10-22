@@ -335,7 +335,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/export/samples.csv", protect(s.exportSamples))
 	mux.HandleFunc("/api/export/stats.csv", protect(s.exportStats))
 	mux.HandleFunc("/download/", protect(s.handleDownload))
-	return mux
+	return landingMiddleware(mux)
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
