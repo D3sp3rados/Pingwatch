@@ -55,19 +55,20 @@ type SiteCfg struct {
 }
 
 type Config struct {
-	Hosts         []HostCfg `json:"hosts"`
-	Sites         []SiteCfg `json:"sites"`
-	RetentionDays int       `json:"retentionDays"`
-	PassHash      string    `json:"passHash"`
-	Devices       []Device  `json:"devices"`
-	Orgs          []Org     `json:"orgs"`
-	Users         []User    `json:"users"`
-	Channels      []Channel `json:"channels"`
-	Maints        []Maint   `json:"maints"`
-	Groups        []Group   `json:"groups"`
-	VapidKey      string    `json:"vapidKey,omitempty"` // Web-Push-Schlüssel (privat)
-	Secret        string    `json:"secret"`
-	Version       int64     `json:"version"`
+	Hosts         []HostCfg        `json:"hosts"`
+	Sites         []SiteCfg        `json:"sites"`
+	RetentionDays int              `json:"retentionDays"`
+	PassHash      string           `json:"passHash"`
+	Devices       []Device         `json:"devices"`
+	Orgs          []Org            `json:"orgs"`
+	Users         []User           `json:"users"`
+	Channels      []Channel        `json:"channels"`
+	Maints        []Maint          `json:"maints"`
+	Groups        []Group          `json:"groups"`
+	Requests      []FeatureRequest `json:"requests,omitempty"` // Änderungswünsche aus dem KI-Assistenten
+	VapidKey      string           `json:"vapidKey,omitempty"` // Web-Push-Schlüssel (privat)
+	Secret        string           `json:"secret"`
+	Version       int64            `json:"version"`
 }
 
 func randHex(n int) string {

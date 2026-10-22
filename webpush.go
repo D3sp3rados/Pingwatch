@@ -185,6 +185,9 @@ func (m *Monitor) sendWebPush(d Device, n notice) error {
 	if n.hostID != "" {
 		url = "/#/host/" + n.hostID
 	}
+	if n.kind == "request" {
+		url = "/#/requests"
+	}
 	payload, _ := json.Marshal(map[string]any{"title": n.title, "body": n.body, "host": n.hostID, "kind": n.kind, "url": url,
 		"urgent": n.kind == "outage" || n.kind == "offline" || n.kind == "devoff" || n.kind == "wandown"})
 	body, err := webpushEncrypt(payload, p256, auth)

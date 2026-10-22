@@ -91,16 +91,19 @@ var datenschutzTmpl = template.Must(template.New("d").Parse(legalHead + `
 <h2>7. E-Mail und weitere Alarmwege</h2>
 <p>E-Mails (Alarme, Einladungen, Monatsberichte) versenden wir über einen eigenen Mailserver in Deutschland. Richten Sie Alarmwege zu Microsoft Teams, Telegram oder eigenen Webhooks ein, werden die Meldungstexte an diese von Ihnen gewählten Dienste übermittelt; dafür gelten deren Datenschutzbestimmungen.</p>
 
-<h2>8. Speicherdauer</h2>
+<h2>8. KI-Assistent</h2>
+<p>Ab dem Paket Basis steht in PingWacht ein KI-Assistent zur Verfügung. Wenn Sie ihn nutzen, werden Ihre Chat-Eingaben zusammen mit Angaben zu Ihrem eigenen Konto (Firmenname, Paket, Anzahl und Status von Standorten und Hosts, Versionen der Agenten) an ein Sprachmodell übermittelt, das auf eigenen Servern der {{.L.Name}} in Deutschland läuft. Passwörter, Zugangsschlüssel und IP-Adressen werden dabei nicht übermittelt. Es findet keine Weitergabe an Dritte statt, und Ihre Eingaben werden nicht zum Training von Modellen verwendet. Der Gesprächsverlauf wird nur in Ihrem Browser für die laufende Sitzung gespeichert. Reichen Sie über den Assistenten einen Änderungswunsch ein, speichern wir den Wunsch, einen kurzen Gesprächsauszug und eine automatische Vorprüfung, bis die Anfrage erledigt ist. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO; die Nutzung des Assistenten ist freiwillig. KI-Antworten können Fehler enthalten.</p>
+
+<h2>9. Speicherdauer</h2>
 <p>Messwerte und Ereignisse speichern wir entsprechend Ihres Pakets (je nach Paket 7 bis 365 Tage) und löschen sie danach automatisch. Kontodaten speichern wir, solange das Konto besteht; nach Kündigung werden sie gelöscht, soweit keine gesetzlichen Aufbewahrungspflichten (z. B. für Rechnungen) bestehen. Server-Protokolle werden nur kurzzeitig vorgehalten und laufend überschrieben.</p>
 
-<h2>9. Empfänger</h2>
+<h2>10. Empfänger</h2>
 <p>Eine Weitergabe an Dritte erfolgt nur an die Push-Dienste (Abschnitt 6) und an die von Ihnen eingerichteten Alarmwege (Abschnitt 7) oder wenn wir gesetzlich dazu verpflichtet sind. Ein Verkauf von Daten findet nicht statt.</p>
 
-<h2>10. Ihre Rechte</h2>
+<h2>11. Ihre Rechte</h2>
 <p>Sie haben das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch (Art. 21 DSGVO). Wenden Sie sich dazu an <a href="mailto:{{.L.Email}}">{{.L.Email}}</a>. Sie können sich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren, z. B. bei: {{.L.Authority}}.</p>
 
-<h2>11. Sicherheit</h2>
+<h2>12. Sicherheit</h2>
 <p>Alle Verbindungen sind TLS-verschlüsselt. Passwörter werden nur als Hash gespeichert, Agenten melden sich mit einem eigenen Schlüssel je Standort an, Agent-Updates werden über eine Prüfsumme abgesichert.</p>
 
 <p class="mut">Stand: {{.L.Updated}}</p>

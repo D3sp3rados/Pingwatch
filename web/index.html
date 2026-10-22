@@ -203,6 +203,32 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 #tip .r span:first-child{color:var(--mut)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
+/* KI-Assistent */
+#ai-btn{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:24px;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;z-index:50;display:none}
+#ai-btn.on{display:block}
+#ai-panel{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:min(400px,calc(100vw - 24px));height:min(600px,calc(100dvh - 120px));background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:55;display:none;flex-direction:column;overflow:hidden}
+#ai-panel.on{display:flex}
+.ai-h{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-weight:600}
+.ai-h .seg{margin-left:auto;font-weight:400}
+.ai-x{border:0;background:none;color:var(--mut);font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
+#ai-log{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.ai-m{max-width:88%;padding:8px 11px;border-radius:12px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.ai-m.u{align-self:flex-end;background:var(--acc);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap}
+.ai-m.a{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.ai-m.a ul{margin:4px 0 4px 18px;padding:0}.ai-m.a p{margin:0 0 6px}.ai-m.a p:last-child{margin:0}
+.ai-m.err{align-self:center;background:none;color:var(--bad);font-size:13px;text-align:center}
+.ai-dots{align-self:flex-start;color:var(--mut);font-size:13px}
+.ai-f{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
+.ai-f textarea{flex:1;resize:none;font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);color:var(--fg);max-height:120px}
+.ai-note{font-size:11px;color:var(--mut);padding:0 12px 9px;text-align:center}
+#ai-reqs{flex:1;overflow:auto;padding:12px 14px;display:none}
+.rq{padding:12px 14px;margin-bottom:10px}
+.rq-h{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--mut)}
+.rq-t{font-size:14.5px;margin:6px 0;font-weight:500}
+.rq-a{font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}
+.rq-s{font-weight:600}.rq-s.neu{color:var(--warn)}.rq-s.umsetzen,.rq-s.erledigt,.rq-s.vorhanden{color:var(--ok)}.rq-s.abgelehnt{color:var(--bad)}.rq-s.rueckfrage{color:var(--acc)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+@media (max-width:640px){#ai-panel{right:0;left:0;bottom:0;width:100%;height:calc(100dvh - 60px);border-radius:16px 16px 0 0}#ai-btn{right:14px;bottom:calc(14px + env(safe-area-inset-bottom))}}
 .conn{display:none;background:var(--bad);color:#fff;text-align:center;font-size:13px;padding:5px}
 .conn.on{display:block}
 @media (max-width:700px){
@@ -234,6 +260,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <a href="#/settings" data-v="settings">Einstellungen</a>
     <a href="#/billing" data-v="billing" id="tab-billing" style="display:none">Abo</a>
     <a href="#/admin" data-v="admin" id="tab-admin" style="display:none">Kunden</a>
+    <a href="#/requests" data-v="requests" id="tab-req" style="display:none">Anfragen<span class="badge" id="req-badge" style="display:none"></span></a>
   </nav>
 </div></header>
 
@@ -460,6 +487,11 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <p class="muted" style="font-size:12.5px;margin-top:14px" id="b-legal"></p>
 </section>
 
+<section id="v-requests">
+  <h2>Änderungswünsche <span class="muted" style="font-weight:400;font-size:12.5px">aus dem KI-Assistenten – mit automatischer Vorprüfung</span>
+    <span class="seg" id="rq-filter" style="margin-left:auto"><a href="#" data-f="offen" class="on">Offen</a><a href="#" data-f="alle">Alle</a></span></h2>
+  <div id="rq-list"></div>
+</section>
 <section id="v-admin">
   <div class="panel kv" id="a-kpi"></div>
   <h2>Kunden <button class="btn sm pri" id="a-new">+ Kunde anlegen</button> <a class="btn sm" href="/api/admin/orgs?format=csv">Abrechnung (CSV)</a>
@@ -709,6 +741,14 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
 
 <div id="tip"></div>
 <div class="toast" id="toast"></div>
+<button id="ai-btn" title="Assistent – Fragen und Wünsche" aria-label="Assistent öffnen">💬</button>
+<div id="ai-panel" role="dialog" aria-label="PingWacht-Assistent">
+  <div class="ai-h"><span>💬 Assistent</span><span class="seg" id="ai-tabs"><a href="#" data-t="chat" class="on">Chat</a><a href="#" data-t="reqs" id="ai-tab-reqs">Meine Anfragen</a></span><button class="ai-x" id="ai-new" title="Neues Gespräch">⟲</button><button class="ai-x" id="ai-close" title="Schließen">×</button></div>
+  <div id="ai-log"></div>
+  <div id="ai-reqs"></div>
+  <form class="ai-f" id="ai-form"><textarea id="ai-in" rows="1" maxlength="2000" placeholder="Frage stellen oder Wunsch äußern …"></textarea><button class="btn pri" id="ai-send">Senden</button></form>
+  <div class="ai-note">KI-Antworten können Fehler enthalten. Läuft auf Servern der RST in Deutschland.</div>
+</div>
 
 <script>
 'use strict';
@@ -1702,8 +1742,8 @@ function fillHostSelects(force){ const st=S.state; if(!st) return; const gs=st.g
   const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=gopts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
-  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','billing','admin'].includes(v)) v='overview';
-  if(v==='admin'&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
+  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','billing','admin','requests'].includes(v)) v='overview';
+  if((v==='admin'||v==='requests')&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
   S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||(v==='host'&&a.dataset.v==='overview')));
   hideTip();
@@ -1716,12 +1756,13 @@ function route(){
   if(v==='settings') renderSettings();
   if(v==='billing') renderBilling();
   if(v==='admin') loadAdmin();
+  if(v==='requests') loadRequests();
   if(v==='overview') { renderOverview(); }
   window.scrollTo(0,0);
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes();
+  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderAI();
   if(S.view==='billing') renderBilling();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();
@@ -1738,6 +1779,73 @@ setInterval(()=>{ if(document.hidden) return; tick++;
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ refreshState(); refreshOverview(); if(S.view==='host') loadDetail(); } });
 let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); },150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); });
+
+/* ---------- KI-Assistent ---------- */
+const AI={msgs:[],busy:false};
+try{ const v=JSON.parse(sessionStorage.getItem('pw_ai')||'[]'); if(Array.isArray(v)) AI.msgs=v.filter(m=>m&&(m.role==='user'||m.role==='assistant')&&typeof m.content==='string').slice(-30); }catch(e){}
+function aiSave(){ try{ sessionStorage.setItem('pw_ai',JSON.stringify(AI.msgs.slice(-30))); }catch(e){} }
+function mdLite(t){
+  const inl=x=>esc(x).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\((#\/[a-z0-9\/?=&_-]*)\)/gi,'<a href="$2">$1</a>');
+  const out=[]; let list=null;
+  for(const raw of String(t||'').split('\n')){ const line=raw.trim(); const m=line.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
+    if(m){ if(!list){ list=[]; } list.push('<li>'+inl(m[1])+'</li>'); continue; }
+    if(list){ out.push('<ul>'+list.join('')+'</ul>'); list=null; }
+    if(line) out.push('<p>'+inl(line)+'</p>'); }
+  if(list) out.push('<ul>'+list.join('')+'</ul>');
+  return out.join('');
+}
+function aiRender(){ const log=$('#ai-log');
+  if(!AI.msgs.length){ log.innerHTML=`<div class="ai-m a"><p>Hallo! Ich beantworte Fragen zu PingWacht und Ihrem Konto – z. B. <b>„Wie richte ich einen Agent ein?“</b> oder <b>„Was kostet ein weiterer Standort?“</b>.</p>${S.state&&S.state.requests?'<p>Fehlt Ihnen eine Funktion? Beschreiben Sie Ihren Wunsch – ich gebe ihn geprüft an den Anbieter weiter.</p>':''}</div>`; }
+  else log.innerHTML=AI.msgs.map(m=>m.role==='user'?`<div class="ai-m u">${esc(m.content)}</div>`:`<div class="ai-m a">${mdLite(m.content)}</div>`).join('');
+  if(AI.busy) log.insertAdjacentHTML('beforeend','<div class="ai-dots">Assistent schreibt …</div>');
+  if(AI.err) log.insertAdjacentHTML('beforeend',`<div class="ai-m err">${esc(AI.err)}</div>`);
+  log.scrollTop=log.scrollHeight; $('#ai-send').disabled=AI.busy; }
+function renderAI(){ const st=S.state||{}; $('#ai-btn').classList.toggle('on',!!st.assistant); if(!st.assistant) $('#ai-panel').classList.remove('on');
+  $('#ai-tab-reqs').style.display=st.requests?'':'none';
+  const sup=st.me&&st.me.super; $('#tab-req').style.display=sup&&(st.aiOn||st.requestsNew)?'':'none';
+  const b=$('#req-badge'); b.textContent=st.requestsNew||''; b.style.display=st.requestsNew?'':'none'; }
+function aiTab(t){ $$('#ai-tabs a').forEach(a=>a.classList.toggle('on',a.dataset.t===t)); const chat=t==='chat';
+  $('#ai-log').style.display=chat?'':'none'; $('#ai-form').style.display=chat?'':'none'; $('#ai-reqs').style.display=chat?'none':'block';
+  if(chat){ aiRender(); $('#ai-in').focus(); } else loadMyRequests(); }
+$$('#ai-tabs a').forEach(a=>a.onclick=e=>{ e.preventDefault(); aiTab(a.dataset.t); });
+$('#ai-btn').onclick=()=>{ const p=$('#ai-panel'); p.classList.toggle('on'); if(p.classList.contains('on')) aiTab('chat'); };
+$('#ai-close').onclick=()=>$('#ai-panel').classList.remove('on');
+$('#ai-new').onclick=()=>{ if(AI.busy) return; AI.msgs=[]; AI.err=''; aiSave(); aiTab('chat'); };
+$('#ai-log').addEventListener('click',e=>{ if(e.target.closest('a[href^="#/"]')&&innerWidth<=640) $('#ai-panel').classList.remove('on'); });
+const aiIn=$('#ai-in'); aiIn.addEventListener('input',()=>{ aiIn.style.height='auto'; aiIn.style.height=Math.min(aiIn.scrollHeight,120)+'px'; });
+aiIn.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); $('#ai-form').requestSubmit(); } });
+$('#ai-form').onsubmit=async e=>{ e.preventDefault(); const q=aiIn.value.trim(); if(!q||AI.busy) return;
+  AI.msgs.push({role:'user',content:q}); aiIn.value=''; aiIn.style.height='auto'; AI.busy=true; AI.err=''; aiSave(); aiRender();
+  try{ const r=await api('/api/assistant',{method:'POST',body:JSON.stringify({messages:AI.msgs.slice(-12)})});
+    AI.msgs.push({role:'assistant',content:r.reply||'…'}); if(r.request) refreshState(); }
+  catch(err){ AI.err=err.message==='401'?'':(err.message||'Fehler'); AI.msgs.pop(); aiIn.value=q; }
+  AI.busy=false; aiSave(); aiRender(); };
+async function loadMyRequests(){ const box=$('#ai-reqs'); box.innerHTML='<div class="muted">Lade …</div>';
+  try{ const rs=await api('/api/requests'); const mine=S.state&&S.state.me&&S.state.me.super?rs.filter(r=>r.org===(S.state.org&&S.state.org.id)):rs;
+    box.innerHTML=mine.length?mine.map(r=>`<div class="panel rq"><div class="rq-h"><span class="rq-s ${esc(r.status)}">${esc(r.statusLabel)}</span><span>${new Date(r.created).toLocaleDateString('de-DE')}</span></div><div class="rq-t">${esc(r.text)}</div>${r.reply?`<div class="rq-a"><b>Antwort:</b> ${esc(r.reply)}</div>`:''}</div>`).join(''):'<div class="muted" style="font-size:13.5px">Noch keine Anfragen. Beschreiben Sie im Chat, was Ihnen fehlt.</div>';
+  }catch(e){ box.innerHTML=`<div class="ai-m err">${esc(e.message)}</div>`; } }
+
+/* Anfragen (Betreiber) */
+const RQ={f:'offen',list:[]};
+$$('#rq-filter a').forEach(a=>a.onclick=e=>{ e.preventDefault(); RQ.f=a.dataset.f; $$('#rq-filter a').forEach(x=>x.classList.toggle('on',x===a)); renderRequests(); });
+async function loadRequests(){ try{ RQ.list=await api('/api/requests'); }catch(e){ $('#rq-list').innerHTML=`<div class="panel empty">${esc(e.message)}</div>`; return; } renderRequests(); }
+const RQ_OPEN=['neu','rueckfrage'];
+function renderRequests(){ const L=RQ.list.filter(r=>RQ.f==='alle'||RQ_OPEN.includes(r.status));
+  $('#rq-list').innerHTML=L.length?L.map(r=>{ const a=r.assessment||{};
+    const pre=a.ok?`<div class="rq-a"><b>Vorprüfung (KI):</b> machbar <b>${esc(a.machbar)}</b> · Aufwand <b>${esc(a.aufwand)}</b>${a.gibtEsSchon?' · <b>gibt es schon</b>':''}
+      <div style="margin-top:4px">${esc(a.zusammenfassung)}</div>${a.wieGenau?`<div><span class="muted">Wie:</span> ${esc(a.wieGenau)}</div>`:''}
+      ${a.konflikte?`<div><span class="muted">Konflikte:</span> ${esc(a.konflikte)}</div>`:''}${a.datenschutzRecht?`<div><span class="muted">Datenschutz/Recht:</span> ${esc(a.datenschutzRecht)}</div>`:''}</div>`:'<div class="rq-a muted">Vorprüfung nicht möglich.</div>';
+    return `<div class="panel rq" data-id="${esc(r.id)}"><div class="rq-h"><b style="color:var(--fg)">${esc(r.orgName)}</b><span>${esc(r.userName||'')}${r.userEmail?' · '+esc(r.userEmail):''}</span><span>${new Date(r.created).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}</span><span class="rq-s ${esc(r.status)}" style="margin-left:auto">${esc(r.statusLabel)}</span></div>
+      <div class="rq-t">${esc(r.text)}</div>${pre}
+      ${r.chat?`<details style="font-size:13px"><summary class="muted" style="cursor:pointer">Gesprächsauszug</summary><div style="white-space:pre-wrap;margin-top:6px">${esc(r.chat)}</div></details>`:''}
+      <label class="field" style="margin-top:8px">Antwort an den Kunden (optional, geht per E-Mail mit)<textarea rows="2" data-reply style="font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);color:var(--fg)">${esc(r.reply||'')}</textarea></label>
+      <div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn sm pri" data-st="umsetzen">Umsetzen</button><button class="btn sm" data-st="rueckfrage">Rückfrage</button><button class="btn sm danger" data-st="abgelehnt">Ablehnen</button><button class="btn sm" data-st="erledigt">Erledigt</button><button class="btn sm" data-rdel style="margin-left:auto">Löschen</button></div></div>`; }).join('')
+    :`<div class="panel empty">${RQ.f==='offen'?'Keine offenen Anfragen.':'Noch keine Anfragen.'}</div>`;
+  $$('#rq-list [data-st]').forEach(b=>b.onclick=async()=>{ const card=b.closest('.rq'); const reply=card.querySelector('[data-reply]').value.trim();
+    if(b.dataset.st==='rueckfrage'&&!reply){ alert('Bitte die Rückfrage an den Kunden ins Antwortfeld schreiben.'); return; }
+    try{ const r=await api('/api/requests',{method:'POST',body:JSON.stringify({id:card.dataset.id,status:b.dataset.st,reply})}); toast(r.mailed?'Gespeichert – Kunde per E-Mail informiert':'Gespeichert'); await loadRequests(); refreshState(); }catch(e){ alert(e.message); } });
+  $$('#rq-list [data-rdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Anfrage löschen?')) return; try{ await api('/api/requests?id='+encodeURIComponent(b.closest('.rq').dataset.id),{method:'DELETE'}); await loadRequests(); refreshState(); }catch(e){ alert(e.message); } });
+}
 window.addEventListener('hashchange',route);
 (async()=>{ await refreshState(); await refreshOverview(); route(); })();
 </script>

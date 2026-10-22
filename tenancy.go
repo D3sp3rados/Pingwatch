@@ -75,14 +75,14 @@ var plans = []Plan{
 	{ID: "free", Name: "Free", PriceCents: 0, MinSites: 0, MaxSites: 1, HostsPerSite: 5, Retention: 7, MinInterval: 5000,
 		Features: []string{"push"}, Public: true, Text: "1 Standort, 5 Hosts, 7 Tage Verlauf, Push aufs iPhone"},
 	{ID: "basis", Name: "Basis", PriceCents: 490, MinSites: 1, HostsPerSite: 25, Retention: 90, MinInterval: 1000,
-		Features: []string{"push", "alerts"}, Public: true, Text: "25 Hosts pro Standort, 90 Tage Verlauf, Push, E-Mail, Teams, Telegram"},
+		Features: []string{"push", "alerts", "assistant"}, Public: true, Text: "25 Hosts pro Standort, 90 Tage Verlauf, Push, E-Mail, Teams, Telegram, KI-Assistent"},
 	{ID: "pro", Name: "Pro", PriceCents: 990, MinSites: 1, HostsPerSite: 100, Retention: 365, MinInterval: 500,
-		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks"}, Public: true,
-		Text: "100 Hosts pro Standort, 1 Jahr Verlauf, Monatsbericht (PDF), Traceroute, Statusseite"},
+		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks", "assistant", "requests"}, Public: true,
+		Text: "100 Hosts pro Standort, 1 Jahr Verlauf, Monatsbericht (PDF), Traceroute, Statusseite, KI-Assistent mit Änderungswünschen"},
 	{ID: "partner", Name: "Partner", PriceCents: 390, MinSites: 10, HostsPerSite: 25, Retention: 90, MinInterval: 1000,
-		Features: []string{"push", "alerts", "report"}, Public: true, Text: "Ab 10 Standorten: wie Basis, inkl. Monatsbericht"},
+		Features: []string{"push", "alerts", "report", "assistant"}, Public: true, Text: "Ab 10 Standorten: wie Basis, inkl. Monatsbericht"},
 	{ID: "internal", Name: "Intern", PriceCents: 0, HostsPerSite: 0, Retention: 0, MinInterval: 500,
-		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks"}, Text: "Ohne Begrenzung"},
+		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks", "assistant", "requests"}, Text: "Ohne Begrenzung"},
 }
 
 func planByID(id string) Plan {

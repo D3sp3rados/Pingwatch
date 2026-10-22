@@ -20,6 +20,7 @@ var readOnlyOK = map[string]bool{
 	"/api/app/pushtest":   true,
 	"/api/webpush":        true,
 	"/api/me/notify":      true,
+	"/api/assistant":      true, // Fragen stellen darf jeder
 	"/api/billing/portal": false,
 }
 
@@ -32,6 +33,8 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/users", protect(s.handleUsers))
 	mux.HandleFunc("/api/users/mail", protect(s.handleUserMail))
 	mux.HandleFunc("/api/me/notify", protect(s.handleMyNotify))
+	mux.HandleFunc("/api/assistant", protect(s.handleAssistant))
+	mux.HandleFunc("/api/requests", protect(s.handleRequests))
 	mux.HandleFunc("/api/admin/orgs", super(s.handleAdminOrgs))
 	mux.HandleFunc("/api/admin/switch", super(s.handleAdminSwitch))
 	mux.HandleFunc("/api/admin/events", super(s.handleAdminEvents))
@@ -81,6 +84,7 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 			"hasStripe": o.StripeCustomer != "", "email": o.Email,
 		}
 	}
+	s.aiAccountInfo(p, s.m.orgByID(p.Org), out)
 	if p.Super {
 		var orgs []map[string]string
 		s.m.mu.RLock()
@@ -519,6 +523,13 @@ func (s *Server) deleteOrg(id string) {
 		}
 	}
 	m.cfg.Groups = keepG
+	keepR := m.cfg.Requests[:0]
+	for _, x := range m.cfg.Requests {
+		if x.Org != id {
+			keepR = append(keepR, x)
+		}
+	}
+	m.cfg.Requests = keepR
 	keepC := m.cfg.Channels[:0]
 	for _, c := range m.cfg.Channels {
 		if c.Org != id {
