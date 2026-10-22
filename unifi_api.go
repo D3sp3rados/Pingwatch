@@ -266,7 +266,7 @@ func (u *unifiAPI) enrich(siteID string, devs []unifiDevice) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			if d.ID != "" && strings.EqualFold(d.State, "ONLINE") {
-				if u.cloud && statCache.use(d) {
+				if u.cloud && len(devs) > unifiCloudStatFew && statCache.use(d) {
 					return
 				}
 				var st map[string]any

@@ -24,7 +24,8 @@ const (
 	unifiCloudEvery   = 60 * time.Second
 	unifiCloudWorkers = 4
 	unifiCloudMaxAll  = 3               // mehr Sites auf einer Konsole → Site muss gewählt werden (sonst Drosselung)
-	unifiCloudStatAge = 5 * time.Minute // Statistik je Gerät über die Cloud nur alle 5 Minuten neu
+	unifiCloudStatAge = 5 * time.Minute // Statistik je Gerät über die Cloud bei großen Standorten nur alle 5 Minuten neu
+	unifiCloudStatFew = 20              // bis zu so vielen Geräten am Standort: Statistik jede Minute
 )
 
 func (c *UniFiCfg) isCloud() bool { return c != nil && c.Mode == unifiModeCloud }
