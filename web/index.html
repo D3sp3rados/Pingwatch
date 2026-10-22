@@ -379,6 +379,23 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div class="help" style="border-top:1px solid var(--line)" id="g-info"></div>
   </div>
   <h2>Benachrichtigungen aufs Handy <button class="btn sm" id="push-test">Testnachricht senden</button></h2>
+  <div class="panel" id="my-notify" style="padding:14px;margin-bottom:10px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:14px">👤 Meine Benachrichtigungen</b><span class="muted" id="mn-state" style="font-size:13px"></span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0">
+      <label class="check"><input type="checkbox" id="mn-push"> Push aufs Handy / in den Browser</label>
+      <label class="check"><input type="checkbox" id="mn-mail"> E-Mail bei Ausfällen</label>
+      <input id="mn-mailto" placeholder="E-Mail (leer = Login-Adresse)" style="max-width:260px">
+      <label class="check" id="mn-allf" style="display:none"><input type="checkbox" id="mn-all"> Mails für alle Kunden (Betreiber)</label>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <span style="font-size:13px">🏖️ Urlaubsmodus:</span>
+      <button class="btn sm" data-pause="1">bis morgen früh</button><button class="btn sm" data-pause="7">1 Woche</button><button class="btn sm" data-pause="14">2 Wochen</button>
+      <input type="date" id="mn-pdate" style="max-width:150px"><button class="btn sm" id="mn-pset">bis Datum</button>
+      <button class="btn sm" id="mn-poff" style="display:none">Pause beenden</button>
+    </div>
+    <div id="mn-groups"></div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">Gilt nur für dich. Stumm geschaltete Kunden und der Urlaubsmodus gelten für Push und E-Mail. Die Alarmkanäle der Firma (Teams, Sammel-Mail …) laufen weiter.</p>
+  </div>
   <div class="panel" id="wp-box" style="padding:14px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:14px">🔔 Dieses Gerät</b><span class="muted" id="wp-state" style="font-size:13px"></span></div>
     <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0" id="wp-prefs">
@@ -971,7 +988,7 @@ function renderSettings(){
   $('#dev-tbl').innerHTML=devs.length?'<tr><th>Gerät</th><th>Registriert</th><th>Ausfall</th><th class="hide-m">Verlust</th><th class="hide-m">Spitzen</th><th class="hide-m">Standort</th><th class="hide-m">Hosts</th><th></th></tr>'+devs.map(d=>`<tr><td><b>${esc(d.name)}</b> <span class="tag">${d.kind==='web'?'Browser':'iPhone-App'}</span></td><td>${fmtDT(d.added,false)}</td><td>${yes(d.outage)}</td><td class="hide-m">${yes(d.loss)}</td><td class="hide-m">${yes(d.spike)}</td><td class="hide-m">${yes(d.offline)}</td><td class="hide-m">${d.hosts?d.hosts:'alle'}</td><td class="act"><button class="btn sm danger ed" data-deldev="${esc(d.id)}">Entfernen</button></td></tr>`).join(''):'<tr><td class="empty">Noch kein Gerät. Oben „Benachrichtigungen auf diesem Gerät aktivieren“ oder in der iPhone-App anmelden.</td></tr>';
   $$('#dev-tbl [data-deldev]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gerät entfernen? Es bekommt dann keine Benachrichtigungen mehr.')) return; await api('/api/app/device?id='+encodeURIComponent(b.dataset.deldev),{method:'DELETE'}); refreshState(); });
   $('#push-info').innerHTML=st.push?'Push für die iPhone-App ist eingerichtet.':(st.me&&st.me.super?'<b style="color:var(--warn)">Push für die iPhone-App nicht aktiv</b>: '+esc(st.pushErr||'APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID setzen')+'. Browser-Benachrichtigungen funktionieren trotzdem.':'');
-  $('#push-test').style.display=devs.length?'':'none'; wpRender();
+  $('#push-test').style.display=devs.length?'':'none'; wpRender(); if(!MN.loaded){ MN.loaded=true; mnLoad(); } else mnRender();
   if(document.activeElement!==$('#g-ret')) $('#g-ret').value=st.retentionDays;
   const sup=st.me&&st.me.super;
   $('#g-retrow').style.display=sup?'flex':'none';
@@ -1114,6 +1131,31 @@ function spURL(){ const sl=$('#sp-slug').value.trim(); $('#sp-url').innerHTML=sl
 $('#sp-slug').oninput=spURL;
 $('#sp-save').onclick=async()=>{ const body={on:$('#sp-on').checked,slug:$('#sp-slug').value.trim().toLowerCase(),title:$('#sp-title').value.trim(),note:$('#sp-note').value.trim(),hosts:$$('#sp-hosts input:checked').map(i=>i.value)};
   try{ await api('/api/statuspage',{method:'POST',body:JSON.stringify(body)}); SP.page=body; spURL(); toast(body.on?'Statusseite ist online':'Gespeichert'); }catch(e){ alert(e.message); } };
+
+/* Meine Benachrichtigungen */
+const MN={v:null};
+async function mnLoad(){ try{ MN.v=await api('/api/me/notify'); }catch(e){ MN.v=null; } mnRender(); }
+async function mnSave(body){ try{ MN.v=await api('/api/me/notify',{method:'POST',body:JSON.stringify(body)}); mnRender(); refreshState(); }catch(e){ alert(e.message); mnRender(); } }
+function mnUntilTxt(u){ return u<0?'dauerhaft':'bis '+fmtDT(u,false); }
+function mnRender(){ const box=$('#my-notify'); if(!box) return; const v=MN.v;
+  if(!v){ box.style.display='none'; return; } box.style.display='';
+  $('#mn-push').checked=!v.noPush; $('#mn-mail').checked=!!v.mail; if(document.activeElement!==$('#mn-mailto')) $('#mn-mailto').value=v.mailTo||''; $('#mn-mailto').placeholder='E-Mail (leer = '+v.email+')';
+  $('#mn-mailto').style.display=v.mail?'':'none'; $('#mn-allf').style.display=v.super&&v.mail?'':'none'; $('#mn-all').checked=!!v.mailAll;
+  const now=Date.now(); const paused=v.pauseUntil>now;
+  $('#mn-state').innerHTML=paused?'<b style="color:var(--warn)">🏖️ Pausiert '+esc(mnUntilTxt(v.pauseUntil))+'</b>':(v.noPush&&!v.mail?'<b style="color:var(--warn)">alles aus</b>':'aktiv'+(v.mail&&!v.smtp?' – <span style="color:var(--warn)">Mailserver fehlt</span>':''));
+  $('#mn-poff').style.display=paused?'':'none';
+  const gs=(S.state&&S.state.groups)||[]; const mute=v.mute||{};
+  $('#mn-groups').innerHTML=gs.length?'<div style="font-size:13px;margin-bottom:6px">🔕 Kunden stummschalten (z. B. bei Wartung):</div><table class="tbl">'+gs.map(g=>{ const u=mute[g.id]; const on=u!==undefined&&(u<0||u>now);
+    return `<tr><td><b>${esc(g.name)}</b> ${on?'<span class="tag" style="color:var(--warn)">stumm '+esc(mnUntilTxt(u))+'</span>':''}</td><td class="act">${on?`<button class="btn sm" data-mute="${g.id}" data-until="0">Wieder melden</button>`:`<button class="btn sm" data-mute="${g.id}" data-until="today">Heute</button> <button class="btn sm" data-mute="${g.id}" data-until="7">1 Woche</button> <button class="btn sm" data-mute="${g.id}" data-until="-1">Dauerhaft</button>`}</td></tr>`;}).join('')+'</table>':'<p class="muted" style="font-size:12.5px">Lege Gruppen (Kunden) an, dann kannst du sie hier einzeln stummschalten.</p>';
+  $$('#mn-groups [data-mute]').forEach(b=>b.onclick=()=>{ let u=b.dataset.until; if(u==='today'){ const d=new Date(); d.setHours(23,59,59,0); u=d.getTime(); } else if(u==='7'){ u=Date.now()+7*864e5; } else u=+u; mnSave({muteGroup:b.dataset.mute,muteUntil:u}); });
+}
+$('#mn-push').onchange=()=>mnSave({noPush:!$('#mn-push').checked});
+$('#mn-mail').onchange=()=>mnSave({mail:$('#mn-mail').checked});
+$('#mn-all').onchange=()=>mnSave({mailAll:$('#mn-all').checked});
+$('#mn-mailto').onchange=()=>mnSave({mailTo:$('#mn-mailto').value});
+$$('#my-notify [data-pause]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pause; const d=new Date(); d.setDate(d.getDate()+n); d.setHours(7,0,0,0); mnSave({pauseUntil:d.getTime()}); });
+$('#mn-pset').onclick=()=>{ const v=$('#mn-pdate').value; if(!v) return; const d=new Date(v+'T23:59:59'); mnSave({pauseUntil:d.getTime()}); };
+$('#mn-poff').onclick=()=>mnSave({pauseUntil:0});
 
 /* Web-Push */
 const WP={sub:null,checked:false};

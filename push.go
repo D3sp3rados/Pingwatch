@@ -276,12 +276,25 @@ func (m *Monitor) notify(n notice) {
 func (m *Monitor) pushLoop() {
 	for n := range m.notices {
 		m.dispatchAlerts(n)
+		m.personalMails(n)
 		m.mu.RLock()
 		devs := append([]Device(nil), m.cfg.Devices...)
+		group := m.hostGroupLocked(n.hostID)
+		prefs := map[string]*NotifyPrefs{}
+		for _, u := range m.cfg.Users {
+			if u.Notify != nil {
+				cp := *u.Notify
+				prefs[u.ID] = &cp
+			}
+		}
 		m.mu.RUnlock()
+		now := time.Now().UnixMilli()
 		var bad []string
 		for _, d := range devs {
 			if !d.AllOrgs && d.Org != n.org {
+				continue
+			}
+			if p := prefs[d.User]; p != nil && (p.NoPush || p.suppressed(group, now)) {
 				continue
 			}
 			if !d.wants(n) {

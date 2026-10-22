@@ -43,16 +43,17 @@ type Org struct {
 }
 
 type User struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	Org       string `json:"org"`
-	Role      string `json:"role"` // owner, admin, viewer
-	PassHash  string `json:"passHash"`
-	Created   int64  `json:"created"`
-	LastLogin int64  `json:"lastLogin,omitempty"`
-	Super     bool   `json:"super,omitempty"`   // Betreiber-Admin (nur Benutzer der Betreiber-Org)
-	Expires   int64  `json:"expires,omitempty"` // Zugang gültig bis (ms), 0 = unbegrenzt
+	ID        string       `json:"id"`
+	Email     string       `json:"email"`
+	Name      string       `json:"name"`
+	Org       string       `json:"org"`
+	Role      string       `json:"role"` // owner, admin, viewer
+	PassHash  string       `json:"passHash"`
+	Created   int64        `json:"created"`
+	LastLogin int64        `json:"lastLogin,omitempty"`
+	Super     bool         `json:"super,omitempty"`   // Betreiber-Admin (nur Benutzer der Betreiber-Org)
+	Expires   int64        `json:"expires,omitempty"` // Zugang gültig bis (ms), 0 = unbegrenzt
+	Notify    *NotifyPrefs `json:"notify,omitempty"`
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.

@@ -205,6 +205,9 @@ func NewPgStore(dsn string) (*PgStore, error) {
 			break
 		}
 		log.Printf("Datenbank nicht erreichbar (%v) – neuer Versuch in 10 s", err)
+		if i == 12 { // gut 2 Minuten ohne Datenbank → Betreiber per Mail informieren
+			go dbDownMail(err)
+		}
 		time.Sleep(10 * time.Second)
 	}
 	db.SetMaxOpenConns(5)
@@ -565,4 +568,17 @@ func (s *PgStore) LoadIfs(host string, from, to int64) (map[int][]ifPoint, map[i
 		json.Unmarshal([]byte(d), &info)
 	}
 	return pts, info
+}
+
+// dbDownMail informiert den Betreiber (OPS_EMAIL, sonst PROVIDER_EMAIL), dass die Datenbank fehlt.
+func dbDownMail(err error) {
+	to := strings.TrimSpace(envOr("OPS_EMAIL", os.Getenv("PROVIDER_EMAIL")))
+	if to == "" || !smtpConfigured() {
+		return
+	}
+	txt := "PingWatch kann seit über 2 Minuten die Datenbank nicht erreichen und zeigt so lange eine Wartungsseite.\n\nFehler: " + err.Error() +
+		"\n\nPingWatch versucht es alle 10 Sekunden weiter und startet automatisch, sobald die Datenbank wieder erreichbar ist."
+	if e := sendMail(splitAddrs(to), "[PingWatch] Datenbank nicht erreichbar", txt, "", nil); e != nil {
+		log.Printf("Hinweis-Mail Datenbank: %v", e)
+	}
 }

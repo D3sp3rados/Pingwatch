@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -50,6 +51,17 @@ func runServer(args []string) {
 	os.MkdirAll(*dataDir, 0o755)
 	log.SetFlags(log.LstdFlags)
 	log.Printf("PingWatch-Server %s startet, Daten in %s, Zeitzone %s", version, *dataDir, time.Local)
+
+	// HTTP sofort starten – bis alles bereit ist (z. B. Datenbank), antwortet eine Wartungsseite.
+	var current atomic.Value
+	current.Store(http.Handler(http.HandlerFunc(maintenanceHandler)))
+	srv := &http.Server{Addr: "0.0.0.0:" + *port, ReadHeaderTimeout: 10 * time.Second,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { current.Load().(http.Handler).ServeHTTP(w, r) })}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	var store Storage
 	if dsn, ok := databaseDSN(); ok {
@@ -111,13 +123,13 @@ func runServer(args []string) {
 	if os.Getenv("ACCESS_LOG") != "0" {
 		inner := handler
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/agent/config" {
+			if !strings.HasPrefix(r.URL.Path, "/api/") || (r.URL.Path == "/api/agent/config" && agentLogDue(clientIP(r))) {
 				log.Printf("HTTP %s %s (Host %s, von %s)", r.Method, r.URL.Path, r.Host, clientIP(r))
 			}
 			inner.ServeHTTP(w, r)
 		})
 	}
-	srv := &http.Server{Addr: "0.0.0.0:" + *port, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	current.Store(handler)
 	go func() {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
@@ -127,9 +139,28 @@ func runServer(args []string) {
 		os.Exit(0)
 	}()
 	log.Printf("Dashboard auf Port %s", *port)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	go m.statusLogLoop()
+	select {}
+}
+
+// maintenanceHandler: Antwort, solange der Server noch nicht bereit ist (z. B. Datenbank nicht erreichbar).
+func maintenanceHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Retry-After", "30")
+	w.Header().Set("Cache-Control", "no-store")
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"PingWatch startet gerade bzw. wird gewartet – bitte gleich nochmal versuchen"}`))
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	w.Write([]byte(`<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="20"><title>PingWatch – Wartung</title><style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1120;color:#e2e8f0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px}
+div{max-width:420px;text-align:center}h1{font-size:20px;margin:12px 0 6px}p{color:#8b9ab4;margin:0}</style></head>
+<body><div><div style="font-size:42px">🛠️</div><h1>PingWatch wird gerade gewartet</h1>
+<p>Die Überwachung läuft im Hintergrund weiter, sobald der Server wieder bereit ist. Diese Seite lädt sich automatisch neu.</p></div></body></html>`))
 }
 
 func (s *Server) hashPw(pw string) string {

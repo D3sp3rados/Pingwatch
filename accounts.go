@@ -19,6 +19,7 @@ var readOnlyOK = map[string]bool{
 	"/api/app/device":     true,
 	"/api/app/pushtest":   true,
 	"/api/webpush":        true,
+	"/api/me/notify":      true,
 	"/api/billing/portal": false,
 }
 
@@ -30,6 +31,7 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/me", protect(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.accountInfo(r)) }))
 	mux.HandleFunc("/api/users", protect(s.handleUsers))
 	mux.HandleFunc("/api/users/mail", protect(s.handleUserMail))
+	mux.HandleFunc("/api/me/notify", protect(s.handleMyNotify))
 	mux.HandleFunc("/api/admin/orgs", super(s.handleAdminOrgs))
 	mux.HandleFunc("/api/admin/switch", super(s.handleAdminSwitch))
 	mux.HandleFunc("/api/admin/events", super(s.handleAdminEvents))
