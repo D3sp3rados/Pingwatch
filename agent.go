@@ -22,6 +22,8 @@ type AgentFile struct {
 	Server string `json:"server"`
 	Token  string `json:"token"`
 	Site   string `json:"site,omitempty"`
+	// "sysonly": nur diesen Rechner überwachen (keine Hosts), z. B. auf weiteren Servern/PCs
+	Mode string `json:"mode,omitempty"`
 }
 
 type agentHost struct {
@@ -56,6 +58,12 @@ type Agent struct {
 	autoUpdate    bool
 	requestExit   func() // Oberfläche beenden (Windows-Tray)
 	lastAutoCheck time.Time
+	// Rechner-Überwachung
+	sysOnly bool
+	sysOn   bool
+	sysSvcs []string
+	sysErr  string
+	machine string
 }
 
 const maxBuffer = 2_000_000
@@ -94,6 +102,7 @@ func runAgent(args []string) {
 	fs := flag.NewFlagSet("agent", flag.ContinueOnError)
 	cfgPath := fs.String("config", "", "Pfad zur agent.json")
 	dataFlag := fs.String("data", "", "Datenverzeichnis")
+	sysOnlyFlag := fs.Bool("sysonly", false, "nur diesen Rechner überwachen (keine Hosts prüfen)")
 	fs.Parse(args)
 	dataDir := *dataFlag
 	if dataDir == "" {
@@ -130,6 +139,23 @@ func runAgent(args []string) {
 		showError("PingWacht-Agent: " + err.Error() + "\n\nIm Dashboard unter Einstellungen → Standorte die Datei agent.json herunterladen und neben die pingwatch-agent.exe legen (oder auf die exe ziehen).")
 		return
 	}
+	// Modus „nur Rechner“: Startparameter hat Vorrang, sonst gemerkter Modus aus dem Datenverzeichnis
+	flagSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "sysonly" {
+			flagSet = true
+		}
+	})
+	if flagSet {
+		af.Mode = ""
+		if *sysOnlyFlag {
+			af.Mode = "sysonly"
+		}
+	} else if af.Mode == "" {
+		if prev, _, err := loadAgentFile(filepath.Join(dataDir, "agent.json")); err == nil && prev.Mode == "sysonly" && prev.Token == af.Token {
+			af.Mode = "sysonly"
+		}
+	}
 	// Kopie im Datenverzeichnis, damit Autostart auch ohne Datei neben der exe klappt
 	if b, err := json.MarshalIndent(af, "", "  "); err == nil {
 		os.WriteFile(filepath.Join(dataDir, "agent.json"), b, 0o600)
@@ -138,13 +164,18 @@ func runAgent(args []string) {
 		file: af, dataDir: dataDir, hosts: map[string]*agentHost{}, siteName: af.Site,
 		refresh: make(chan struct{}, 1), stopAll: make(chan struct{}),
 		notify: func(string, string, bool) {}, changed: func() {},
-		client: &http.Client{Timeout: 25 * time.Second},
+		client:  &http.Client{Timeout: 25 * time.Second},
+		sysOnly: af.Mode == "sysonly", machine: sysMachineID(dataDir),
 	}
 	a.loadPending()
 	log.Printf("PingWacht-Agent %s, Server %s", version, af.Server)
+	if a.sysOnly {
+		log.Printf("Modus: nur Rechner-Überwachung (keine Hosts)")
+	}
 	go a.configLoop()
 	go a.unifiLoop()
 	go a.sendLoop()
+	go a.sysLoop()
 	agentUI(a)
 	a.shutdown()
 }
@@ -156,6 +187,10 @@ func (a *Agent) req(method, path string, body io.Reader, gz bool) (*http.Respons
 	}
 	r.Header.Set("Authorization", "Bearer "+a.file.Token)
 	r.Header.Set("X-Agent-Version", version)
+	if a.sysOnly {
+		r.Header.Set("X-Agent-Mode", "sysonly")
+		r.Header.Set("X-Machine", a.machine)
+	}
 	if gz {
 		r.Header.Set("Content-Encoding", "gzip")
 		r.Header.Set("Content-Type", "application/json")
@@ -230,6 +265,10 @@ func (a *Agent) fetchConfig() bool {
 		UniFi   *UniFiCfg  `json:"unifi"`
 		Latest  string     `json:"latest"`
 		Auto    *bool      `json:"autoUpdate"`
+		Sys     *struct {
+			On       bool     `json:"on"`
+			Services []string `json:"services"`
+		} `json:"sys"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
 		a.setServer(false, err.Error())
@@ -253,7 +292,17 @@ func (a *Agent) fetchConfig() bool {
 	a.setServer(true, "")
 	a.mu.Lock()
 	a.siteName = cfg.Site.Name
+	if a.sysOnly {
+		a.siteName += " (nur Rechner)"
+	}
+	a.sysOn, a.sysSvcs = cfg.Sys != nil && cfg.Sys.On, nil
+	if cfg.Sys != nil {
+		a.sysSvcs = cfg.Sys.Services
+	}
 	a.unifi = cfg.UniFi
+	if a.sysOnly {
+		a.unifi, cfg.Hosts = nil, nil
+	}
 	a.cfgVer = cfg.Version
 	want := map[string]HostCfg{}
 	for _, hc := range cfg.Hosts {

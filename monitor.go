@@ -52,6 +52,8 @@ type SiteCfg struct {
 	// Agent nicht automatisch aktualisieren
 	NoAutoUpdate bool  `json:"noAutoUpdate,omitempty"`
 	SetAuto      *bool `json:"setAutoUpdate,omitempty"` // nur API-Eingabe
+	// Rechner-Überwachung (CPU, RAM, Laufwerke, Dienste …)
+	Sys *SysCfg `json:"sys,omitempty"`
 }
 
 type Config struct {
@@ -66,6 +68,7 @@ type Config struct {
 	Maints        []Maint          `json:"maints"`
 	Groups        []Group          `json:"groups"`
 	Requests      []FeatureRequest `json:"requests,omitempty"` // Änderungswünsche aus dem KI-Assistenten
+	Machines      []MachineCfg     `json:"machines,omitempty"` // überwachte Rechner (Rechner-Überwachung)
 	VapidKey      string           `json:"vapidKey,omitempty"` // Web-Push-Schlüssel (privat)
 	Secret        string           `json:"secret"`
 	Version       int64            `json:"version"`
@@ -541,6 +544,7 @@ func (m *Monitor) housekeeping() {
 			}
 			h.mu.Unlock()
 		}
+		m.checkMachines(nowMs)
 		// Standorte ohne Meldung → offline
 		for _, s := range sites {
 			m.mu.RLock()
@@ -718,6 +722,11 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 	if s.ID == "" {
 		s.ID = randHex(4)
 		s.Token = randHex(24)
+		if s.Sys != nil {
+			sc := *s.Sys
+			sc.norm()
+			s.Sys = &sc
+		}
 		m.cfg.Sites = append(m.cfg.Sites, s)
 		m.sites[s.ID] = &siteState{}
 	} else {
@@ -731,6 +740,11 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 				}
 				if s.SetAuto != nil {
 					m.cfg.Sites[i].NoAutoUpdate = !*s.SetAuto
+				}
+				if s.Sys != nil {
+					sc := *s.Sys
+					sc.norm()
+					m.cfg.Sites[i].Sys = &sc
 				}
 				s = m.cfg.Sites[i]
 			}
@@ -750,6 +764,13 @@ func (m *Monitor) DeleteSite(id string) {
 	}
 	m.cfg.Sites = out
 	delete(m.sites, id)
+	machOut := m.cfg.Machines[:0]
+	for _, mc := range m.cfg.Machines {
+		if mc.Site != id {
+			machOut = append(machOut, mc)
+		}
+	}
+	m.cfg.Machines = machOut
 	var paused []string
 	for i := range m.cfg.Hosts {
 		if m.cfg.Hosts[i].Site == id {

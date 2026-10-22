@@ -42,6 +42,9 @@ func (m *Monitor) hostGroupLocked(hostID string) string {
 	if hostID == "" {
 		return ""
 	}
+	if strings.HasPrefix(hostID, "m:") {
+		return m.machineGroupLocked(hostID)
+	}
 	for _, h := range m.cfg.Hosts {
 		if h.ID == hostID {
 			return h.Group

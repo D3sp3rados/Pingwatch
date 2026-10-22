@@ -255,6 +255,28 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   .hide-m{display:none}
 }
 .pw-banner{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.pw-banner a{color:#991b1b;font-weight:700;margin-left:6px}@media (prefers-color-scheme:dark){.pw-banner{background:#3b0d0d;color:#fecaca;border-color:#7f1d1d}.pw-banner a{color:#fecaca}}
+
+/* Rechner-Überwachung */
+.mcard .meters{display:grid;gap:6px;margin:12px 0 4px}
+.mtr{display:grid;grid-template-columns:52px 1fr 42px;align-items:center;gap:8px;font-size:12.5px;color:var(--mut)}
+.mtr.nolbl{grid-template-columns:1fr 42px}
+.mtr i{display:block;height:7px;border-radius:4px;background:var(--line);overflow:hidden;position:relative}
+.mtr i b{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--ok)}
+.mtr span:last-child{text-align:right;color:var(--fg);font-variant-numeric:tabular-nums}
+.mtags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.mtags .tag{font-size:11.5px}
+.mcard .mmini{display:none}
+#ov.compact .mcard .meters,#ov.compact .mcard .mtags{display:none}
+#ov.compact .mcard .mmini{display:block;font-size:12.5px;color:var(--mut);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.mcols{grid-template-columns:1fr}}
+.mprob{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.b-sys{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.syscfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.mlist{display:grid;gap:6px;margin-top:6px}
+.mrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+.mrow b{flex:1 1 140px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow select,.mrow input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--fg)}
 </style>
 </head>
 <body>
@@ -329,12 +351,36 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="panel evlist" id="d-events"></div>
 </section>
 
+<section id="v-machine">
+  <div class="det-h">
+    <a class="btn sm" href="#/">← Übersicht</a>
+    <span class="dot" id="m-dot"></span>
+    <h1 id="m-name"></h1>
+    <span class="muted" id="m-sub"></span>
+    <button class="btn sm ed" id="m-mute" style="margin-left:auto">🔕 Stummschalten</button>
+    <button class="btn sm ed" id="m-edit">Bearbeiten</button>
+  </div>
+  <div class="mprob" id="m-probs"></div>
+  <div class="stats" id="m-stats"></div>
+  <div class="panel" style="padding:12px;margin-top:12px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Verlauf</b><div class="seg" id="m-range"><button data-r="24h" class="on">24 h</button><button data-r="7d">7 Tage</button></div>
+      <span class="muted" style="font-size:12.5px"><i style="display:inline-block;width:10px;height:3px;background:var(--acc);vertical-align:middle"></i> CPU · <i style="display:inline-block;width:10px;height:3px;background:#8b5cf6;vertical-align:middle"></i> RAM · <i style="display:inline-block;width:10px;height:3px;background:#f59e0b;vertical-align:middle"></i> vollstes Laufwerk</span></div>
+    <canvas id="m-chart" style="width:100%;height:190px;display:block;margin-top:8px"></canvas>
+  </div>
+  <div class="mcols">
+    <div><h2>Laufwerke</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-disks"></table></div></div>
+    <div><h2>Dienste</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="m-svcs"></table></div></div>
+  </div>
+  <h2>Ereignisse <span class="sub muted" style="font-weight:400;font-size:12.5px">letzte 7 Tage</span></h2>
+  <div class="panel evlist" id="m-events"></div>
+</section>
+
 <section id="v-events">
   <div class="filters">
     <select id="f-group" style="display:none"><option value="">Alle Gruppen</option></select>
     <select id="f-host"><option value="">Alle Hosts</option></select>
     <div class="seg" id="f-types">
-      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button><button data-t="reboot" class="on">Neustarts</button><button data-t="wan" class="on">WAN</button>
+      <button data-t="outage" class="on">Ausfälle</button><button data-t="loss" class="on">Paketverlust</button><button data-t="spike" class="on">Latenzspitzen</button><button data-t="offline" class="on">Standort offline</button><button data-t="device" class="on">UniFi-Geräte</button><button data-t="port" class="on">Ports</button><button data-t="reboot" class="on">Neustarts</button><button data-t="wan" class="on">WAN</button><button data-t="sys" class="on">Rechner</button>
     </div>
     <select id="f-range">
       <option value="1">Letzte 24 h</option><option value="7" selected>Letzte 7 Tage</option><option value="30">Letzte 30 Tage</option><option value="0">Alles</option>
@@ -694,6 +740,31 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
   </form>
 </dialog>
 
+<dialog id="dlg-sys">
+  <form method="dialog" id="sy-form">
+    <div class="dlg-h" id="sy-title">Rechner-Überwachung</div>
+    <div class="dlg-b" style="display:block">
+      <label class="check"><input type="checkbox" name="on"> <span><b>Rechner überwachen</b> – der Rechner mit dem Agent und weitere Rechner mit dem Agent im Modus „nur Rechner“ melden jede Minute CPU, Arbeitsspeicher, Laufwerke, Dienste, Updates, Virenschutz und ausstehende Neustarts. Es wird nur gemessen, nichts ferngesteuert.</span></label>
+      <label class="field" style="margin-top:10px">Überwachte Dienste (einer pro Zeile)<textarea name="services" rows="3" placeholder="Spooler&#10;MSSQLSERVER&#10;smbd"></textarea><small>Windows: Dienstname oder Anzeigename (services.msc). Linux: systemd-Dienst. Mac: launchd-Label. Meldung, wenn ein Dienst nicht läuft.</small></label>
+      <div class="syscfg-grid">
+        <label class="field">Laufwerk voll ab (%)<input name="diskPct" type="number" min="50" max="99"></label>
+        <label class="field">oder weniger frei als (GB, 0 = aus)<input name="diskMinGB" type="number" min="0" step="0.5"></label>
+        <label class="field">CPU dauerhaft über (%)<input name="cpuPct" type="number" min="50" max="100"></label>
+        <label class="field">RAM dauerhaft über (%)<input name="memPct" type="number" min="50" max="100"></label>
+        <label class="field">„dauerhaft“ = Minuten<input name="highMin" type="number" min="5" max="240"></label>
+        <label class="field">Virensignaturen älter als (Tage)<input name="avSigDays" type="number" min="1" max="60"></label>
+        <label class="field">Neustart ausstehend seit (Tagen)<input name="rebootDays" type="number" min="1" max="90"></label>
+        <label class="field">Ereignis ab … kritischen Einträgen/h<input name="evCrit" type="number" min="1" max="1000"></label>
+      </div>
+      <div style="margin-top:12px"><b style="font-size:13px">Rechner an diesem Standort</b> <span class="muted" id="sy-limit" style="font-size:12.5px"></span>
+        <div class="mlist" id="sy-machines"></div>
+        <p class="muted" style="font-size:12.5px;margin:8px 0 0">Weitere Server/PCs: unter <a href="#/install">Installieren</a> die agent.json „nur Rechner“ herunterladen und mit dem Agent auf den Rechner legen. Ein entfernter Rechner erscheint wieder, solange dort der Agent läuft.</p></div>
+    </div>
+    <div class="dlg-err" id="sy-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Schließen</button><button class="btn pri ed" value="ok">Speichern</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-maint">
   <form method="dialog" id="mt-form">
     <div class="dlg-h" id="mf-title">Wartung planen</div>
@@ -830,8 +901,11 @@ function pct(l,n,dec){ if(!n) return '–'; const v=l*100/n; return v.toLocaleSt
 function agg(a){ return a&&a!==0? {n:a[0],lost:a[1],spk:a[2],avg:a[3],min:a[4],max:a[5]} : {n:0,lost:0,spk:0,avg:-1,min:-1,max:-1}; }
 async function api(p,opt){ const r=await fetch(p,opt); if(r.status===401){location.href='/login';throw new Error('401');} if(!r.ok){throw new Error((await r.text())||r.statusText);} const ct=r.headers.get('content-type')||''; return ct.includes('json')? r.json() : r.text(); }
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2200);}
+const MSTATUS={ok:['OK','--ok'],warn:['Warnung','--warn'],bad:['Problem','--bad'],off:['Meldet sich nicht','--bad'],unknown:['Warte auf Daten','--off'],disabled:['Überwachung aus','--off']};
+const MBAD=m=>['bad','warn','off'].includes(m.status);
+const fmtBytes=b=>{ if(!b) return '0 GB'; const g=b/1073741824; return g>=1024?(g/1024).toLocaleString('de-DE',{maximumFractionDigits:1})+' TB':g>=100?Math.round(g)+' GB':g.toLocaleString('de-DE',{maximumFractionDigits:1})+' GB'; };
 const STATUS={ok:['OK','--ok'],spike:['Latenzspitze','--warn'],loss:['Paketverlust','--loss'],down:['Keine Antwort','--bad'],stale:['Keine Daten','--off'],siteoff:['Standort offline','--off'],paused:['Pausiert','--off'],unknown:['Warte auf Daten','--off']};
-const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down',reboot:'Neustart',wan:'WAN getrennt'};
+const TYPES={outage:'Ausfall',loss:'Paketverlust',spike:'Latenzspitze',offline:'Standort offline',device:'UniFi-Gerät',port:'Port down',reboot:'Neustart',wan:'WAN getrennt',sys:'Rechner'};
 
 /* ---------- Tooltip ---------- */
 const tip=$('#tip');
@@ -861,30 +935,31 @@ function renderSummary(){
   let uoff=0,wdown=0; for(const s of st.sites){ if(s.unifi&&s.unifi.on){ uoff+=s.unifi.offline||0; wdown+=s.unifi.wanDown||0; } }
   if(uoff) html+=`<span class="pill" style="color:var(--bad)"><b>${uoff}</b>&nbsp;UniFi offline</span>`;
   if(wdown) html+=`<span class="pill" style="color:var(--bad)"><b>${wdown}</b>&nbsp;WAN getrennt</span>`;
+  const mbad=(st.machines||[]).filter(MBAD).length; if(mbad) html+=`<span class="pill" style="color:var(--warn)"><b>${mbad}</b>&nbsp;Rechner auffällig</span>`;
   $('#summary').innerHTML=html;
 }
 function renderOverview(){
   const st=S.state; if(!st) return;
   const root=$('#ov');
-  if(!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
+  if(!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)&&!(st.machines||[]).length){ root.innerHTML=`<div class="panel empty"><div style="font-size:16px;color:var(--fg);font-weight:600">Noch keine Hosts</div>Lege den ersten Host an – z. B. eure Antenne oder 8.8.8.8.<br><button class="btn pri" onclick="openHost()">+ Host hinzufügen</button></div>`; cards={}; return; }
   // Abschnitte: nach Gruppe (Ordner) oder nach Standort
   const gs=st.groups||[]; const mode=ovMode(); const view=ovView(); root.classList.toggle('compact',view==='list'); $$('#ovview button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   $('#ovbar').style.display=st.hosts.length>1?'flex':'none'; $('#ovbar').style.flexWrap='wrap'; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
-  const secs=[];
+  const secs=[], ms=st.machines||[];
   if(mode==='group'){
-    for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id); if(hs.length) secs.push({key:'g'+g.id,kind:'group',group:g,hosts:hs}); }
-    const rest=st.hosts.filter(h=>!h.group||!gs.some(g=>g.id===h.group)); if(rest.length) secs.push({key:'g-',kind:'group',group:{name:'Ohne Gruppe'},hosts:rest});
+    for(const g of gs){ const hs=st.hosts.filter(h=>h.group===g.id), mm=ms.filter(m=>m.group===g.id); if(hs.length||mm.length) secs.push({key:'g'+g.id,kind:'group',group:g,hosts:hs,machines:mm}); }
+    const rest=st.hosts.filter(h=>!h.group||!gs.some(g=>g.id===h.group)), mrest=ms.filter(m=>!m.group||!gs.some(g=>g.id===m.group)); if(rest.length||mrest.length) secs.push({key:'g-',kind:'group',group:{name:'Ohne Gruppe'},hosts:rest,machines:mrest});
     for(const s of st.sites) if(s.unifi&&s.unifi.on) secs.push({key:'u'+s.id,kind:'site',site:s,hosts:[]});
   } else {
-    for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id); if(hs.length||(s.unifi&&s.unifi.on)) secs.push({key:'s'+s.id,kind:'site',site:s,hosts:hs}); }
+    for(const s of st.sites){ const hs=st.hosts.filter(h=>h.site===s.id), mm=ms.filter(m=>m.site===s.id); if(hs.length||mm.length||(s.unifi&&s.unifi.on)) secs.push({key:'s'+s.id,kind:'site',site:s,hosts:hs,machines:mm}); }
   }
-  const sig=mode+'|'+secs.map(x=>x.key+':'+x.hosts.map(h=>h.id).join(',')+(x.site&&x.site.unifi&&x.site.unifi.on?':u':'')).join('|');
+  const sig=mode+'|'+secs.map(x=>x.key+':'+x.hosts.map(h=>h.id).join(',')+':'+(x.machines||[]).map(m=>m.id).join(',')+(x.site&&x.site.unifi&&x.site.unifi.on?':u':'')).join('|');
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const sec of secs){
       const h=document.createElement('div'); h.className='site-h'; h.dataset.sec=sec.key; root.appendChild(h);
       const g=document.createElement('div'); g.className='grid'; g.dataset.sec=sec.key; root.appendChild(g);
-      if(sec.hosts.length){ const mb=document.createElement('button'); mb.className='btn sm ov-more'; mb.dataset.sec=sec.key; mb.style.display='none';
+      if(sec.hosts.length||(sec.machines||[]).length){ const mb=document.createElement('button'); mb.className='btn sm ov-more'; mb.dataset.sec=sec.key; mb.style.display='none';
         mb.onclick=()=>{ const o=ovOpen(); if(o[sec.key]) delete o[sec.key]; else o[sec.key]=1; try{ localStorage.setItem('pw_ovopen',JSON.stringify(o)); }catch(e){} renderOverview(); };
         root.appendChild(mb); }
       if(sec.site&&sec.site.unifi&&sec.site.unifi.on){ const u=document.createElement('div'); u.className='panel uf'; u.dataset.site=sec.site.id; root.appendChild(u); }
@@ -892,13 +967,17 @@ function renderOverview(){
         c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
         const bar=c.querySelector('.bar'); bar.addEventListener('mousemove',e=>barHover(e,host.id)); bar.addEventListener('mouseleave',hideTip); bar.addEventListener('click',e=>barClick(e,host.id));
         g.appendChild(c); cards[host.id]=c; }
+      for(const mc of sec.machines||[]){ const c=document.createElement('div'); c.className='panel card mcard'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><div class="meters"></div><div class="mtags"></div><div class="mmini"></div><div class="last"></div>`;
+        c.onclick=()=>{ location.hash='#/machine/'+mc.id; }; g.appendChild(c); cards['m:'+mc.id]=c; }
     }
   }
   ovFold(root,secs,view);
   for(const sec of secs){ const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
-    if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}</span>`; }
+    const mm=sec.machines||[], mInfo=mm.length?` · 💻 ${mm.filter(x=>x.status==='ok').length}/${mm.length} Rechner OK`:'';
+    if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}${mInfo}</span>`; }
     else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
-      h.innerHTML=`<span class="dot" style="background:var(${dn?'--bad':wn?'--warn':ok<act.length?'--off':'--ok'})"></span>📁 ${esc(sec.group.name)} <span class="muted">${ok}/${act.length} OK${dn?` · <b style="color:var(--bad)">${dn} ohne Antwort</b>`:''}${sec.group.note?' · '+esc(sec.group.note):''}</span>${sec.group.id?` <a href="#" class="ed" data-gmute="${sec.group.id}" title="Kunde stummschalten / pausieren" style="font-size:13px;text-decoration:none">🔕</a>`:''}`;
+      const mb=mm.filter(x=>x.status==='bad'||x.status==='off').length, mw=mm.filter(x=>x.status==='warn').length;
+      h.innerHTML=`<span class="dot" style="background:var(${dn||mb?'--bad':wn||mw?'--warn':ok<act.length?'--off':'--ok'})"></span>📁 ${esc(sec.group.name)} <span class="muted">${act.length?`${ok}/${act.length} OK`:''}${dn?` · <b style="color:var(--bad)">${dn} ohne Antwort</b>`:''}${act.length?mInfo:mInfo.slice(3)}${sec.group.note?' · '+esc(sec.group.note):''}</span>${sec.group.id?` <a href="#" class="ed" data-gmute="${sec.group.id}" title="Kunde stummschalten / pausieren" style="font-size:13px;text-decoration:none">🔕</a>`:''}`;
       const gm=h.querySelector('[data-gmute]'); if(gm) gm.onclick=e=>{ e.preventDefault(); openMute('group',sec.group.id,sec.group.name); }; }
   }
   for(const sec of secs){ if(!sec.site) continue; const u=root.querySelector(`.uf[data-site="${sec.site.id}"]`); if(u) renderUniFi(u,sec.site); }
@@ -920,8 +999,31 @@ function renderOverview(){
     else if(h.lastOutage){ const e=h.lastOutage; last.className='last'; last.textContent=`Letzter Ausfall: ${fmtDT(e.start,false)} · ${fmtDur((e.end||e.last)-e.start)}`; }
     else { last.className='last'; last.textContent=h.lastErr&&h.lastR<0?h.lastErr:(a24.n?'Keine Ausfälle gespeichert':''); }
   }
+  for(const m of st.machines||[]){ const c=cards['m:'+m.id]; if(c) renderMachineCard(c,m); }
   drawBars();
 }
+/* Rechner-Kachel in der Übersicht */
+function meterHTML(lbl,v,warnAt,badAt){ const L=lbl?`<span>${esc(lbl)}</span>`:'', cls=lbl?'mtr':'mtr nolbl';
+  if(v==null||v<0) return `<div class="${cls}">${L}<i></i><span>–</span></div>`; const col=v>=badAt?'--bad':v>=warnAt?'--warn':'--ok';
+  return `<div class="${cls}">${L}<i><b style="width:${Math.min(100,v)}%;background:var(${col})"></b></i><span>${v} %</span></div>`; }
+function avText(av){ if(!av) return ''; return !av.on?'🛡 Virenschutz aus':!av.rt?'🛡 Echtzeitschutz aus':'🛡 '+(av.name||'Virenschutz')+' aktiv'; }
+function renderMachineCard(c,m){ const [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown, r=m.cur||{};
+  c.classList.toggle('down',m.status==='bad'||m.status==='off');
+  c.querySelector('.dot').style.background=`var(${col})`;
+  c.querySelector('.card-t b').textContent='💻 '+m.name;
+  c.querySelector('.card-t span').textContent=(r.os||(m.sysOnly?'Rechner':'Rechner mit Agent'))+(ovMode()==='group'?' · '+siteName(m.site):'');
+  c.querySelector('.card-v b').textContent=m.cpu>=0?m.cpu+' %':'—'; const sv=c.querySelector('.card-v span'); sv.textContent=m.cpu>=0&&m.status==='ok'?'CPU':lbl; sv.style.color=m.status==='ok'?'':`var(${col})`;
+  c.querySelector('.meters').innerHTML=meterHTML('CPU',m.cpu,80,95)+meterHTML('RAM',m.mem,85,95)+meterHTML(m.diskName||'Platte',m.disk,80,90);
+  const tags=[]; if(m.svcN) tags.push(`<span class="tag ${m.svcOK<m.svcN?'warn':'ok'}">Dienste ${m.svcOK}/${m.svcN}</span>`);
+  if(r.upd>0) tags.push(`<span class="tag">${r.upd} Update${r.upd>1?'s':''}</span>`); if(r.av) tags.push(`<span class="tag ${r.av.on&&r.av.rt?'ok':'warn'}">${esc(avText(r.av))}</span>`);
+  if(r.reboot===1) tags.push('<span class="tag warn">Neustart ausstehend</span>'); if(r.evC>0) tags.push(`<span class="tag warn">${r.evC} kritische Ereignisse</span>`);
+  c.querySelector('.mtags').innerHTML=tags.join('');
+  c.querySelector('.mmini').textContent=m.cpu>=0?`CPU ${m.cpu} % · RAM ${m.mem} % · ${m.diskName||'Platte'} ${m.disk} %`:lbl;
+  const last=c.querySelector('.last');
+  if((m.problems||[]).length){ last.className='last live'; last.textContent=m.problems.join(' · '); }
+  else if(m.status==='off'){ last.className='last live'; last.textContent=m.at?'Letzte Meldung '+fmtDT(m.at,false):'Noch keine Meldung'; }
+  else if(m.status==='disabled'){ last.className='last'; last.textContent='Rechner-Überwachung am Standort ausgeschaltet'; }
+  else { last.className='last'; last.textContent=r.up?'Läuft seit '+fmtUp(r.up):''; } }
 /* Installieren: Agent-Downloads (gemeinsam mit den Standort-Karten) und Apps */
 const AGENT_DL={win:[['pingwatch-agent.exe','Windows-Agent']],linux:[['pingwatch-agent-linux-arm64','Pi (ARM64)'],['pingwatch-agent-linux-amd64','Linux x64']],mac:[['pingwatch-agent-darwin-arm64','Mac (Apple)'],['pingwatch-agent-darwin-amd64','Mac (Intel)']]};
 function agentDlLinks(keys,pri){ return keys.flatMap(k=>AGENT_DL[k]||[]).map(([f,l])=>`<a class="btn sm${pri?' pri':''}" href="/download/${f}">${l}</a>`).join(''); }
@@ -937,10 +1039,18 @@ function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; 
   const siteJson=sites.length?`<div class="row" style="margin:6px 0">${sites.map(x=>`<a class="btn sm" href="/download/agent.json?site=${x.id}">agent.json – ${esc(x.name)}</a>`).join('')}</div>`:`<div class="muted" style="margin:6px 0">Noch kein Standort – zuerst unter <a href="#/settings/sites">Einstellungen → Standorte</a> einen Standort anlegen (z. B. „Büro“).</div>`;
   const step1=`<li><b>Standort wählen</b> und dessen <b>agent.json</b> herunterladen (ein Standort = ein lokales Netz):${siteJson}</li>`;
   const push=`<a href="#/settings/konto">Einstellungen → Mein Konto</a>`;
+  const sysJson=sites.length?`<span class="row" style="display:inline-flex;flex-wrap:wrap">${sites.map(x=>`<a class="btn sm" href="/download/agent.json?site=${x.id}&mode=sysonly">agent.json „nur Rechner“ – ${esc(x.name)}</a>`).join('')}</span>`:'(zuerst einen Standort anlegen)';
+  const sysOn=sites.some(x=>x.sys&&x.sys.on);
+  const sysBlock=k=>`<h3 style="margin-top:16px">💻 Weitere Server/PCs überwachen (nur Rechner)</h3><p class="muted" style="margin:0 0 6px;font-size:13px">Misst CPU, Arbeitsspeicher, Laufwerke, Dienste${k==='win'?', Ereignisprotokoll, Windows-Updates, Virenschutz':''} und ausstehende Neustarts – ohne Hosts zu prüfen. Zählt nicht als Standort.</p><ol>
+    <li>${sysOn?'Rechner-Überwachung ist eingeschaltet ✔':`Unter <a href="#/settings/sites">Einstellungen → Standorte</a> beim Standort <b>„💻 Rechner-Überwachung“</b> einschalten (dort auch Dienste und Schwellwerte).`}</li>
+    <li>Diese Datei herunterladen: ${sysJson}</li>
+    ${k==='win'?'<li>Zusammen mit <b>pingwatch-agent.exe</b> auf den Server/PC legen (Dateiname <code>agent.json</code>) und starten – der Agent merkt sich den Modus, startet automatisch mit Windows und aktualisiert sich selbst.</li>':k==='mac'?'<li>Mit dem Mac-Agent in einen Ordner legen und dort starten: <code>./pingwatch-agent-darwin-arm64 agent -config agent.json</code></li>':'<li>Mit dem Linux-Agent auf den Server legen und starten: <code>./pingwatch-agent-linux-amd64 agent -config agent.json</code> (oder mit der normalen agent.json und <code>-sysonly</code>).</li>'}
+    <li>Der Rechner erscheint nach etwa einer Minute in der Übersicht. Name und Gruppe lassen sich unter Standorte → Rechner-Überwachung ändern.</li></ol>
+    ${k==='win'?'':'<p class="muted" style="font-size:12.5px;margin:4px 0 0">Der normale Standort-Agent meldet seinen eigenen Rechner automatisch mit, sobald die Rechner-Überwachung eingeschaltet ist.</p>'}`;
   const D={
-    win:`<h3>🪟 Windows-Agent</h3><ol>${step1}<li>Agent herunterladen: <span class="row" style="display:inline-flex">${agentDlLinks(['win'],true)}</span></li><li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\\PingWacht</code>) und <b>pingwatch-agent.exe</b> starten.</li><li>Erscheint „Der Computer wurde durch Windows geschützt“ (SmartScreen): <b>Weitere Informationen → Trotzdem ausführen</b>.</li><li>Der Agent sitzt als Symbol im Infobereich der Taskleiste, startet ab jetzt automatisch mit Windows und aktualisiert sich selbst.</li></ol>`,
-    mac:`<h3>🍎 Mac-Agent</h3><ol>${step1}<li>Agent herunterladen – <b>Apple</b> für M1/M2/M3…, <b>Intel</b> für ältere Macs: <span class="row" style="display:inline-flex">${agentDlLinks(['mac'],true)}</span></li><li>Beide Dateien in denselben Ordner legen und im Terminal dort starten:<br><code>chmod +x pingwatch-agent-darwin-arm64 &amp;&amp; ./pingwatch-agent-darwin-arm64 agent -config agent.json</code></li><li>Blockiert macOS den Start: in Systemeinstellungen → Datenschutz &amp; Sicherheit <b>„Dennoch öffnen“</b> wählen.</li></ol>`,
-    linux:`<h3>🐧 Linux / Raspberry Pi</h3><ol>${step1}<li>Agent herunterladen – <b>ARM64</b> für Raspberry Pi, <b>x64</b> für normale PCs/Server: <span class="row" style="display:inline-flex">${agentDlLinks(['linux'],true)}</span></li><li>Starten: <code>chmod +x pingwatch-agent-linux-arm64 &amp;&amp; ./pingwatch-agent-linux-arm64 agent -config agent.json</code> (am besten als systemd-Dienst).</li></ol>
+    win:`<h3>🪟 Windows-Agent</h3><ol>${step1}<li>Agent herunterladen: <span class="row" style="display:inline-flex">${agentDlLinks(['win'],true)}</span></li><li>Beide Dateien in denselben Ordner legen (z. B. <code>C:\\PingWacht</code>) und <b>pingwatch-agent.exe</b> starten.</li><li>Erscheint „Der Computer wurde durch Windows geschützt“ (SmartScreen): <b>Weitere Informationen → Trotzdem ausführen</b>.</li><li>Der Agent sitzt als Symbol im Infobereich der Taskleiste, startet ab jetzt automatisch mit Windows und aktualisiert sich selbst.</li></ol>${sysBlock('win')}`,
+    mac:`<h3>🍎 Mac-Agent</h3><ol>${step1}<li>Agent herunterladen – <b>Apple</b> für M1/M2/M3…, <b>Intel</b> für ältere Macs: <span class="row" style="display:inline-flex">${agentDlLinks(['mac'],true)}</span></li><li>Beide Dateien in denselben Ordner legen und im Terminal dort starten:<br><code>chmod +x pingwatch-agent-darwin-arm64 &amp;&amp; ./pingwatch-agent-darwin-arm64 agent -config agent.json</code></li><li>Blockiert macOS den Start: in Systemeinstellungen → Datenschutz &amp; Sicherheit <b>„Dennoch öffnen“</b> wählen.</li></ol>${sysBlock('mac')}`,
+    linux:`<h3>🐧 Linux / Raspberry Pi</h3><ol>${step1}<li>Agent herunterladen – <b>ARM64</b> für Raspberry Pi, <b>x64</b> für normale PCs/Server: <span class="row" style="display:inline-flex">${agentDlLinks(['linux'],true)}</span></li><li>Starten: <code>chmod +x pingwatch-agent-linux-arm64 &amp;&amp; ./pingwatch-agent-linux-arm64 agent -config agent.json</code> (am besten als systemd-Dienst).</li></ol>${sysBlock('linux')}
       <h3 style="margin-top:14px">🏠 Home Assistant (Add-on)</h3><ol><li>Einstellungen → Add-ons → Add-on-Store → ⋮ → <b>Repositories</b> → <code>https://github.com/D3sp3rados/Pingwatch</code> hinzufügen.</li><li>Add-on <b>„PingWacht Agent“</b> installieren.</li><li>In der Konfiguration das <b>Token</b> aus der agent.json des Standorts eintragen und starten. Bei jedem Start holt sich das Add-on die aktuelle Version.</li></ol>`,
     ios:`<h3>📱 iPhone / iPad</h3><p class="muted" style="margin:0 0 8px">Die App im App Store folgt – in der Testphase gibt es sie über <b>TestFlight</b> (Einladung beim Anbieter anfragen).</p><p style="margin:0 0 4px">Bis dahin als <b>Web-App</b>:</p><ol><li>Diese Seite in <b>Safari</b> öffnen.</li><li>Teilen-Symbol (Quadrat mit Pfeil nach oben) → <b>„Zum Home-Bildschirm“</b>.</li><li>PingWacht vom Home-Bildschirm starten und unter ${push} die <b>Benachrichtigungen aktivieren</b> (ab iOS 16.4).</li></ol>`,
     android:`<h3>🤖 Android</h3>${installEvt?'<p><button class="btn pri install-btn" id="inst-android-btn">📲 PingWacht jetzt installieren</button></p>':''}<ol><li>Diese Seite in <b>Chrome</b> öffnen.</li><li>Menü <b>⋮</b> → <b>„App installieren“</b> (bzw. „Zum Startbildschirm hinzufügen“).</li><li>PingWacht vom Startbildschirm öffnen und unter ${push} die <b>Benachrichtigungen aktivieren</b>.</li></ol>`};
@@ -950,9 +1060,10 @@ function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; 
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
 const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
 function ovFold(root,secs,view){ const open=ovOpen();
-  for(const sec of secs){ if(!sec.hosts.length) continue; const g=root.querySelector(`.grid[data-sec="${sec.key}"]`), mb=root.querySelector(`.ov-more[data-sec="${sec.key}"]`); if(!g||!mb) continue;
-    const bad=sec.hosts.filter(OV_BAD), good=sec.hosts.filter(h=>!OV_BAD(h)), order=[...bad,...good];
-    const want=order.map(h=>cards[h.id]).filter(Boolean);
+  for(const sec of secs){ const items=[...sec.hosts.map(h=>({c:cards[h.id],bad:OV_BAD(h)})),...(sec.machines||[]).map(m=>({c:cards['m:'+m.id],bad:MBAD(m)}))]; if(!items.length) continue;
+    const g=root.querySelector(`.grid[data-sec="${sec.key}"]`), mb=root.querySelector(`.ov-more[data-sec="${sec.key}"]`); if(!g||!mb) continue;
+    const bad=items.filter(x=>x.bad), good=items.filter(x=>!x.bad), order=[...bad,...good];
+    const want=order.map(x=>x.c).filter(Boolean);
     if(want.some((c,i)=>g.children[i]!==c)) want.forEach(c=>g.appendChild(c));
     let cols=1; if(view!=='list'){ cols=(getComputedStyle(g).gridTemplateColumns||'').split(' ').filter(x=>x&&x!=='none').length||1; }
     const limit=Math.max(view==='list'?4:cols*2, bad.length), n=order.length, isOpen=!!open[sec.key];
@@ -971,7 +1082,7 @@ function drawSpark(c,h){
 }
 function drawBars(){
   const ov=S.overview; if(!ov) return;
-  for(const id in cards){ const c=cards[id].querySelector('.bar'); const arr=ov.hosts[id]; const {g,W,H}=setupCanvas(c); if(!arr) continue;
+  for(const id in cards){ const c=cards[id].querySelector('.bar'); if(!c) continue; const arr=ov.hosts[id]; const {g,W,H}=setupCanvas(c); if(!arr) continue;
     const n=arr.length, w=W/n;
     for(let i=0;i<n;i++){ const a=agg(arr[i]); g.fillStyle=bucketColor(a); const x=Math.floor(i*w), x2=Math.floor((i+1)*w); g.fillRect(x,0,Math.max(1,x2-x-(w>5?1:0)),H); }
   }
@@ -990,6 +1101,7 @@ function evText(e){
     case 'port': return 'Schnittstelle war down';
     case 'reboot': return 'UniFi-Gerät neu gestartet';
     case 'wan': return 'Internetleitung getrennt';
+    case 'sys': return 'Rechner-Überwachung';
     case 'device': return e.name==='UniFi-Konsole'?'Konsole nicht erreichbar':'offline in der UniFi-Konsole';
   } return ''; }
 function ackHTML(e){ if(e.type!=='outage'&&e.type!=='offline') return '';
@@ -1009,7 +1121,7 @@ function renderEvents(el,evs,showHost,limit){
   el.querySelectorAll('[data-ack]').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); ackEvent(b.dataset.ack); });
   el.querySelectorAll('[data-tr]').forEach(a=>a.onclick=ev=>{ ev.preventDefault(); ev.stopPropagation(); const e=all.find(x=>String(x.id)===a.dataset.tr); showTrace('Traceroute zu '+(e.name||''),e.trace); });
   const more=el.querySelector('[data-more]'); if(more) more.onclick=ev=>{ ev.stopPropagation(); el._all=true; renderEvents(el,all,showHost,limit); };
-  el.querySelectorAll('.ev:not([data-more])').forEach(x=>x.onclick=()=>{ if(!x.dataset.h) return; const s=+x.dataset.s,e=+x.dataset.e, pad=Math.max(5*60e3,(e-s)*0.5); location.hash=`#/host/${x.dataset.h}?from=${Math.round(s-pad)}&to=${Math.round(Math.min(Date.now(),e+pad))}`; });
+  el.querySelectorAll('.ev:not([data-more])').forEach(x=>x.onclick=()=>{ if(!x.dataset.h) return; if(x.dataset.h.startsWith('m:')){ location.hash='#/machine/'+x.dataset.h.slice(2); return; } const s=+x.dataset.s,e=+x.dataset.e, pad=Math.max(5*60e3,(e-s)*0.5); location.hash=`#/host/${x.dataset.h}?from=${Math.round(s-pad)}&to=${Math.round(Math.min(Date.now(),e+pad))}`; });
 }
 
 /* ---------- Detailansicht ---------- */
@@ -1121,7 +1233,7 @@ function evQuery(){ const grp=$('#f-group').value; return evQuery0()+(grp?'&grou
 function evQuery0(){ const host=$('#f-host').value, types=$$('#f-types button.on').map(b=>b.dataset.t).join(','), days=+$('#f-range').value; let q=`host=${host}&types=${types}`; if(days) q+=`&from=${Date.now()-days*864e5}`; return q; }
 const EVG={open:{}}; try{ EVG.open=JSON.parse(localStorage.getItem('pw_evopen')||'{}'); }catch(e){}
 function evMode(){ const st=S.state||{}, me=st.me||{}; let m='list'; try{ m=localStorage.getItem('pw_evmode')||((st.groups||[]).length?'group':'list'); }catch(e){} if(m==='org'&&!me.super) m='list'; return m; }
-const LIVE_T=new Set(['outage','offline','device','port','wan']);
+const LIVE_T=new Set(['outage','offline','device','port','wan','sys']);
 async function loadEvents(){ const mode=evMode(), me=(S.state&&S.state.me)||{};
   $$('#ev-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode)); $('#ev-mode [data-m=org]').style.display=me.super?'':'none';
   if(mode!=='org') fillHostSelects(true);
@@ -1130,7 +1242,7 @@ async function loadEvents(){ const mode=evMode(), me=(S.state&&S.state.me)||{};
     if(mode==='org'){ const r=await api('/api/admin/events?limit=3000&'+evQuery0().replace(/^host=[^&]*&?/,'')); renderEvGroups(r.events,e=>e.org,k=>'🏢 '+(r.orgs[k]||k),true); $('#f-count').textContent=r.events.length+' Ereignisse'; $('#f-export').style.display='none'; return; }
     $('#f-export').style.display='';
     const evs=await api('/api/events?limit=1000&'+evQuery()); $('#f-count').textContent=evs.length+(evs.length>=1000?'+':'')+' Ereignisse'; $('#f-export').href='/api/export/events.csv?'+evQuery();
-    if(mode==='group'){ const st=S.state, gs=st.groups||[], hg={}; for(const h of st.hosts) hg[h.id]=gs.some(g=>g.id===h.group)?h.group:'-';
+    if(mode==='group'){ const st=S.state, gs=st.groups||[], hg={}; for(const h of st.hosts) hg[h.id]=gs.some(g=>g.id===h.group)?h.group:'-'; for(const m of st.machines||[]) hg['m:'+m.id]=gs.some(g=>g.id===m.group)?m.group:'-';
       const key=e=>e.host&&hg[e.host]!==undefined?'g'+hg[e.host]:(e.type==='device'||e.type==='reboot'||e.type==='wan'||e.dev)?'u'+e.site:e.type==='offline'?'s':'g-';
       const lbl=k=>k==='g-'?'Ohne Gruppe':k==='s'?'🛰 Standorte (Agenten)':k[0]==='u'?'📶 UniFi · '+siteName(k.slice(1)):'📁 '+((gs.find(g=>'g'+g.id===k)||{}).name||'?');
       renderEvGroups(evs,key,lbl,false); }
@@ -1212,13 +1324,15 @@ function renderSettings(){
   $$('#hosts-tbl [data-hmute]').forEach(b=>b.onclick=()=>{ const h=hs.find(x=>x.id===b.dataset.hmute); openMute('host',h.id,h.name); });
   const sites=st.sites.filter(s=>s.id!=='cloud');
   $('#sites').innerHTML=sites.length? sites.map(s=>`<div class="panel site"><div class="site-t"><span class="dot" style="background:var(${s.online?'--ok':s.lastSeen?'--bad':'--off'})"></span>${esc(s.name)}</div>
-    <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.unifi&&s.unifi.on?`<dt>UniFi</dt><dd><a href="#" data-ulist="${s.id}">${s.unifi.err?'<span style="color:var(--bad)">Konsole nicht erreichbar</span>':s.unifi.at?`${s.unifi.total} Geräte${s.unifi.offline?` · <b style="color:var(--bad)">${s.unifi.offline} offline</b>`:' · alle online'}`:'warte auf Agent …'}</a></dd>`:''}${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)} ${verNewer(st.version,s.version)?`<span class="tag warn">Update auf ${esc(st.version)} verfügbar</span>`:'<span class="tag ok">aktuell</span>'}</dd>`:''}<dt>Updates</dt><dd><label class="check" style="display:inline-flex"><input type="checkbox" class="ed" data-autoupd="${s.id}"${s.noAutoUpdate?'':' checked'}> automatisch</label>${s.online&&s.version&&verNewer(st.version,s.version)?` <button class="btn sm pri ed" data-updnow="${s.id}">Jetzt aktualisieren</button>`:''}</dd></dl>
+    <dl><dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${s.unifi&&s.unifi.on?`<dt>UniFi</dt><dd><a href="#" data-ulist="${s.id}">${s.unifi.err?'<span style="color:var(--bad)">Konsole nicht erreichbar</span>':s.unifi.at?`${s.unifi.total} Geräte${s.unifi.offline?` · <b style="color:var(--bad)">${s.unifi.offline} offline</b>`:' · alle online'}`:'warte auf Agent …'}</a></dd>`:''}${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)} ${verNewer(st.version,s.version)?`<span class="tag warn">Update auf ${esc(st.version)} verfügbar</span>`:'<span class="tag ok">aktuell</span>'}</dd>`:''}<dt>Rechner</dt><dd>${(()=>{ const mm=(st.machines||[]).filter(m=>m.site===s.id), bad=mm.filter(MBAD).length; return s.sys&&s.sys.on?`<a href="#" data-sys="${s.id}">${mm.length?mm.length+' überwacht'+(bad?` · <b style="color:var(--bad)">${bad} auffällig</b>`:' · alles OK'):'eingeschaltet, warte auf Agent …'}</a>`:`<a href="#" class="ed" data-sys="${s.id}">einrichten</a>`; })()}</dd><dt>Updates</dt><dd><label class="check" style="display:inline-flex"><input type="checkbox" class="ed" data-autoupd="${s.id}"${s.noAutoUpdate?'':' checked'}> automatisch</label>${s.online&&s.version&&verNewer(st.version,s.version)?` <button class="btn sm pri ed" data-updnow="${s.id}">Jetzt aktualisieren</button>`:''}</dd></dl>
     <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a>${agentDlLinks(['win','linux','mac'])}</div>
-    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button><button class="btn sm" data-ulive="${s.id}">UniFi-Livestatus</button></div>
+    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button><button class="btn sm" data-ulive="${s.id}">UniFi-Livestatus</button><button class="btn sm" data-sysb="${s.id}">💻 Rechner-Überwachung</button></div>
     <div class="row ed" style="margin-top:8px"><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
   $$('#sites [data-scan]').forEach(b=>b.onclick=()=>openImport(b.dataset.scan,'scan'));
   $$('#sites [data-unifi]').forEach(b=>b.onclick=()=>openImport(b.dataset.unifi,'unifi'));
   $$('#sites [data-ulive]').forEach(b=>b.onclick=()=>openULive(b.dataset.ulive));
+  $$('#sites [data-sys]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openSys(a.dataset.sys); });
+  $$('#sites [data-sysb]').forEach(b=>b.onclick=()=>openSys(b.dataset.sysb));
   $$('#sites [data-ulist]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openULive(a.dataset.ulist); });
   $$('#sites [data-autoupd]').forEach(c=>c.onchange=async()=>{ try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:c.dataset.autoupd,setAutoUpdate:c.checked})}); toast(c.checked?'Automatische Updates an':'Automatische Updates aus'); refreshState(); }catch(e){ alert(e.message); } });
   $$('#sites [data-updnow]').forEach(b=>b.onclick=async()=>{ b.disabled=true; b.textContent='Wird aktualisiert …';
@@ -1423,7 +1537,8 @@ async function installApp(){ if(!installEvt) return; installEvt.prompt(); await 
 /* Meldungen pausieren / Prüfung pausieren */
 const mudlg=$('#dlg-mute'); const MU={scope:'all',id:'',mode:'mute'};
 function openMute(scope,id,label){ MU.scope=scope; MU.id=id||''; MU.mode='mute';
-  $('#mu-title').textContent=scope==='all'?'Alle Meldungen pausieren':scope==='group'?'Kunde: '+label:'Host: '+label; $('#mu-err').textContent=''; muSync(); mudlg.showModal(); }
+  $('#mu-title').textContent=scope==='all'?'Alle Meldungen pausieren':scope==='group'?'Kunde: '+label:scope==='machine'?'Rechner: '+label:'Host: '+label; $('#mu-err').textContent='';
+  $('#mu-mode [data-m=pause]').style.display=scope==='machine'?'none':''; muSync(); mudlg.showModal(); }
 function muSync(){ $$('#mu-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===MU.mode));
   $('#mu-help').textContent=MU.mode==='mute'?'Es wird weiter geprüft und aufgezeichnet, aber es gehen keine Meldungen raus (Push, E-Mail, Teams …).':'Es wird gar nicht mehr geprüft (z. B. Gerät abgebaut). Läuft zum gewählten Zeitpunkt automatisch wieder an.'; }
 $$('#mu-mode button').forEach(b=>b.onclick=()=>{ MU.mode=b.dataset.m; muSync(); });
@@ -1866,16 +1981,17 @@ function fillHostSelects(force){ const st=S.state; if(!st) return; const gs=st.g
   const sh=$('#s-host'); if(sh.dataset.sig!==sig1){ const v2=sh.value; sh.innerHTML=gopts; if(v2) sh.value=v2; sh.dataset.sig=sig1; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
-  let v=parts[0]||'overview'; if(!['overview','host','events','stats','settings','install','billing','admin','requests'].includes(v)) v='overview';
+  let v=parts[0]||'overview'; if(!['overview','host','machine','events','stats','settings','install','billing','admin','requests'].includes(v)) v='overview';
   if((v==='admin'||v==='requests')&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
   S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
-  $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||(v==='host'&&a.dataset.v==='overview')));
+  $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||((v==='host'||v==='machine')&&a.dataset.v==='overview')));
   { const ta=$('#tabs a.on'); const tb=$('#tabs'); if(ta&&tb&&tb.scrollWidth>tb.clientWidth) tb.scrollLeft=Math.max(0,ta.offsetLeft-tb.clientWidth/2+ta.offsetWidth/2); }
   hideTip();
   if(v==='host'){ S.hostId=parts[1]; const r=q.get('r'); if(q.get('from')){ D.preset=null; D.from=+q.get('from'); D.to=+q.get('to')||Date.now(); } else { D.preset=r&&RANGES[r]?r:(D.preset||'1h'); }
     $$('#d-range button').forEach(b=>b.classList.toggle('on',b.dataset.r===D.preset)); $('#d-back').style.display=D.preset?'none':''; $('#d-date').value='';
     D.data=null; $('#d-events')._all=false; drawChart(); renderDetailHead(); loadDetail(); }
   else S.hostId=null;
+  if(v==='machine'){ MD.id=parts[1]; MD.data=null; renderMachine(); loadMachine(); } else MD.id=null;
   if(v==='events') loadEvents();
   if(v==='stats'){ fillHostSelects(); renderReportBox(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
   if(v==='settings'){ setCat(parts[1]); renderSettings(); }
@@ -1893,6 +2009,7 @@ async function refreshState(){
   if(S.view==='install') renderInstall();
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();
+  if(S.view==='machine') renderMachine();
   if(S.view==='settings') renderSettings();
 }
 async function refreshOverview(){ try{ S.overview=await api('/api/overview?hours=24&n=96'); if(S.view==='overview') drawBars(); }catch(e){} }
@@ -1902,10 +2019,72 @@ setInterval(()=>{ if(document.hidden) return; tick++;
   if(tick%10===0) refreshOverview();
   if(S.view==='host'&&D.preset){ const span=RANGES[D.preset]; if(span<=6*36e5||tick%10===0) loadDetail(); }
   if(S.view==='events'&&tick%5===0) loadEvents();
+  if(S.view==='machine'&&tick%5===0) loadMachine();
 },3000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ refreshState(); refreshOverview(); if(S.view==='host') loadDetail(); } });
-let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); },150); });
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='machine') drawMachineChart(); },150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); });
+
+
+/* ---------- Rechner: Detailansicht ---------- */
+const MD={id:null,data:null,range:'24h',evs:[]};
+function machineOf(id){ return ((S.state&&S.state.machines)||[]).find(m=>m.id===id); }
+async function loadMachine(){ const id=MD.id; if(!id) return;
+  try{ const d=await api('/api/machine?id='+encodeURIComponent(id)); if(MD.id!==id) return; MD.data=d; }catch(e){ if(MD.id===id){ $('#m-name').textContent='Rechner nicht gefunden'; } return; }
+  try{ const evs=await api('/api/events?limit=200&host='+encodeURIComponent('m:'+id)+'&from='+(Date.now()-7*864e5)); if(MD.id===id){ MD.evs=evs; renderEvents($('#m-events'),evs,true,50); } }catch(e){}
+  renderMachine(); }
+function renderMachine(){ const d=MD.data||machineOf(MD.id); if(!d){ $('#m-name').textContent='…'; return; }
+  const m=machineOf(MD.id)||d, r=(MD.data&&MD.data.cur)||m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
+  $('#m-dot').style.background=`var(${col})`; $('#m-name').textContent='💻 '+m.name;
+  $('#m-sub').textContent=[r.os,m.host&&m.host!==m.name?m.host:'',siteName(m.site),m.sysOnly?'Agent „nur Rechner“':'Standort-Agent',m.at?'Stand '+fmtTime(m.at,false):''].filter(Boolean).join(' · ');
+  const probs=m.problems||[]; $('#m-probs').innerHTML=(m.status==='off'?[`<span class="tag bad">Meldet sich nicht${m.at?' seit '+fmtDT(m.at,false):''}</span>`]:[]).concat(probs.map(p=>`<span class="tag ${/Dienst|Virenschutz/.test(p)?'bad':'warn'}">${esc(p)}</span>`)).join('')+(m.status==='disabled'?'<span class="tag">Rechner-Überwachung am Standort ausgeschaltet</span>':'');
+  const st=(k,v,c)=>`<div class="panel stat"><span>${k}</span><b class="num" ${c?`style="color:var(${c})"`:''}>${v}</b></div>`, pc=(v,w,b)=>v>=b?'--bad':v>=w?'--warn':'';
+  const av=r.av; const disk=(r.disks||[]).length;
+  $('#m-stats').innerHTML=st('Status',lbl,col==='--ok'?'':col)+st('CPU',m.cpu>=0?m.cpu+' %':'–',pc(m.cpu,80,95))+st('Arbeitsspeicher',m.mem>=0?`${m.mem} %<small style="display:block;font-size:12px;font-weight:400;color:var(--mut)">${fmtBytes(r.memU)} von ${fmtBytes(r.memT)}</small>`:'–',pc(m.mem,85,95))
+    +st('Vollstes Laufwerk',m.disk>=0?`${esc(m.diskName)} ${m.disk} %`:'–',pc(m.disk,80,90))+st('Laufzeit',r.up?fmtUp(r.up):'–')
+    +st('Updates',r.upd>=0?(r.upd?r.upd+' ausstehend':'aktuell'):'–',r.upd>0?'--warn':'')+st('Virenschutz',av?(!av.on?'aus':!av.rt?'Echtzeit aus':'aktiv')+(av.sig>=0?`<small style="display:block;font-size:12px;font-weight:400;color:var(--mut)">Signaturen ${av.sig} T alt</small>`:''):'–',av&&!(av.on&&av.rt)?'--bad':'')
+    +st('Neustart',r.reboot===1?'ausstehend'+(m.rebootSince?`<small style="display:block;font-size:12px;font-weight:400;color:var(--mut)">seit ${fmtDT(m.rebootSince,false)}</small>`:''):r.reboot===0?'nicht nötig':'–',r.reboot===1?'--warn':'')
+    +st('Ereignisprotokoll (1 h)',r.evC>=0?`${r.evC} kritisch · ${r.evE} Fehler`:'–',r.evC>0?'--warn':'');
+  const cfg=(MD.data&&MD.data.cfg)||{};
+  $('#m-disks').innerHTML=disk?'<tr><th>Laufwerk</th><th>Größe</th><th>Frei</th><th>Belegt</th></tr>'+r.disks.map(x=>{ const p=x.t?Math.round((x.t-Math.min(x.f,x.t))*100/x.t):0; return `<tr><td><b>${esc(x.m)}</b></td><td class="num">${fmtBytes(x.t)}</td><td class="num">${fmtBytes(x.f)}</td><td style="min-width:140px">${meterHTML('',p,cfg.diskPct?cfg.diskPct-10:80,cfg.diskPct||90)}</td></tr>`; }).join(''):'<tr><td class="empty">Keine Laufwerke gemeldet</td></tr>';
+  const SV={running:['läuft','--ok'],stopped:['gestoppt','--bad'],missing:['nicht vorhanden','--bad'],unknown:['unbekannt','--off']};
+  $('#m-svcs').innerHTML=(r.svcs||[]).length?'<tr><th>Dienst</th><th>Zustand</th></tr>'+r.svcs.map(x=>{ const [t,c]=SV[x.s]||SV.unknown; return `<tr><td><b>${esc(x.n)}</b></td><td><span class="dot" style="display:inline-block;margin-right:6px;background:var(${c})"></span>${t}</td></tr>`; }).join(''):`<tr><td class="empty">Keine Dienste ausgewählt – unter <a href="#/settings/sites">Einstellungen → Standorte</a> bei „Rechner-Überwachung“ eintragen.</td></tr>`;
+  drawMachineChart(); }
+function drawMachineChart(){ const c=$('#m-chart'); if(!c||!MD.data) return; const {g,W,H}=setupCanvas(c);
+  const pts=MD.range==='7d'?(MD.data.hist7||[]):(MD.data.hist||[]), span=MD.range==='7d'?7*864e5:864e5, t1=Date.now(), t0=t1-span;
+  const cs=getComputedStyle(document.body), mut=cs.getPropertyValue('--mut').trim(), line=cs.getPropertyValue('--line').trim();
+  const L=32,B=16,X=t=>L+(t-t0)/span*(W-L-4), Y=v=>4+(100-v)/100*(H-B-6);
+  g.strokeStyle=line; g.lineWidth=1; g.fillStyle=mut; g.font='11px system-ui';
+  for(const v of [0,50,100]){ const y=Y(v); g.beginPath(); g.moveTo(L,y); g.lineTo(W-4,y); g.stroke(); g.fillText(v+' %',0,y+4); }
+  const nl=W<500?2:4; for(let i=0;i<=nl;i++){ const t=t0+i*span/nl; const x=Math.min(W-34,Math.max(L,X(t)-14)); g.fillText(MD.range==='7d'?new Date(t).toLocaleDateString('de-DE',{weekday:'short',day:'2-digit'}):new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),x,H-2); }
+  const series=[['c',cs.getPropertyValue('--acc').trim()],['m','#8b5cf6'],['d','#f59e0b']];
+  for(const [k,col] of series){ g.strokeStyle=col; g.lineWidth=1.6; g.beginPath(); let first=true, lastT=0;
+    for(const p of pts){ const v=p[k]; if(v==null||v<0||p.t<t0){ first=true; continue; } const x=X(p.t), y=Y(v); if(first||p.t-lastT>(MD.range==='7d'?40*6e4:5*6e4)) g.moveTo(x,y); else g.lineTo(x,y); first=false; lastT=p.t; } g.stroke();
+    if(pts.length<40){ g.fillStyle=col; for(const p of pts){ const v=p[k]; if(v==null||v<0||p.t<t0) continue; g.beginPath(); g.arc(X(p.t),Y(v),2.2,0,7); g.fill(); } } }
+  if(!pts.length){ g.fillStyle=mut; g.fillText('Noch kein Verlauf – die ersten Werte kommen innerhalb einer Minute.',L+8,H/2); } }
+$$('#m-range button').forEach(b=>b.onclick=()=>{ MD.range=b.dataset.r; $$('#m-range button').forEach(x=>x.classList.toggle('on',x===b)); drawMachineChart(); });
+$('#m-mute').onclick=()=>{ const m=machineOf(MD.id); if(m) openMute('machine',m.id,m.name); };
+$('#m-edit').onclick=()=>{ const m=machineOf(MD.id); if(m) openSys(m.site); };
+
+/* ---------- Rechner-Überwachung je Standort ---------- */
+const sydlg=$('#dlg-sys'), syf=$('#sy-form'); let SY={site:null};
+function openSys(siteId){ const st=S.state; const s=st&&st.sites.find(x=>x.id===siteId); if(!s) return; SY.site=siteId;
+  const c=Object.assign({diskPct:90,diskMinGB:0,cpuPct:95,memPct:95,highMin:15,avSigDays:3,rebootDays:7,evCrit:1,services:[]},s.sys||{});
+  $('#sy-title').textContent='Rechner-Überwachung – '+s.name; syf.on.checked=!!(s.sys&&s.sys.on); syf.services.value=(c.services||[]).join('\n');
+  for(const k of ['diskPct','diskMinGB','cpuPct','memPct','highMin','avSigDays','rebootDays','evCrit']) syf[k].value=c[k];
+  const pl=(st.org&&st.plans||[]).find(p=>p.id===st.org.plan); const lim=pl?pl.machinesPerSite:(st.org&&st.org.plan==='internal'?-1:undefined);
+  $('#sy-limit').textContent=lim>0?`(Paket: bis ${lim} Rechner je Standort)`:lim===0?'(im aktuellen Paket nicht enthalten)':'';
+  renderSysMachines(); $('#sy-err').textContent=''; sydlg.showModal(); }
+function renderSysMachines(){ const st=S.state, ms=((st&&st.machines)||[]).filter(m=>m.site===SY.site), gs=(st&&st.groups)||[];
+  $('#sy-machines').innerHTML=ms.length?ms.map(m=>`<div class="mrow"><span class="dot" style="background:var(${(MSTATUS[m.status]||MSTATUS.unknown)[1]})"></span><b title="${esc(m.host||'')}">${esc(m.name)}</b><span class="muted" style="font-size:12px">${m.sysOnly?'nur Rechner':'Standort-Agent'}</span>
+    <select class="ed" data-mgrp="${esc(m.id)}"><option value="">Ohne Gruppe</option>${gs.map(g=>`<option value="${esc(g.id)}"${g.id===m.group?' selected':''}>${esc(g.name)}</option>`).join('')}</select>
+    <button type="button" class="btn sm ed" data-mren="${esc(m.id)}">Umbenennen</button><button type="button" class="btn sm danger ed" data-mdel="${esc(m.id)}">Entfernen</button></div>`).join(''):'<div class="muted" style="font-size:13px">Noch keine Rechner gemeldet. Nach dem Einschalten meldet sich der Rechner mit dem Agent innerhalb einer Minute.</div>';
+  $$('#sy-machines [data-mgrp]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:sel.dataset.mgrp,group:sel.value})}); toast('Gruppe gespeichert'); await refreshState(); }catch(e){ alert(e.message); } });
+  $$('#sy-machines [data-mren]').forEach(b=>b.onclick=async()=>{ const m=machineOf(b.dataset.mren); const n=prompt('Neuer Name:',m?m.name:''); if(!n) return; try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:b.dataset.mren,name:n})}); await refreshState(); renderSysMachines(); }catch(e){ alert(e.message); } });
+  $$('#sy-machines [data-mdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Rechner entfernen? Solange dort der Agent läuft, erscheint er wieder.')) return; try{ await api('/api/machine?id='+encodeURIComponent(b.dataset.mdel),{method:'DELETE'}); await refreshState(); renderSysMachines(); }catch(e){ alert(e.message); } }); }
+syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const num=k=>+syf[k].value||0; const sys={on:syf.on.checked,services:syf.services.value.split('\n').map(x=>x.trim()).filter(Boolean),diskPct:num('diskPct'),diskMinGB:num('diskMinGB'),cpuPct:num('cpuPct'),memPct:num('memPct'),highMin:num('highMin'),avSigDays:num('avSigDays'),rebootDays:num('rebootDays'),evCrit:num('evCrit')};
+  try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
 
 /* ---------- KI-Assistent ---------- */
 const AI={msgs:[],busy:false};

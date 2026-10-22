@@ -59,30 +59,32 @@ type User struct {
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.
 type Plan struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	PriceCents   int      `json:"priceCents"`
-	MinSites     int      `json:"minSites"`
-	MaxSites     int      `json:"maxSites"`     // 0 = laut Buchung
-	HostsPerSite int      `json:"hostsPerSite"` // 0 = unbegrenzt
-	Retention    int      `json:"retention"`    // Tage
-	MinInterval  int      `json:"minInterval"`  // ms
-	Features     []string `json:"features"`
-	Public       bool     `json:"public"`
-	Text         string   `json:"text"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	PriceCents   int    `json:"priceCents"`
+	MinSites     int    `json:"minSites"`
+	MaxSites     int    `json:"maxSites"`     // 0 = laut Buchung
+	HostsPerSite int    `json:"hostsPerSite"` // 0 = unbegrenzt
+	// Rechner-Überwachung: Rechner je Standort (-1 = unbegrenzt, 0 = nicht enthalten)
+	MachinesPerSite int      `json:"machinesPerSite"`
+	Retention       int      `json:"retention"`   // Tage
+	MinInterval     int      `json:"minInterval"` // ms
+	Features        []string `json:"features"`
+	Public          bool     `json:"public"`
+	Text            string   `json:"text"`
 }
 
 var plans = []Plan{
 	{ID: "free", Name: "Free", PriceCents: 0, MinSites: 0, MaxSites: 1, HostsPerSite: 5, Retention: 7, MinInterval: 5000,
 		Features: []string{"push"}, Public: true, Text: "1 Standort, 5 Hosts, 7 Tage Verlauf, Push aufs iPhone"},
-	{ID: "basis", Name: "Basis", PriceCents: 490, MinSites: 1, HostsPerSite: 25, Retention: 90, MinInterval: 1000,
-		Features: []string{"push", "alerts", "assistant"}, Public: true, Text: "25 Hosts pro Standort, 90 Tage Verlauf, Push, E-Mail, Teams, Telegram, KI-Assistent"},
-	{ID: "pro", Name: "Pro", PriceCents: 990, MinSites: 1, HostsPerSite: 100, Retention: 365, MinInterval: 500,
+	{ID: "basis", Name: "Basis", PriceCents: 490, MinSites: 1, HostsPerSite: 25, MachinesPerSite: 5, Retention: 90, MinInterval: 1000,
+		Features: []string{"push", "alerts", "assistant"}, Public: true, Text: "25 Hosts und 5 überwachte Rechner pro Standort, 90 Tage Verlauf, Push, E-Mail, Teams, Telegram, KI-Assistent"},
+	{ID: "pro", Name: "Pro", PriceCents: 990, MinSites: 1, HostsPerSite: 100, MachinesPerSite: 25, Retention: 365, MinInterval: 500,
 		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks", "assistant", "requests"}, Public: true,
-		Text: "100 Hosts pro Standort, 1 Jahr Verlauf, Monatsbericht (PDF), Traceroute, Statusseite, KI-Assistent mit Änderungswünschen"},
-	{ID: "partner", Name: "Partner", PriceCents: 390, MinSites: 10, HostsPerSite: 25, Retention: 90, MinInterval: 1000,
-		Features: []string{"push", "alerts", "report", "assistant"}, Public: true, Text: "Ab 10 Standorten: wie Basis, inkl. Monatsbericht"},
-	{ID: "internal", Name: "Intern", PriceCents: 0, HostsPerSite: 0, Retention: 0, MinInterval: 500,
+		Text: "100 Hosts und 25 überwachte Rechner pro Standort, 1 Jahr Verlauf, Monatsbericht (PDF), Traceroute, Statusseite, KI-Assistent mit Änderungswünschen"},
+	{ID: "partner", Name: "Partner", PriceCents: 390, MinSites: 10, HostsPerSite: 25, MachinesPerSite: 5, Retention: 90, MinInterval: 1000,
+		Features: []string{"push", "alerts", "report", "assistant"}, Public: true, Text: "Ab 10 Standorten: wie Basis (25 Hosts, 5 Rechner je Standort), inkl. Monatsbericht"},
+	{ID: "internal", Name: "Intern", PriceCents: 0, HostsPerSite: 0, MachinesPerSite: -1, Retention: 0, MinInterval: 500,
 		Features: []string{"push", "alerts", "report", "traceroute", "status", "checks", "assistant", "requests"}, Text: "Ohne Begrenzung"},
 }
 

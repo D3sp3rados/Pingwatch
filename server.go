@@ -89,6 +89,9 @@ func runServer(args []string) {
 	}
 	go m.pushLoop()
 	go m.reportLoop()
+	if simMode {
+		go m.simMachines()
+	}
 	s := &Server{m: m, envPass: os.Getenv("ADMIN_PASSWORD"), agentDir: envOr("AGENT_DIR", "./downloads")}
 	if s.envPass == "" && m.cfg.PassHash == "" {
 		pw := randHex(5)
@@ -230,6 +233,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/unifi", s.handleAgentUniFi)
 	mux.HandleFunc("/api/agent/snmp", s.handleAgentSNMP)
 	mux.HandleFunc("/api/agent/fritz", s.handleAgentFritz)
+	mux.HandleFunc("/api/agent/sys", s.handleAgentSys)
 	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
 
 	// geschützt
@@ -288,6 +292,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
 	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
+	mux.HandleFunc("/api/machine", protect(s.handleMachine))
 	mux.HandleFunc("/api/snmp/watch", protect(s.handleSNMPWatch))
 	mux.HandleFunc("/api/statuspage", protect(s.handleStatusConfig))
 	mux.HandleFunc("/status/", s.handlePublicStatus)
@@ -490,6 +495,10 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
 		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate}, Online: on, Hosts: cnt[sc.ID]}
+		if sc.Sys != nil {
+			sy := sc.Sys.eff()
+			v.Sys = &sy
+		}
 		if sc.UniFi != nil && sc.UniFi.On {
 			u := m.unifiSiteView(&sc)
 			v.UniFi = &u
@@ -504,8 +513,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
 		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
-		"groups": m.groupsOf(p.Org),
-		"mutes":  m.activeMutes(p.Org),
+		"groups":   m.groupsOf(p.Org),
+		"mutes":    m.activeMutes(p.Org),
+		"machines": m.machinesOf(p.Org),
 	}
 	for k, v := range s.accountInfo(r) {
 		out[k] = v
@@ -990,7 +1000,11 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Disposition", `attachment; filename="agent.json"`)
 		w.Header().Set("Content-Type", "application/json")
-		b, _ := json.MarshalIndent(map[string]string{"server": baseURL(r), "token": site.Token, "site": site.Name}, "", "  ")
+		af := map[string]string{"server": baseURL(r), "token": site.Token, "site": site.Name}
+		if r.URL.Query().Get("mode") == "sysonly" {
+			af["mode"] = "sysonly"
+		}
+		b, _ := json.MarshalIndent(af, "", "  ")
 		w.Write(b)
 		return
 	}
@@ -1056,6 +1070,23 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Token ungültig", 401)
 		return
 	}
+	sysOnly := r.Header.Get("X-Agent-Mode") == "sysonly"
+	sysOut := map[string]any{"on": false}
+	if site.Sys != nil && site.Sys.On {
+		sc := site.Sys.eff()
+		sysOut = map[string]any{"on": true, "services": sc.Services}
+	}
+	if sysOnly {
+		// „Nur Rechner“-Agent: keine Hosts, keine Aufträge, Standort bleibt Sache des Standort-Agenten
+		if mid := r.Header.Get("X-Machine"); mid != "" {
+			if mc, ok := s.m.machineByID(machineKey(site.ID, mid)); ok {
+				s.m.machineSeen(mc)
+			}
+		}
+		writeJSON(w, map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": []HostCfg{},
+			"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut})
+		return
+	}
 	s.m.siteSeen(site.ID, clientIP(r), r.Header.Get("X-Agent-Version"))
 	s.m.mu.RLock()
 	hosts := []HostCfg{}
@@ -1067,7 +1098,7 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
 	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name}, "hosts": hosts, "version": ver,
-		"latest": version, "autoUpdate": !site.NoAutoUpdate}
+		"latest": version, "autoUpdate": !site.NoAutoUpdate, "sys": sysOut}
 	if site.UniFi != nil && site.UniFi.On {
 		out["unifi"] = site.UniFi
 	}

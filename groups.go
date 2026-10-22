@@ -51,6 +51,11 @@ func (m *Monitor) groupHostSet(org, gid string) map[string]bool {
 			set[h.ID] = true
 		}
 	}
+	for _, mc := range m.cfg.Machines {
+		if mc.Org == org && (mc.Group == gid || (gid == "-" && !valid[mc.Group])) {
+			set["m:"+mc.ID] = true
+		}
+	}
 	return set
 }
 

@@ -84,6 +84,20 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 				hosts = append(hosts, h.ID)
 			}
 		}
+		if req.Mode == "mute" {
+			for _, mc := range m.cfg.Machines {
+				if mc.Org == p.Org && mc.Group == req.ID {
+					hosts = append(hosts, "m:"+mc.ID)
+				}
+			}
+		}
+	case "machine":
+		for _, mc := range m.cfg.Machines {
+			if mc.Org == p.Org && mc.ID == req.ID && req.Mode == "mute" {
+				hosts = append(hosts, "m:"+mc.ID)
+				label = mc.Name
+			}
+		}
 	case "host":
 		for _, h := range m.cfg.Hosts {
 			if h.Org == p.Org && h.ID == req.ID {
