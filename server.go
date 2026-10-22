@@ -66,7 +66,10 @@ func runServer(args []string) {
 	m := NewMonitor(store)
 	m.notices = make(chan notice, 1000)
 	if p, err := newPusherFromEnv(); err != nil {
+		m.pushErr = err.Error()
 		log.Printf("Push-Benachrichtigungen deaktiviert: %v", err)
+	} else if p == nil {
+		m.pushErr = "APNS_KEY, APNS_KEY_ID und APNS_TEAM_ID sind nicht gesetzt"
 	} else if p != nil {
 		m.pusher = p
 		log.Printf("Push-Benachrichtigungen aktiv (Topic %s)", p.topic)
@@ -460,7 +463,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
-		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "devices": devs,
+		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
 		"groups": m.groupsOf(p.Org),
 	}
 	for k, v := range s.accountInfo(r) {
@@ -1363,7 +1366,7 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		case d.Kind == "web":
 			err = s.m.sendWebPush(d, n)
 		case s.m.pusher == nil:
-			err = errors.New("Apple-Push nicht eingerichtet (APNS_KEY fehlt)")
+			err = errors.New("Apple-Push nicht aktiv – " + s.m.pushErr)
 		default:
 			err = s.m.pusher.send(d, n)
 		}

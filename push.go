@@ -74,7 +74,20 @@ func newPusherFromEnv() (*Pusher, error) {
 		raw = string(b)
 	}
 	if raw == "" || keyID == "" || teamID == "" {
-		return nil, nil // nicht konfiguriert
+		if raw == "" && keyID == "" && teamID == "" {
+			return nil, nil // nicht konfiguriert
+		}
+		var miss []string
+		if raw == "" {
+			miss = append(miss, "APNS_KEY")
+		}
+		if keyID == "" {
+			miss = append(miss, "APNS_KEY_ID")
+		}
+		if teamID == "" {
+			miss = append(miss, "APNS_TEAM_ID")
+		}
+		return nil, fmt.Errorf("es fehlt: %s", strings.Join(miss, ", "))
 	}
 	key, err := parseP8(raw)
 	if err != nil {

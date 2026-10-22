@@ -210,6 +210,7 @@ type Monitor struct {
 	started int64
 	icmpOK  string
 	pusher  *Pusher
+	pushErr string // Grund, warum Apple-Push nicht aktiv ist
 	notices chan notice
 }
 
