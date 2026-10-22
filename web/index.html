@@ -793,6 +793,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
         <div id="ul-steps" style="margin:8px 0"></div>
       </div>
       <label class="field">UniFi-Site (leer = alle)<input name="usite" placeholder="Default"></label>
+      <label class="field">WAN-Anschlüsse ignorieren (optional)<input name="wanign" placeholder="z. B. WAN3"><small>Vorbereitete, aber ungenutzte Leitungen – keine Meldung und keine Anzeige „WAN getrennt“. Mehrere mit Komma trennen.</small></label>
       <div id="ul-info" class="muted" style="font-size:13px;margin:8px 0"></div>
       <div id="ul-devs" style="max-height:40vh;overflow:auto"></div>
     </div>
@@ -1613,7 +1614,7 @@ async function openULive(site){ ulf.dataset.site=site; $('#ul-title').textConten
   const so=(S.state.sites||[]).find(x=>x.id===site)||{}; const cloudOnly=so.kind==='unifi';
   ulf.dataset.lock=cloudOnly?'1':''; $('#ul-mode').style.display=cloudOnly?'none':'';
   ulSetMode(cloudOnly||v.mode==='cloud'?'cloud':'');
-  ulf.on.checked=cloudOnly&&!v.on?true:!!v.on; ulf.url.value=v.url||''; ulf.key.value=''; ulf.ckey.value=''; ulf.usite.value=v.site||'';
+  ulf.on.checked=cloudOnly&&!v.on?true:!!v.on; ulf.url.value=v.url||''; ulf.key.value=''; ulf.ckey.value=''; ulf.usite.value=v.site||''; ulf.wanign.value=(v.wanIgnore||[]).map(x=>x==='WAN'?'WAN1':x).join(', ');
   ulf.key.placeholder=v.on&&v.mode!=='cloud'?'leer lassen = unverändert':'API-Schlüssel einfügen';
   ulf.ckey.placeholder=v.keySet&&v.mode==='cloud'?'eigener Key hinterlegt – leer = unverändert':'leer = Key aus „UniFi-Cloud (ohne Agent)“';
   ulConsoles([],v.console||'',v.consoleName||'');
@@ -1626,8 +1627,8 @@ async function openULive(site){ ulf.dataset.site=site; $('#ul-title').textConten
   uldlg.showModal(); }
 ulf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const cloud=ulf.dataset.mode==='cloud'; const cs=$('#ul-console'); const cname=cs.value?(cs.options[cs.selectedIndex].textContent||'').split(' · ')[0]:'';
-  const body=cloud?{site:ulf.dataset.site,on:ulf.on.checked,mode:'cloud',console:cs.value,consoleName:cname,key:ulf.ckey.value.trim(),usite:ulf.usite.value.trim()}
-    :{site:ulf.dataset.site,on:ulf.on.checked,url:ulf.url.value.trim(),key:ulf.key.value.trim(),usite:ulf.usite.value.trim()};
+  const body=cloud?{site:ulf.dataset.site,on:ulf.on.checked,mode:'cloud',console:cs.value,consoleName:cname,key:ulf.ckey.value.trim(),usite:ulf.usite.value.trim(),wanIgnore:ulf.wanign.value}
+    :{site:ulf.dataset.site,on:ulf.on.checked,url:ulf.url.value.trim(),key:ulf.key.value.trim(),usite:ulf.usite.value.trim(),wanIgnore:ulf.wanign.value};
   try{ await api('/api/unifi',{method:'POST',body:JSON.stringify(body)}); uldlg.close(); toast(ulf.on.checked?(cloud?'UniFi über die Cloud aktiv – erste Werte gleich':'UniFi-Livestatus aktiv – erste Werte in ca. 1–2 Minuten'):'Gespeichert'); refreshState(); }
   catch(err){ $('#ul-err').textContent=err.message; } });
 

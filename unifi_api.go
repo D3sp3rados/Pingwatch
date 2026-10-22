@@ -352,8 +352,8 @@ func parseWANs(g map[string]any) []unifiWAN {
 			x.Latency = fnum(s["latency_average"])
 			x.Avail = fnum(s["availability"])
 		}
-		if !up && ip == "" && !hasStats {
-			continue // Anschluss nicht eingerichtet
+		if !up && ip == "" && (!hasStats || x.Avail <= 0) {
+			continue // Anschluss nicht eingerichtet bzw. nie verbunden
 		}
 		if en, ok := w["enable"].(bool); ok && !en {
 			continue // nicht konfigurierte Leitung

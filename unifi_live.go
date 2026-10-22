@@ -25,6 +25,36 @@ type UniFiCfg struct {
 	Console     string `json:"console,omitempty"`     // Konsolen-ID (Site Manager)
 	ConsoleName string `json:"consoleName,omitempty"` // Anzeige
 	KeySet      bool   `json:"keySet,omitempty"`      // nur Ausgabe: Key am Standort hinterlegt
+	// WAN-Anschlüsse, die nicht überwacht werden (z. B. vorbereitet, aber ungenutzt): "WAN3"
+	WanIgnore []string `json:"wanIgnore,omitempty"`
+}
+
+// ignoresWAN: WAN-Anschluss in der Ignorier-Liste des Standorts?
+func (u *UniFiCfg) ignoresWAN(name string) bool {
+	if u == nil {
+		return false
+	}
+	for _, x := range u.WanIgnore {
+		if strings.EqualFold(strings.TrimSpace(x), name) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseWANList: "WAN3, wan4" → ["WAN3","WAN4"]
+func parseWANList(s string) []string {
+	var out []string
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == ' ' }) {
+		f = strings.ToUpper(strings.TrimSpace(f))
+		if f == "WAN1" {
+			f = "WAN"
+		}
+		if f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 type unifiSiteState struct {
@@ -77,6 +107,18 @@ func devLabel(d unifiDevice) string {
 
 // ingestUniFi verarbeitet eine Abfrage des Agenten.
 func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) {
+	// ignorierte WAN-Anschlüsse gar nicht erst verarbeiten (keine Meldung, keine Anzeige)
+	if site.UniFi != nil && len(site.UniFi.WanIgnore) > 0 {
+		for i := range devs {
+			ws := devs[i].WAN[:0:0]
+			for _, w := range devs[i].WAN {
+				if !site.UniFi.ignoresWAN(w.Name) {
+					ws = append(ws, w)
+				}
+			}
+			devs[i].WAN = ws
+		}
+	}
 	now := time.Now()
 	nowMs := now.UnixMilli()
 	inMaint := m.inMaint(site.Org, "", now)
@@ -326,7 +368,8 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		On                    bool
 		Mode                  string // "" lokal (Agent), "cloud" (UniFi-Cloud)
 		Console, ConsoleName  string
-		ClearKey              bool // eigenen Standort-Key entfernen (dann gilt der Key des Kunden)
+		ClearKey              bool   // eigenen Standort-Key entfernen (dann gilt der Key des Kunden)
+		WanIgnore             string // „WAN3, WAN4“ – nicht überwachen
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -374,7 +417,7 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Kein UniFi-Cloud-Key – bitte oben unter „UniFi-Cloud (ohne Agent)“ eintragen oder hier einen Key angeben", 400)
 			return
 		}
-		nc := &UniFiCfg{On: req.On, URL: u, Key: key, Site: strings.TrimSpace(req.USite)}
+		nc := &UniFiCfg{On: req.On, URL: u, Key: key, Site: strings.TrimSpace(req.USite), WanIgnore: parseWANList(req.WanIgnore)}
 		if cloud {
 			nc.Mode, nc.URL = unifiModeCloud, ""
 			nc.Console, nc.ConsoleName = strings.TrimSpace(req.Console), strings.TrimSpace(req.ConsoleName)
@@ -415,6 +458,7 @@ type unifiSummary struct {
 	KeySet      bool        `json:"keySet,omitempty"` // eigener Key am Standort
 	URL         string      `json:"url,omitempty"`
 	Site        string      `json:"site,omitempty"`
+	WanIgnore   []string    `json:"wanIgnore,omitempty"`
 	At          int64       `json:"at,omitempty"`
 	Err         string      `json:"err,omitempty"`
 	Total       int         `json:"total"`
@@ -461,6 +505,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	}
 	v.On, v.URL, v.Site = site.UniFi.On, site.UniFi.URL, site.UniFi.Site
 	v.Mode, v.Console, v.ConsoleName, v.KeySet = site.UniFi.Mode, site.UniFi.Console, site.UniFi.ConsoleName, site.UniFi.Key != ""
+	v.WanIgnore = site.UniFi.WanIgnore
 	unifiLiveState.Lock()
 	defer unifiLiveState.Unlock()
 	st := unifiLiveState.bySite[site.ID]

@@ -142,3 +142,22 @@ func TestUniFiCategoryAndUnusedWAN(t *testing.T) {
 		t.Fatalf("%+v", w)
 	}
 }
+
+func TestWanIgnore(t *testing.T) {
+	if got := parseWANList("wan3, WAN1;wan4"); len(got) != 3 || got[0] != "WAN3" || got[1] != "WAN" || got[2] != "WAN4" {
+		t.Fatalf("parseWANList: %v", got)
+	}
+	u := &UniFiCfg{WanIgnore: []string{"WAN3"}}
+	if !u.ignoresWAN("wan3") || u.ignoresWAN("WAN") {
+		t.Fatal("ignoresWAN")
+	}
+	// nie verbundener Anschluss ohne IP wird gar nicht erst gemeldet
+	g := map[string]any{
+		"wan1":         map[string]any{"up": true, "ip": "1.2.3.4"},
+		"wan3":         map[string]any{"up": false},
+		"uptime_stats": map[string]any{"WAN": map[string]any{"availability": 100.0}, "WAN3": map[string]any{"availability": 0.0}},
+	}
+	if ws := parseWANs(g); len(ws) != 1 || ws[0].Name != "WAN" {
+		t.Fatalf("parseWANs: %+v", ws)
+	}
+}
