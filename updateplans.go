@@ -137,13 +137,8 @@ func (s *Server) handleUpdatePlans(w http.ResponseWriter, r *http.Request) {
 		} else {
 			x.Sig, x.Kid = "", ""
 		}
-		sub, sec, _ := m.totpOf(p)
-		if sec == "" {
-			http.Error(w, "Bitte zuerst unter Einstellungen → Mein Konto die Zwei-Faktor-Anmeldung einrichten", 412)
-			return
-		}
-		if err := totpCheck(sub, sec, req.Code, time.Now()); err != nil {
-			http.Error(w, err.Error(), 403)
+		if code, err := m.secondFactor(p, req.Code); err != nil {
+			http.Error(w, err.Error(), code)
 			return
 		}
 		x.By = "Betreiber"

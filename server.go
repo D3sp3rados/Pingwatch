@@ -241,6 +241,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/nutzungsbedingungen", s.handleTerms)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
+	mux.HandleFunc("/passkey/login", s.handlePasskeyLogin)
+	mux.HandleFunc("/passkey/login/options", s.handlePasskeyLogin)
+	mux.HandleFunc("/.well-known/apple-app-site-association", handleAASA)
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "pw_session", Value: "", Path: "/", MaxAge: -1})
 		http.Redirect(w, r, "/login", http.StatusFound)
@@ -346,6 +349,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/cwmp", s.handleCWMP)
 	mux.HandleFunc("/cwmp/", s.handleCWMP)
 	mux.HandleFunc("/api/acs", protect(s.handleACS))
+	mux.HandleFunc("/api/passkey", protect(s.handlePasskey))
+	mux.HandleFunc("/api/passkey/", protect(s.handlePasskey))
 	mux.HandleFunc("/api/app/websession", s.handleAppWebSession)
 	mux.HandleFunc("/api/app/device", protect(s.handleDevice))
 	mux.HandleFunc("/api/app/pushtest", protect(s.handlePushTest))

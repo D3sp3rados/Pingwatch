@@ -14,17 +14,21 @@ import (
 
 // Pfade, die auch Nur-Lesen-Benutzer per POST/DELETE aufrufen dürfen
 var readOnlyOK = map[string]bool{
-	"/api/settings":       true, // eigenes Passwort
-	"/api/terms/accept":   true, // Nutzungsbedingungen bestätigen
-	"/api/totp":           true, // eigene Zwei-Faktor-Anmeldung
-	"/api/events/ack":     true, // auch „Nur lesen“ darf quittieren
-	"/api/app/device":     true,
-	"/api/app/pushtest":   true,
-	"/api/webpush":        true,
-	"/api/me/notify":      true,
-	"/api/me/profile":     true, // eigenes Konto
-	"/api/assistant":      true, // Fragen stellen darf jeder
-	"/api/billing/portal": false,
+	"/api/settings":         true, // eigenes Passwort
+	"/api/terms/accept":     true, // Nutzungsbedingungen bestätigen
+	"/api/totp":             true, // eigene Zwei-Faktor-Anmeldung
+	"/api/passkey":          true, // eigene Passkeys
+	"/api/passkey/options":  true,
+	"/api/passkey/register": true,
+	"/api/passkey/stepup":   true,
+	"/api/events/ack":       true, // auch „Nur lesen“ darf quittieren
+	"/api/app/device":       true,
+	"/api/app/pushtest":     true,
+	"/api/webpush":          true,
+	"/api/me/notify":        true,
+	"/api/me/profile":       true, // eigenes Konto
+	"/api/assistant":        true, // Fragen stellen darf jeder
+	"/api/billing/portal":   false,
 }
 
 func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(http.HandlerFunc) http.HandlerFunc) {

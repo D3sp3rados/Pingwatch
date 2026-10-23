@@ -92,6 +92,7 @@ type Config struct {
 	// Zwei-Faktor-Code des Betreiber-Logins (ADMIN_PASSWORD)
 	AdminTOTP        string            `json:"adminTotp,omitempty"`
 	AdminTOTPPending string            `json:"adminTotpPending,omitempty"`
+	AdminPasskeys    []Passkey         `json:"adminPasskeys,omitempty"`
 	Requests         []FeatureRequest  `json:"requests,omitempty"` // Änderungswünsche aus dem KI-Assistenten
 	Machines         []MachineCfg      `json:"machines,omitempty"` // überwachte Rechner (Rechner-Überwachung)
 	Acs              []AcsDevice       `json:"acs,omitempty"`      // TR-069: Fritzboxen am ACS (Prototyp)

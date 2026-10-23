@@ -130,13 +130,8 @@ func (s *Server) handleSignKeys(w http.ResponseWriter, r *http.Request) {
 	} else if !readJSON(w, r, &req) {
 		return
 	}
-	sub, sec, _ := m.totpOf(p)
-	if sec == "" {
-		http.Error(w, "Bitte zuerst die Zwei-Faktor-Anmeldung einrichten", 412)
-		return
-	}
-	if err := totpCheck(sub, sec, req.Code, time.Now()); err != nil {
-		http.Error(w, err.Error(), 403)
+	if code, err := m.secondFactor(p, req.Code); err != nil {
+		http.Error(w, err.Error(), code)
 		return
 	}
 	by := "Betreiber"

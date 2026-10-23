@@ -24,6 +24,7 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-stelliger Code aus der Authenticator-App"></div>
 <div class="err" id="err">E-Mail oder Passwort falsch.</div>
 <button type="submit">Anmelden</button>
+<button type="button" id="pkl" style="display:none;margin-top:10px;background:transparent;color:var(--fg,inherit);border:1px solid rgba(127,127,127,.45)">🔑 Mit Passkey anmelden</button>
 <div style="font-size:12px;color:var(--mut);margin-top:10px;text-align:center">Nach 5 Fehlversuchen ist die Anmeldung 15 Minuten gesperrt.</div>
 <div id="su" style="display:none;margin-top:14px;font-size:13px;text-align:center;color:var(--mut)">Noch kein Konto? <a href="/signup" style="color:var(--acc)">Kostenlos registrieren</a></div>
 <p style="text-align:center;font-size:12px;margin:16px 0 0"><a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></p>
@@ -31,5 +32,14 @@ button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--acc)
 <script>const q=new URLSearchParams(location.search); if(q.get('f')){ const e=document.getElementById('err'); e.style.display='block'; if(q.get('m')) e.textContent=q.get('m'); }
 if(q.get('step')==='2fa'){ document.getElementById('cred').remove(); document.getElementById('tfa').style.display='block'; document.getElementById('code').required=true; document.getElementById('code').focus(); }
 else { document.getElementById('tfa').remove(); document.getElementById('em').focus(); }
+(function(){ const b=document.getElementById('pkl'); if(!b||q.get('step')==='2fa'||!window.PublicKeyCredential||!navigator.credentials) return; b.style.display='block';
+  const enc=buf=>{ let s=''; for(const c of new Uint8Array(buf)) s+=String.fromCharCode(c); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+  const dec=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
+  const err=t=>{ const e=document.getElementById('err'); e.textContent=t; e.style.display='block'; };
+  b.onclick=async()=>{ try{ const o=await (await fetch('/passkey/login/options',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
+      const cr=await navigator.credentials.get({publicKey:{challenge:dec(o.challenge),rpId:o.rpId,timeout:o.timeout,userVerification:'required',allowCredentials:[]}});
+      const r=await fetch('/passkey/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:enc(cr.rawId),clientDataJSON:enc(cr.response.clientDataJSON),authenticatorData:enc(cr.response.authenticatorData),signature:enc(cr.response.signature),userHandle:cr.response.userHandle?enc(cr.response.userHandle):''})});
+      if(!r.ok){ err((await r.text()).trim()||'Anmeldung mit Passkey fehlgeschlagen'); return; } location.href='/'; }
+    catch(e){ if(e&&e.name==='NotAllowedError') return; err('Passkey: '+(e.message||e)); } }; })();
 fetch('/api/plans').then(r=>r.json()).then(d=>{ if(d.provider&&d.provider.signup==='true') document.getElementById('su').style.display='block'; }).catch(()=>{});</script>
 </body></html>

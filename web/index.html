@@ -687,6 +687,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </div>
   <h2>Zwei-Faktor-Anmeldung</h2>
   <div class="panel" style="padding:14px" id="tf-box"></div>
+  <h2>Passkeys</h2>
+  <div class="panel" style="padding:14px" id="pk-box"></div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
   </div>
   <div class="setcat" data-cat="acs">
@@ -889,7 +891,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Script<textarea name="body" rows="12" spellcheck="false" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:pre;tab-size:4"></textarea></label>
       <label class="check"><input type="checkbox" name="check"> <span><b>Als Prüfung</b> – Exit-Code ≠ 0 löst eine Meldung aus (z. B. Tunnel down), Exit 0 die Entwarnung</span></label>
       <div class="muted" style="font-size:12px;margin-top:6px" id="sc2-ver"></div>
-      <label class="field" style="margin-top:8px">Zwei-Faktor-Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-stelliger Code"></label>
+      <div class="formrow" style="margin-top:8px;align-items:flex-end"><label class="field">Zwei-Faktor-Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="6-stelliger Code"></label><button type="button" class="btn sm pk-btn" data-pkfill style="display:none">🔑 Mit Passkey bestätigen</button></div>
     </div>
     <div class="dlg-err" id="sc2-err"></div>
     <div class="dlg-f"><button class="btn danger" type="button" id="sc2-del" style="margin-right:auto">Löschen</button><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
@@ -915,7 +917,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
         <label class="field">Welche Updates<select name="cat"><option value="security">Sicherheitsupdates (inkl. Defender-Signaturen und Tool gegen Schadsoftware)</option><option value="all">Alle Updates (ohne Funktionsupdates und Treiber)</option></select></label>
         <label class="field">Neustart<select name="reboot"><option value="ifneeded">wenn nötig – 5 Minuten nach der Installation</option><option value="never">nie – nur melden, dass einer nötig ist</option></select></label>
       </div>
-      <label class="field">Zwei-Faktor-Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-stelliger Code aus der Authenticator-App"></label>
+      <div class="formrow" style="align-items:flex-end"><label class="field">Zwei-Faktor-Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="6-stelliger Code aus der Authenticator-App"></label><button type="button" class="btn sm pk-btn" data-pkfill style="display:none">🔑 Mit Passkey bestätigen</button></div>
       <div class="muted" style="font-size:12.5px" id="ac-hint"></div>
     </div>
     <div class="dlg-err" id="ac-err"></div>
@@ -1999,7 +2001,7 @@ $('#hosts-q').addEventListener('input',()=>renderSettings());
 const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','system','acs'];
 function setCat(c){ if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
   try{ localStorage.setItem('pw_setcat',c); }catch(e){}
-  if(c==='updates') loadUpdates(); if(c==='konto') renderTF(); if(c==='acs') loadACS();
+  if(c==='updates') loadUpdates(); if(c==='konto'){ renderTF(); renderPK(); } if(c==='acs') loadACS();
   $$('#v-settings .setcat').forEach(d=>d.style.display=d.dataset.cat===c?'':'none');
   $$('#set-tabs a').forEach(a=>a.classList.toggle('on',a.dataset.cat===c));
   const on=$('#set-tabs a.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'}); }
@@ -3116,7 +3118,32 @@ const LANGN={powershell:'PowerShell',cmd:'cmd',bash:'bash',sh:'sh'};
 const WDN=['So','Mo','Di','Mi','Do','Fr','Sa'];
 function siteActOK(s){ return !!(s&&s.sys&&s.sys.on&&s.sys.updates); }
 function actTargets(scope,id){ const st=S.state; let ss=st.sites.filter(siteActOK); if(scope==='site') ss=ss.filter(s=>s.id===id); if(scope==='customer') ss=ss.filter(s=>s.customer===id); const set=new Set(ss.map(s=>s.id)); return (st.machines||[]).filter(m=>set.has(m.site)&&(scope!=='machine'||m.id===id)); }
-async function loadTF(){ try{ TF=await api('/api/totp'); }catch(e){} return TF; }
+async function loadTF(){ try{ TF=await api('/api/totp'); }catch(e){} TF.mfa=!!TF.on||(await loadPK()).length>0; $$('[data-pkfill]').forEach(b=>b.textContent='🔑 Mit Passkey bestätigen'); return TF; }
+/* ---------- Passkeys (WebAuthn) ---------- */
+const PK={list:[],loaded:false};
+const b64uEnc=buf=>{ let s=''; for(const c of new Uint8Array(buf)) s+=String.fromCharCode(c); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+const b64uDec=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
+const pkSupported=()=>!!(window.PublicKeyCredential&&navigator.credentials);
+async function pkGet(o){ const cr=await navigator.credentials.get({publicKey:{challenge:b64uDec(o.challenge),rpId:o.rpId,timeout:o.timeout,userVerification:'required',allowCredentials:(o.allowCredentials||[]).map(c=>({type:'public-key',id:b64uDec(c.id)}))}});
+  return {id:b64uEnc(cr.rawId),clientDataJSON:b64uEnc(cr.response.clientDataJSON),authenticatorData:b64uEnc(cr.response.authenticatorData),signature:b64uEnc(cr.response.signature),userHandle:cr.response.userHandle?b64uEnc(cr.response.userHandle):''}; }
+async function pkStepUp(){ const o=await api('/api/passkey/options',{method:'POST',body:JSON.stringify({purpose:'stepup'})}); const a=await pkGet(o); await api('/api/passkey/stepup',{method:'POST',body:JSON.stringify(a)}); return 'passkey'; }
+async function pkRegister(name){ const o=await api('/api/passkey/options',{method:'POST',body:JSON.stringify({purpose:'register'})});
+  const cr=await navigator.credentials.create({publicKey:{challenge:b64uDec(o.challenge),rp:o.rp,user:{id:b64uDec(o.user.id),name:o.user.name,displayName:o.user.displayName},pubKeyCredParams:o.pubKeyCredParams,timeout:o.timeout,attestation:'none',authenticatorSelection:o.authenticatorSelection,excludeCredentials:(o.excludeCredentials||[]).map(c=>({type:'public-key',id:b64uDec(c.id)}))}});
+  await api('/api/passkey/register',{method:'POST',body:JSON.stringify({name,clientDataJSON:b64uEnc(cr.response.clientDataJSON),attestationObject:b64uEnc(cr.response.attestationObject)})}); }
+async function loadPK(){ try{ PK.list=await api('/api/passkey'); }catch(e){ PK.list=[]; } PK.loaded=true; $$('[data-pkfill]').forEach(b=>b.style.display=PK.list.length&&pkSupported()?'':'none'); return PK.list; }
+function pkDevName(){ const ua=navigator.userAgent; return /iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Macintosh/.test(ua)?'Mac':/Windows/.test(ua)?'Windows-PC':/Android/.test(ua)?'Android':'Gerät'; }
+async function renderPK(){ const box=$('#pk-box'); if(!box) return; await loadPK();
+  box.innerHTML=`<div style="font-size:13.5px;line-height:1.6;margin-bottom:8px">Anmelden ohne Passwort und Updates, Neustarts und Scripts freigeben – mit Face ID, Touch ID, Windows Hello oder dem Handy. Ersetzt den 6-stelligen Code.</div>`
+    +(PK.list.length?'<table class="tbl" style="margin-bottom:8px"><tr><th>Name</th><th>Angelegt</th><th>Zuletzt benutzt</th><th></th></tr>'+PK.list.map(k=>`<tr><td><b>🔑 ${esc(k.name)}</b></td><td class="num">${fmtDT(k.created,false)}</td><td class="num">${k.last?fmtDT(k.last,false):'–'}</td><td style="white-space:nowrap"><button class="btn sm" data-pkren="${esc(k.id)}">Umbenennen</button> <button class="btn sm danger" data-pkdel="${esc(k.id)}">Entfernen</button></td></tr>`).join('')+'</table>':'')
+    +(pkSupported()?'<button class="btn sm pri" id="pk-add">+ Passkey für dieses Gerät anlegen</button>':'<span class="muted">Dieser Browser unterstützt keine Passkeys.</span>')
+    +(location.hostname!=='app.pingwacht.de'?`<div class="muted" style="font-size:12px;margin-top:8px">Hinweis: Passkeys gelten nur für die Adresse, unter der sie angelegt werden (${esc(location.hostname)}). Für die iPhone-App bitte unter app.pingwacht.de anlegen.</div>`:'');
+  const add=$('#pk-add'); if(add) add.onclick=async()=>{ const nm=await uiPrompt('Name für den Passkey:',pkDevName()); if(nm===null||nm===undefined) return; try{ await pkRegister(nm||pkDevName()); toast('Passkey angelegt'); renderPK(); }catch(e){ if(e&&e.name==='NotAllowedError') return; uiAlert('Passkey nicht angelegt: '+(e.message||e)); } };
+  $$('#pk-box [data-pkdel]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Passkey entfernen? Danach kann er sich hier nicht mehr anmelden. (Im Passwort-Manager des Geräts bleibt er stehen und kann dort gelöscht werden.)')) return; await api('/api/passkey',{method:'POST',body:JSON.stringify({action:'delete',id:b.dataset.pkdel})}); renderPK(); });
+  $$('#pk-box [data-pkren]').forEach(b=>b.onclick=async()=>{ const k=PK.list.find(x=>x.id===b.dataset.pkren); const nm=await uiPrompt('Neuer Name:',k?k.name:''); if(!nm) return; await api('/api/passkey',{method:'POST',body:JSON.stringify({action:'rename',id:b.dataset.pkren,name:nm})}); renderPK(); }); }
+document.addEventListener('click',async e=>{ const b=e.target.closest&&e.target.closest('[data-pkfill]'); if(!b) return; e.preventDefault(); const inp=b.closest('.formrow').querySelector('input[name=code]');
+  try{ b.disabled=true; await pkStepUp(); inp.value='passkey'; b.textContent='✓ Mit Passkey bestätigt'; toast('Bestätigt – jetzt ausführen (gilt 2 Minuten)'); }catch(err){ if(!(err&&err.name==='NotAllowedError')) uiAlert('Passkey: '+(err.message||err)); } finally{ b.disabled=false; } });
+/* Code abfragen: mit Passkey, wenn vorhanden – sonst 6-stelliger Code */
+async function askCode(msg){ if(!PK.loaded) await loadPK(); if(PK.list.length&&pkSupported()){ try{ return await pkStepUp(); }catch(e){ if(e&&e.name!=='NotAllowedError') uiAlert('Passkey: '+(e.message||e)); } } return uiPrompt(msg); }
 async function renderTF(){ const box=$('#tf-box'); if(!box) return; await loadTF();
   box.innerHTML=TF.on?`<b>✅ Eingerichtet</b><div style="font-size:13.5px;line-height:1.6;margin:4px 0">Der Code wird abgefragt bei:<ul style="margin:4px 0;padding-left:20px"><li>Anmeldung (in der iPhone-App: Passwort und direkt dahinter den Code)</li><li>Updates, Neustarts und Scripts auf Rechnern</li><li>Anlegen und Ändern von Plänen</li></ul></div> <button class="btn sm" id="tf-off" style="margin-left:8px">Abschalten</button>`
     :`<div style="margin:0 0 10px;font-size:13.5px;line-height:1.6">Schützt Ihr Konto mit einem 6-stelligen Code aus einer Authenticator-App (z. B. Microsoft Authenticator, Google Authenticator, 1Password).<br><b>Der Code wird abgefragt bei:</b><ul style="margin:4px 0 6px;padding-left:20px"><li>Anmeldung</li></ul><b>Erst nach dem Einrichten nutzbar:</b><ul style="margin:4px 0 0;padding-left:20px"><li>Windows- und Linux-Updates auf Rechnern</li><li>Neustarts von Rechnern</li><li>Scripts ausführen</li><li>Pläne für Updates, Neustarts und Scripts</li></ul></div><button class="btn sm pri" id="tf-setup">Einrichten</button><div id="tf-step" style="margin-top:10px"></div>`;
@@ -3131,9 +3158,9 @@ async function openAction(kind,scope,id,label){ Object.assign(AC,{mode:'run',kin
   const ms=actTargets(scope,id); $('#ac-title').textContent=kind==='reboot'?'🔄 Neu starten':kind==='script'?'▶ Script ausführen':'⬆️ Updates installieren'; $('#ac-target').innerHTML=acTargetText(ms,label);
   $('#ac-plan').style.display='none'; $('#ac-upd').style.display=kind==='winupdate'?'':'none'; $('#ac-del').style.display='none'; $('#ac-err').textContent=''; acf.code.value='';
   $('#ac-scrw').style.display=kind==='script'?'':'none'; if(kind==='script') acf.scr.innerHTML=UP.scripts.length?UP.scripts.map(x=>`<option value="${x.id}">${esc(x.name)} (${LANGN[x.lang]||x.lang})</option>`).join(''):'<option value="">Noch keine Scripts – unter Einstellungen → Updates &amp; Scripts anlegen</option>';
-  $('#ac-hint').innerHTML=TF.on?(kind==='reboot'?'Der Rechner startet 1 Minute nach Eingang des Auftrags neu. Meldungen sind 2 Stunden stumm.':'Updates werden gesucht, heruntergeladen und installiert – das kann eine Weile dauern. Ausgeschaltete Rechner holen den Auftrag bis zu 12 Stunden später ab. Das Ergebnis kommt als Meldung und steht im Protokoll.'):'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung einrichten.';
-  if(kind==='script'&&TF.on) $('#ac-hint').innerHTML='Das Script läuft als Dienst-Benutzer des Agenten (Windows: SYSTEM, Linux: root). Ausgabe und Exit-Code stehen danach im Protokoll.';
-  $('#ac-ok').disabled=!TF.on||!ms.length||(kind==='script'&&!UP.scripts.length); $('#ac-ok').textContent=kind==='reboot'?'Neu starten':kind==='script'?'Ausführen':'Starten'; acdlg.showModal(); }
+  $('#ac-hint').innerHTML=TF.mfa?(kind==='reboot'?'Der Rechner startet 1 Minute nach Eingang des Auftrags neu. Meldungen sind 2 Stunden stumm.':'Updates werden gesucht, heruntergeladen und installiert – das kann eine Weile dauern. Ausgeschaltete Rechner holen den Auftrag bis zu 12 Stunden später ab. Das Ergebnis kommt als Meldung und steht im Protokoll.'):'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung oder einen Passkey einrichten.';
+  if(kind==='script'&&TF.mfa) $('#ac-hint').innerHTML='Das Script läuft als Dienst-Benutzer des Agenten (Windows: SYSTEM, Linux: root). Ausgabe und Exit-Code stehen danach im Protokoll.';
+  $('#ac-ok').disabled=!TF.mfa||!ms.length||(kind==='script'&&!UP.scripts.length); $('#ac-ok').textContent=kind==='reboot'?'Neu starten':kind==='script'?'Ausführen':'Starten'; acdlg.showModal(); }
 function planTargetOpts(){ const st=S.state, cs=st.customers||[], ss=st.sites.filter(s=>s.id!=='cloud'&&s.kind!=='unifi'), ms=st.machines||[];
   return (cs.length?'<optgroup label="Kunden">'+cs.map(c=>`<option value="customer:${c.id}">${esc(c.name)}</option>`).join('')+'</optgroup>':'')+
     '<optgroup label="Standorte">'+ss.map(s=>`<option value="site:${s.id}">${esc(s.name)}${siteActOK(s)?'':' (nicht erlaubt)'}</option>`).join('')+'</optgroup>'+
@@ -3149,8 +3176,8 @@ async function openPlan(id){ const x=id&&UP.plans.find(p=>p.id===id); Object.ass
   $('#ac-days').innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="check"><input type="checkbox" value="${d}"${x?(x.weekdays.includes(d)?' checked':''):(d===3?' checked':'')}> ${WDN[d]}</label>`).join('');
   const upd=()=>{ const [sc,tid]=(acf.ptarget.value||':').split(':'); $('#ac-target').innerHTML=acf.ptarget.value?'Betroffen heute: '+acTargetText(actTargets(sc,tid),acf.ptarget.selectedOptions[0].textContent):''; }; acf.ptarget.onchange=upd; upd();
   $('#ac-del').style.display=x?'':'none'; $('#ac-err').textContent=''; acf.code.value='';
-  $('#ac-hint').innerHTML=TF.on?'Der Plan läuft zur gewählten Zeit ohne weiteren Code. Zum Anlegen und Ändern ist der Code nötig.':'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung einrichten.';
-  $('#ac-ok').disabled=!TF.on; $('#ac-ok').textContent='Speichern'; acdlg.showModal(); }
+  $('#ac-hint').innerHTML=TF.mfa?'Der Plan läuft zur gewählten Zeit ohne weiteren Code. Zum Anlegen und Ändern ist der Code nötig.':'⚠️ Zuerst unter <a href="#/settings/konto">Mein Konto</a> die Zwei-Faktor-Anmeldung oder einen Passkey einrichten.';
+  $('#ac-ok').disabled=!TF.mfa; $('#ac-ok').textContent='Speichern'; acdlg.showModal(); }
 acf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#ac-err').textContent='';
   try{ if(AC.mode==='plan'){ const [sc,tid]=acf.ptarget.value.split(':');
       const scr=acf.pkind.value.startsWith('script:');
@@ -3196,7 +3223,7 @@ async function renderSK(){ const box=$('#sk-box'); if(!box) return; await skLoad
     '<p class="muted" style="font-size:12px;margin:8px 0 0">Wichtig: Geht der letzte Browser mit Schlüssel verloren, lassen sich keine Aufträge mehr auslösen, bis auf den Rechnern die Datei <code>trusted-keys.json</code> im Datenordner des Agenten gelöscht wird. Deshalb am besten einen zweiten Browser bestätigen.</p>';
   const nw=$('#sk-new'); if(nw) nw.onclick=async()=>{ try{ const kp=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},false,['sign','verify']); const pub=b64(await crypto.subtle.exportKey('spki',kp.publicKey)); const kid=await kidOf(pub);
       await skPut(orgId(),{kid,pub,priv:kp.privateKey}); SK.local={kid,pub,priv:kp.privateKey};
-      if(!SK.keys.length){ const c=await uiPrompt('Ersten Schlüssel speichern – Zwei-Faktor-Code eingeben:'); if(!c){ await skDel(orgId()); renderSK(); return; }
+      if(!SK.keys.length){ const c=await askCode('Ersten Schlüssel speichern – Zwei-Faktor-Code eingeben:'); if(!c){ await skDel(orgId()); renderSK(); return; }
         const name=navigator.userAgent.match(/(Edg|Chrome|Firefox|Safari)\/[\d]+/)?.[0]||'Browser'; await api('/api/signkeys',{method:'POST',body:JSON.stringify({pub,name:((S.state.me&&S.state.me.email)||'')+' – '+name,code:c})}); toast('Schlüssel gespeichert'); }
       renderSK(); }catch(e){ uiAlert(e.message); } };
   const fg=$('#sk-forget'); if(fg) fg.onclick=async()=>{ await skDel(orgId()); renderSK(); };
@@ -3210,12 +3237,12 @@ async function openScript(id){ await loadTF(); const x=id&&UP.scripts.find(y=>y.
   $('#sc2-title').textContent=x?'Script bearbeiten':'Script anlegen'; sc2f.name.value=x?x.name:''; sc2f.lang.value=x?x.lang:'powershell'; sc2f.timeout.value=x?x.timeout:300; sc2f.desc.value=x?x.desc||'':''; sc2f.body.value=x?x.body:''; sc2f.check.checked=!!(x&&x.check); sc2f.code.value='';
   $('#sc2-ver').innerHTML=x?`Version ${x.version} · ${fmtDT(x.updated,false)} · ${esc(x.by||'')}${(x.history||[]).length?` · <a href="#" id="sc2-hist">frühere Fassungen (${x.history.length})</a>`:''}`:'Zum Speichern ist der Zwei-Faktor-Code nötig. Frühere Fassungen bleiben erhalten.';
   const h=$('#sc2-hist'); if(h) h.onclick=e=>{ e.preventDefault(); uiAlert(x.history.map(v=>`— Version ${v.version} · ${fmtDT(v.t,false)} · ${v.by}\n${v.body}`).join('\n\n')); };
-  $('#sc2-del').style.display=x?'':'none'; $('#sc2-err').textContent=TF.on?'':'Zuerst unter Mein Konto die Zwei-Faktor-Anmeldung einrichten.'; sc2dlg.showModal(); }
+  $('#sc2-del').style.display=x?'':'none'; $('#sc2-err').textContent=TF.mfa?'':'Zuerst unter Mein Konto die Zwei-Faktor-Anmeldung einrichten.'; sc2dlg.showModal(); }
 $('#add-script').onclick=()=>openScript('');
 sc2f.body.addEventListener('keydown',e=>{ if(e.key==='Tab'){ e.preventDefault(); const t=e.target, a=t.selectionStart; t.setRangeText('    ',a,t.selectionEnd,'end'); } });
 sc2f.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#sc2-err').textContent='';
   try{ await api('/api/scripts',{method:'POST',body:JSON.stringify({id:SCR?SCR.id:'',name:sc2f.name.value,lang:sc2f.lang.value,timeout:+sc2f.timeout.value||300,desc:sc2f.desc.value,body:sc2f.body.value,check:sc2f.check.checked,code:sc2f.code.value})}); sc2dlg.close(); toast('Script gespeichert'); loadUpdates(); }catch(err){ $('#sc2-err').textContent=err.message; } });
-$('#sc2-del').onclick=async()=>{ if(!SCR) return; const c=await uiPrompt('Script „'+SCR.name+'“ löschen? Zur Bestätigung den Zwei-Faktor-Code eingeben:'); if(!c) return; try{ await api('/api/scripts?id='+SCR.id+'&code='+encodeURIComponent(c),{method:'DELETE'}); sc2dlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
+$('#sc2-del').onclick=async()=>{ if(!SCR) return; const c=await askCode('Script „'+SCR.name+'“ löschen? Zur Bestätigung den Zwei-Faktor-Code eingeben:'); if(!c) return; try{ await api('/api/scripts?id='+SCR.id+'&code='+encodeURIComponent(c),{method:'DELETE'}); sc2dlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
 function actionOptsTxt(cat,rb){ return (cat==='all'?'alle Updates':'Sicherheitsupdates')+' · '+(rb==='ifneeded'?'Neustart wenn nötig':'kein Neustart'); }
 $('#m-off').onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:MD.id,offAlert:$('#m-off').value})}); toast('Gespeichert'); await refreshState(); renderMachine(); }catch(e){ uiAlert(e.message); } };
 $('#m-svcedit').onclick=()=>{ const m=machineOf(MD.id); if(!m) return; const so=S.state.sites.find(x=>x.id===m.site)||{}, ss=(so.sys&&so.sys.services)||[], f=$('#ms-form');
