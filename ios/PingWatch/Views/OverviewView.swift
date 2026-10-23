@@ -50,7 +50,7 @@ struct OverviewView: View {
                                     }
                                 }
                                 if let u = site.unifi, u.on {
-                                    UniFiSection(summary: u, siteName: site.name)
+                                    UniFiSection(summary: u, siteName: site.name, siteID: site.id)
                                 }
                             } header: {
                                 SiteHeader(site: site)
@@ -163,6 +163,7 @@ struct HostRow: View {
 struct UniFiSection: View {
     let summary: UniFiSummary
     let siteName: String
+    var siteID: String = ""
     @State private var expanded: Bool?
 
     private var devices: [UniFiDevice] { summary.devices ?? [] }
@@ -179,7 +180,7 @@ struct UniFiSection: View {
             }
             ForEach(devices) { d in
                 NavigationLink {
-                    UniFiDeviceView(device: d, siteName: siteName)
+                    UniFiDeviceView(device: d, siteName: siteName, siteID: siteID)
                 } label: {
                     UniFiDeviceRow(device: d)
                 }
@@ -237,7 +238,7 @@ struct UniFiDeviceRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                StatusDot(color: device.isOffline ? PW.bad : (device.state == "ONLINE" ? PW.ok : PW.warn), size: 8)
+                StatusDot(color: device.paused ? .yellow : device.isOffline ? PW.bad : (device.state == "ONLINE" ? PW.ok : PW.warn), size: 8)
                 Text(device.name).font(.subheadline.bold()).lineLimit(1)
                 Spacer()
                 if device.avail >= 0 {
@@ -249,7 +250,8 @@ struct UniFiDeviceRow: View {
                 if device.pingAvg >= 0 { Text(String(format: "%.1f ms", device.pingAvg)) }
                 if device.loss > 0 { Text(String(format: "%.0f %% Verlust", device.loss)).foregroundStyle(PW.loss) }
                 if !device.boots.isEmpty { Text("\(device.boots.count)× Neustart").foregroundStyle(PW.warn) }
-                if device.isOffline { Text("offline seit \(fmtTime(Date(ms: device.since)))").foregroundStyle(PW.bad) }
+                if device.paused { Text("pausiert").foregroundStyle(.yellow) }
+                else if device.isOffline { Text("offline seit \(fmtTime(Date(ms: device.since)))").foregroundStyle(PW.bad) }
             }
             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             UniFiBar(levels: device.bar)
@@ -282,11 +284,15 @@ struct UniFiBar: View {
 struct UniFiDeviceView: View {
     let device: UniFiDevice
     let siteName: String
+    var siteID: String = ""
 
     var body: some View {
         List {
+            if !siteID.isEmpty, let k = device.key, !k.isEmpty {
+                PauseSection(siteID: siteID, key: k, paused: device.paused)
+            }
             Section {
-                row("Status", device.isOffline ? "offline" : device.state == "ONLINE" ? "online" : device.state.lowercased())
+                row("Status", device.paused ? "pausiert" : device.isOffline ? "offline" : device.state == "ONLINE" ? "online" : device.state.lowercased())
                 row("seit", fmtDayTime(Date(ms: device.since)))
                 row("Typ", device.catName)
                 row("Modell", device.model)
@@ -362,7 +368,7 @@ struct PWFolder: Identifiable {
         var n = hosts.filter { !$0.paused && $0.status == "down" }.count
         for s in sites {
             n += s.unifi?.offline ?? 0
-            n += (s.unifi?.protect?.devs ?? []).filter { !$0.online }.count
+            n += (s.unifi?.protect?.devs ?? []).filter { $0.problem }.count
             if let e = s.unifi?.err, !e.isEmpty { n += 1 }
         }
         return n
@@ -486,7 +492,7 @@ struct UniFiSiteRow: View {
                 Image(systemName: "wifi.router").foregroundStyle(PW.accent)
                 Text(site.name).font(.headline)
                 Spacer()
-                let off = (u?.offline ?? 0) + prot.filter { !$0.online }.count
+                let off = (u?.offline ?? 0) + prot.filter { $0.problem }.count
                 if let e = u?.err, !e.isEmpty {
                     Text("nicht erreichbar").font(.caption.bold()).foregroundStyle(PW.bad)
                 } else if off > 0 {
@@ -566,7 +572,7 @@ struct UniFiSiteView: View {
                 Section("Netzwerk") {
                     ForEach(shownDevs) { d in
                         NavigationLink {
-                            UniFiDeviceView(device: d, siteName: site?.name ?? "")
+                            UniFiDeviceView(device: d, siteName: site?.name ?? "", siteID: siteID)
                         } label: {
                             UniFiDeviceRow(device: d)
                         }
@@ -577,7 +583,7 @@ struct UniFiSiteView: View {
                 Section("UniFi Protect") {
                     ForEach(shownProt) { d in
                         NavigationLink {
-                            ProtectDeviceView(device: d, siteName: site?.name ?? "")
+                            ProtectDeviceView(device: d, siteName: site?.name ?? "", siteID: siteID)
                         } label: {
                             ProtectRow(device: d)
                         }
@@ -600,16 +606,16 @@ struct ProtectRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                StatusDot(color: device.online ? (device.lowBattery ? PW.warn : PW.ok) : PW.bad, size: 8)
+                StatusDot(color: device.paused ? .yellow : device.online ? (device.lowBattery ? PW.warn : PW.ok) : PW.bad, size: 8)
                 Image(systemName: device.symbol).foregroundStyle(.secondary)
                 Text(device.name).font(.subheadline.bold()).lineLimit(1)
                 Spacer()
                 Text(device.kindName).font(.caption).foregroundStyle(.secondary)
             }
             let v = device.valuesText
-            Text(device.online ? (v.isEmpty ? (device.model ?? "online") : v) : "offline")
+            Text(device.paused ? "pausiert" + (device.online ? "" : " · offline") : device.online ? (v.isEmpty ? (device.model ?? "online") : v) : "offline")
                 .font(.caption)
-                .foregroundStyle(device.online ? Color.secondary : PW.bad)
+                .foregroundStyle(device.paused ? Color.yellow : device.online ? Color.secondary : PW.bad)
                 .lineLimit(1)
         }
         .padding(.vertical, 2)
@@ -619,11 +625,15 @@ struct ProtectRow: View {
 struct ProtectDeviceView: View {
     let device: ProtectDev
     let siteName: String
+    var siteID: String = ""
 
     var body: some View {
         List {
+            if !siteID.isEmpty {
+                PauseSection(siteID: siteID, key: device.pauseKey, paused: device.paused)
+            }
             Section {
-                row("Status", device.online ? "online" : "offline")
+                row("Status", device.paused ? "pausiert" + (device.online ? "" : " (offline)") : device.online ? "online" : "offline")
                 row("Art", device.kindName)
                 if let m = device.model, !m.isEmpty { row("Modell", m) }
                 row("Standort", siteName)
@@ -649,6 +659,51 @@ struct ProtectDeviceView: View {
             Text(k).foregroundStyle(.secondary)
             Spacer()
             Text(v).multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+/// Pausieren / wieder überwachen für UniFi- und Protect-Geräte.
+struct PauseSection: View {
+    @Environment(AppModel.self) private var model
+    let siteID: String
+    let key: String
+    @State var paused: Bool
+    @State private var busy = false
+    @State private var error: String?
+
+    init(siteID: String, key: String, paused: Bool) {
+        self.siteID = siteID
+        self.key = key
+        _paused = State(initialValue: paused)
+    }
+
+    var body: some View {
+        Section {
+            Button {
+                Task { await toggle() }
+            } label: {
+                Label(paused ? "Wieder überwachen" : "Pausieren", systemImage: paused ? "play.circle" : "pause.circle")
+                    .foregroundStyle(paused ? PW.ok : .yellow)
+            }
+            .disabled(busy || key.isEmpty)
+            if let error { Text(error).font(.caption).foregroundStyle(PW.bad) }
+        } footer: {
+            Text(paused ? "Pausiert: bleibt sichtbar (gelb), aber keine Meldungen und zählt nicht als Störung." : "Pausieren, wenn das Gerät absichtlich aus ist – es bleibt sichtbar (gelb), aber ohne Meldungen.")
+        }
+    }
+
+    private func toggle() async {
+        guard let api = model.api else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            try await api.setUniFiPause(site: siteID, key: key, on: !paused)
+            paused.toggle()
+            error = nil
+            await model.refresh(withOverview: false)
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

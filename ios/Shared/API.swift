@@ -194,8 +194,12 @@ struct UniFiDevice: Decodable, Hashable, Identifiable {
     let boots: [Int64]
     let bar: [Int]
     var wan: [UniFiWAN]?
+    var key: String?
+    var ign: Bool?
 
     var id: String { mac.isEmpty ? name : mac }
+    /// pausiert (keine Meldungen, gelb statt rot)
+    var paused: Bool { ign ?? false }
     var isOffline: Bool { ["OFFLINE", "CONNECTION_INTERRUPTED", "ISOLATED", "DISCONNECTED"].contains(state) }
     var catName: String {
         switch cat {
@@ -234,8 +238,14 @@ struct ProtectDev: Decodable, Hashable, Identifiable {
     var open: Bool?
     var leak: Bool?
     var vals: [String: Double]?
+    var ign: Bool?
 
     var online: Bool { (state ?? "").isEmpty || state == "CONNECTED" }
+    /// pausiert (keine Meldungen, gelb statt rot)
+    var paused: Bool { ign ?? false }
+    /// zählt als Störung: offline und nicht pausiert
+    var problem: Bool { !online && !paused }
+    var pauseKey: String { "p:\(kind):\(id)" }
     var lowBattery: Bool { (batLow ?? false) || ((bat ?? -1) >= 0 && (bat ?? -1) <= 15) }
     var isSensor: Bool { kind == "sensor" }
     var kindName: String {
@@ -441,6 +451,12 @@ struct API {
         if let from { q["from"] = "\(from.ms)" }
         if let to { q["to"] = "\(to.ms)" }
         return try await get("api/events", q)
+    }
+
+    /// UniFi-/Protect-Gerät pausieren bzw. wieder überwachen (bleibt sichtbar, gelb, keine Meldungen).
+    func setUniFiPause(site: String, key: String, on: Bool) async throws {
+        struct Body: Encodable { let site: String; let key: String; let on: Bool }
+        _ = try await request("api/unifi/ignore", method: "POST", body: try JSONEncoder().encode(Body(site: site, key: key, on: on)))
     }
 
     /// Ereignis quittieren („ich kümmere mich“) – stoppt die Eskalation.
