@@ -60,6 +60,7 @@ body.viewer .ed{display:none!important}
 .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;border:1px solid var(--line);color:var(--mut)}
 .tag.warn{color:var(--warn);border-color:var(--warn)}.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}
 section{display:none}section.on{display:block}
+@media(min-width:821px){body:has(#v-overview.on .ov-wrap.has-tree) #pw-foot{padding-left:288px}}
 h2{font-size:15px;margin:22px 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 h2:first-child{margin-top:4px}
 h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
@@ -811,7 +812,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <input type="search" id="a-q" placeholder="Suchen …" style="margin-left:auto;width:200px;max-width:45%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="a-tbl"></table></div>
 </section>
-<footer style="text-align:center;font-size:12.5px;color:var(--mut);padding:24px 0 8px">PingWacht · <a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></footer>
+<footer id="pw-foot" style="text-align:center;font-size:12.5px;color:var(--mut);padding:24px 0 8px">PingWacht · <a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></footer>
 </main>
 
 <dialog id="dlg-org">
