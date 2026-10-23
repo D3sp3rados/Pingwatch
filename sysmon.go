@@ -137,6 +137,9 @@ type MachineCfg struct {
 	// Beschreibung (eine Zeile) und Notizen der Techniker
 	Desc  string `json:"desc,omitempty"`
 	Notes string `json:"notes,omitempty"`
+	// OffNoted: „meldet sich nicht“ wurde gemeldet (Zeitpunkt der letzten Meldung des Rechners) –
+	// gespeichert, damit ein Server-Neustart nicht erneut meldet
+	OffNoted int64 `json:"offNoted,omitempty"`
 }
 
 // ---------- Messwerte (Agent → Server) ----------
@@ -385,7 +388,25 @@ func (m *Monitor) machineSeen(mc MachineCfg) {
 				m.sysInfo(mc, fmt.Sprintf("Hat sich %s nicht gemeldet (%s – %s)", fmtDurShort(ce.End-ce.Start),
 					time.UnixMilli(ce.Start).Format("15:04"), time.UnixMilli(ce.End).Format("15:04"))), mc.Org, ""})
 		}
+	} else if mc.OffNoted > 0 && !m.machineInMaint(mc, time.Now()) {
+		// Meldung stammt von vor einem Server-Neustart
+		m.notify(notice{"syson", "m:" + mc.ID, "🟢 Rechner wieder erreichbar: " + mc.Name,
+			m.sysInfo(mc, fmt.Sprintf("Hat sich seit %s nicht gemeldet", time.UnixMilli(mc.OffNoted).Format("02.01. 15:04"))), mc.Org, ""})
 	}
+	if mc.OffNoted > 0 {
+		m.setOffNoted(mc.ID, 0)
+	}
+}
+
+func (m *Monitor) setOffNoted(id string, v int64) {
+	m.mu.Lock()
+	for i := range m.cfg.Machines {
+		if m.cfg.Machines[i].ID == id {
+			m.cfg.Machines[i].OffNoted = v
+		}
+	}
+	m.saveConfigLocked()
+	m.mu.Unlock()
 }
 
 // sysInfo: „Kunde · Standort“ für die Meldungstexte der Rechner.
@@ -710,15 +731,22 @@ func (m *Monitor) checkMachines(nowMs int64) {
 		if sm.seen == 0 && nowMs-serverStart.UnixMilli() > 5*60000 {
 			sm.seen = serverStart.UnixMilli()
 		}
+		if mc.OffNoted > 0 && (sm.seen == 0 || sm.seen == serverStart.UnixMilli()) {
+			sm.seen = mc.OffNoted // vor dem Neustart schon gemeldet: Zeitpunkt übernehmen
+		}
 		var start *Event
 		alert := mc.wantsOffAlert(sm.cur)
-		if sm.seen > 0 && nowMs-sm.seen > 5*60000 && sm.offEv == nil && alert {
+		// höchstens eine Meldung je Ausfall – auch über Server-Neustarts hinweg (OffNoted)
+		if sm.seen > 0 && nowMs-sm.seen > 5*60000 && sm.offEv == nil && alert && mc.OffNoted == 0 {
 			maint := m.machineInMaint(mc, time.UnixMilli(nowMs))
 			sm.offEv = m.newMachineEvent(mc, "Rechner meldet sich nicht · "+mc.Name, sm.seen, maint)
 			start = sm.offEv
 		}
 		seen := sm.seen
 		sm.mu.Unlock()
+		if start != nil {
+			m.setOffNoted(mc.ID, seen)
+		}
 		if start != nil && !start.Maint {
 			m.notify(notice{"sysoff", "m:" + mc.ID, "⚪️ Rechner meldet sich nicht: " + mc.Name,
 				m.sysInfo(mc, "Seit "+time.UnixMilli(seen).Format("15:04")+" keine Meldung (ausgeschaltet, kein Netz oder Agent beendet?)"), mc.Org, ""})

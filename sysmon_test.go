@@ -304,6 +304,36 @@ func TestSysIngest(t *testing.T) {
 	if len(n) != 1 || n[0].kind != "sysoff" {
 		t.Fatalf("offline: %+v", n)
 	}
+	// weitere Prüfungen und ein Server-Neustart (Speicherzustand weg) melden nicht erneut
+	m.checkMachines(now + 60000)
+	sm3.mu.Lock()
+	sm3.offEv, sm3.seen = nil, 0
+	sm3.mu.Unlock()
+	m3, _ = m.machineByID(m3.ID)
+	if m3.OffNoted == 0 {
+		t.Fatal("OffNoted nicht gespeichert")
+	}
+	m.checkMachines(now + 20*60000)
+	if n := drainNotices(m); len(n) != 0 {
+		t.Fatalf("nach Neustart erneut gemeldet: %+v", n)
+	}
+	m.machineSeen(m3)
+	if n := drainNotices(m); len(n) != 1 || n[0].kind != "syson" {
+		t.Fatalf("wieder da nach Neustart: %+v", n)
+	}
+	m3, _ = m.machineByID(m3.ID)
+	if m3.OffNoted != 0 {
+		t.Fatal("OffNoted nicht gelöscht")
+	}
+	// erneuter Ausfall → wieder genau eine Meldung, danach wieder da
+	sm3.mu.Lock()
+	sm3.seen = now - 10*60000
+	sm3.mu.Unlock()
+	m.checkMachines(now)
+	if n := drainNotices(m); len(n) != 1 {
+		t.Fatalf("zweiter Ausfall: %+v", n)
+	}
+	m3, _ = m.machineByID(m3.ID)
 	m.machineSeen(m3)
 	if n := drainNotices(m); len(n) != 1 || n[0].kind != "syson" {
 		t.Fatalf("wieder da: %+v", n)
