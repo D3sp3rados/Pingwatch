@@ -26,6 +26,9 @@ type NetMap struct {
 	Source  string `json:"source,omitempty"` // z. B. „The Dude“
 	// Erreichbarkeit aller Geräte über den Agenten dieses Standorts prüfen (nur Anzeige)
 	PingSite string `json:"pingSite,omitempty"`
+	// Traffic per SNMP: Communities (Komma, werden der Reihe nach probiert) und Umfang
+	SnmpComm  string `json:"snmpComm,omitempty"`
+	SnmpScope string `json:"snmpScope,omitempty"` // "" = Sektoren + markierte, "all", "off"
 	// Meldungen (einzelne Geräte, Sektoren, Orte, ganze Karte)
 	Rules []MapRule `json:"rules,omitempty"`
 }
@@ -38,6 +41,7 @@ type mapNode struct {
 	Y    float64 `json:"y"`
 	Host string  `json:"host,omitempty"` // verknüpfter PingWacht-Host (leer = automatisch über die Adresse)
 	Zone string  `json:"zone,omitempty"` // Ort/Zone zum Filtern (z. B. „Laufenburg“)
+	Snmp bool    `json:"snmp,omitempty"` // Traffic per SNMP abfragen (zusätzlich zu Sektoren)
 }
 
 type mapLink struct {
@@ -146,6 +150,9 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			out := []NetMap{}
 			for _, x := range m.cfg.Maps {
 				if x.Org == p.Org {
+					if !p.canEdit() {
+						x.SnmpComm = ""
+					}
 					out = append(out, x)
 				}
 			}
@@ -200,11 +207,19 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			}
 			nodes = append(nodes, o)
 		}
-		writeJSON(w, map[string]any{"map": mp, "nodes": nodes, "links": d.Links, "reach": mapReachView(id)})
+		if !p.canEdit() {
+			mp.SnmpComm = ""
+		}
+		mapStats.Lock()
+		snmp := map[string]any{"at": mapStats.snmpLast[id], "ok": mapStats.snmpOK[id]}
+		mapStats.Unlock()
+		writeJSON(w, map[string]any{"map": mp, "nodes": nodes, "links": d.Links, "reach": mapReachView(id), "snmp": snmp})
 	case http.MethodPost:
 		var req struct {
 			ID, Name, Source string
 			PingSite         *string
+			SnmpComm         *string
+			SnmpScope        *string
 			Nodes            *[]mapNode
 			Links            *[]mapLink
 		}
@@ -230,6 +245,12 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			}
 			if name != "" {
 				m.cfg.Maps[i].Name = name
+			}
+			if req.SnmpComm != nil {
+				m.cfg.Maps[i].SnmpComm = clipStr(strings.TrimSpace(*req.SnmpComm), 200)
+			}
+			if req.SnmpScope != nil && (*req.SnmpScope == "" || *req.SnmpScope == "all" || *req.SnmpScope == "off") {
+				m.cfg.Maps[i].SnmpScope = *req.SnmpScope
 			}
 			if req.PingSite != nil {
 				ps := *req.PingSite
@@ -314,6 +335,7 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 		Set []struct {
 			ID                     string
 			Host, Name, Addr, Zone *string
+			Snmp                   *bool
 		}
 		Add    []mapNode
 		Del    []string
@@ -365,6 +387,9 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		if st.Addr != nil {
 			d.Nodes[i].Addr = *st.Addr
+		}
+		if st.Snmp != nil {
+			d.Nodes[i].Snmp = *st.Snmp
 		}
 		if st.Zone != nil {
 			d.Nodes[i].Zone = clipStr(strings.TrimSpace(*st.Zone), 60)

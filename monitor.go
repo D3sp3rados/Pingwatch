@@ -594,6 +594,13 @@ func (m *Monitor) housekeeping() {
 		}
 		if now.Second() < 5 {
 			m.mapPingTick()
+			m.mapSNMPTick()
+			if now.Minute()%30 == 0 {
+				go m.saveMapStats()
+			}
+			if now.Hour() == 3 && now.Minute() == 30 {
+				go m.pruneMapStats()
+			}
 		}
 		if now.Second() < 5 {
 			m.checkBackups(now)
@@ -702,6 +709,7 @@ func (m *Monitor) Shutdown() {
 		m.closeAll(h)
 	}
 	m.saveSysState()
+	m.saveMapStats()
 	m.store.Close()
 }
 

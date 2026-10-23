@@ -540,7 +540,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <button class="btn sm" id="map-old" title="Geräte mit „gekündigt“, „abgebaut“, „abgeschaltet“, „weggezogen“ oder „aus)“ im Namen ausblenden">Gekündigte ausblenden</button>
     <button class="btn sm" id="map-fit" title="Ganze Karte anzeigen">⤢ Alles</button>
     <button class="btn sm ed" id="map-edit">✏️ Bearbeiten</button>
-    <span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
+    <button class="btn sm" id="map-stat" title="Verfügbarkeit und Ausfälle der angezeigten Geräte">📈 Statistik</button><span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-snmp" title="Traffic der Geräte per SNMP erfassen">📶 Traffic</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
   </div>
   <div class="muted" id="map-info" style="font-size:12.5px;margin:2px 0 8px"></div>
   <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-pane" class="panel"></div></div>
@@ -908,6 +908,31 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <div id="ac2-acc" style="display:none"></div>
     </div>
     <div class="dlg-err" id="ac2-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-mstat" style="width:min(860px,96vw)">
+  <form method="dialog">
+    <div class="dlg-h"><span id="ms-title">Statistik</span></div>
+    <div class="dlg-b" style="display:block">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="seg" id="ms-days"><button type="button" data-d="1">24 h</button><button type="button" data-d="7" class="on">7 Tage</button><button type="button" data-d="30">30 Tage</button><button type="button" data-d="90">90 Tage</button></div><div class="seg" id="ms-kind" style="display:none"><button type="button" data-k="node" class="on">Gerät</button><button type="button" data-k="sector">Sektor mit Kunden</button></div></div>
+      <div id="ms-body" style="margin-top:12px"></div>
+    </div>
+    <div class="dlg-f"><button class="btn" value="cancel">Schließen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-msnmp">
+  <form method="dialog" id="sn2-form">
+    <div class="dlg-h">Traffic per SNMP</div>
+    <div class="dlg-b" style="display:block">
+      <p class="muted" style="font-size:13px;margin:0 0 10px">Der Agent der Erreichbarkeitsprüfung fragt alle 5 Minuten die Schnittstellenzähler der Geräte ab (SNMP v2c, nur lesend) und speichert daraus den Traffic je Schnittstelle (Ø und Spitze je Stunde, 90 Tage). Auf den Geräten muss SNMP eingeschaltet und die Adresse des Agenten erlaubt sein.</p>
+      <label class="field">Communities (mehrere mit Komma, werden der Reihe nach probiert)<input name="comm" placeholder="public" autocomplete="off" data-1p-ignore data-lpignore="true"></label>
+      <label class="field">Welche Geräte<select name="scope"><option value="">Sektoren / Masten (mehrere Verbindungen) und einzeln markierte</option><option value="all">Alle Geräte der Karte</option><option value="off">Aus</option></select></label>
+      <div class="muted" id="sn2-state" style="font-size:12px"></div>
+    </div>
+    <div class="dlg-err" id="sn2-err"></div>
     <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
   </form>
 </dialog>
@@ -2406,6 +2431,68 @@ function drawIfChart(pts){ const c=$('#sn-chart'), dpr=devicePixelRatio||1, W=c.
   g.fillStyle='rgba(220,38,38,.8)'; for(const p of pts) if(p.e>0||!p.u) g.fillRect(x(p.t)-1,T,2,4);
 }
 
+
+/* Netzkarte: Statistik */
+let MS={};
+function openMapStat(o){ if(!MP.id) return; MS=Object.assign({days:MS.days||7,kind:'node'},o); const ns=MP.data.nodes;
+  const n=o.node&&ns[MP.idx[o.node]], deg=n?MP.data.links.filter(l=>l.a===n.id||l.b===n.id).length:0;
+  $('#ms-kind').style.display=n&&deg>=2?'':'none'; $$('#ms-kind button').forEach(x=>x.classList.toggle('on',x.dataset.k==='node'));
+  $$('#ms-days button').forEach(x=>x.classList.toggle('on',+x.dataset.d===MS.days));
+  $('#ms-title').textContent='Statistik · '+(n?n.name:(MS.zone?'📍 '+MS.zone:'ganze Karte'));
+  $('#ms-body').innerHTML='<span class="muted">Lade …</span>'; if(!$('#dlg-mstat').open) $('#dlg-mstat').showModal(); msLoad(); }
+$$('#ms-days button').forEach(b=>b.onclick=()=>{ MS.days=+b.dataset.d; $$('#ms-days button').forEach(x=>x.classList.toggle('on',x===b)); msLoad(); });
+$$('#ms-kind button').forEach(b=>b.onclick=()=>{ MS.kind=b.dataset.k; $$('#ms-kind button').forEach(x=>x.classList.toggle('on',x===b)); msLoad(); });
+function fmtPct(v){ return v<0?'–':(v>=99.995?'100':v.toLocaleString('de-DE',{maximumFractionDigits:v>=99?2:1}))+' %'; }
+function fmtDur(ms){ const m=Math.round(ms/60000); if(m<60) return m+' min'; const h=Math.floor(m/60); if(h<48) return h+' h '+(m%60)+' min'; return Math.floor(h/24)+' Tage '+(h%24)+' h'; }
+async function msLoad(){ const q=new URLSearchParams({id:MP.id,days:MS.days}); const sector=MS.node&&MS.kind==='sector';
+  if(MS.node&&!sector) q.set('node',MS.node); else if(sector) q.set('sector',MS.node); else if(MS.zone) q.set('zone',MS.zone);
+  let r; try{ r=await api('/api/maps/stats?'+q); }catch(e){ $('#ms-body').innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`; return; }
+  MS.data=r; const body=$('#ms-body');
+  if(r.hours){ const ifs=r.ifs||[];
+    body.innerHTML=`<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:10px"><div><div class="muted" style="font-size:12px">Verfügbarkeit</div><b style="font-size:20px;color:var(${r.avail<0?'--mut':r.avail>=99.5?'--ok':r.avail>=95?'--warn':'--bad'})">${fmtPct(r.avail)}</b></div><div><div class="muted" style="font-size:12px">Ø Ping</div><b style="font-size:20px">${r.avg?r.avg.toLocaleString('de-DE',{maximumFractionDigits:1})+' ms':'–'}</b></div><div><div class="muted" style="font-size:12px">Ausfälle</div><b style="font-size:20px">${(r.outages||[]).length}</b></div></div>
+      <div class="muted" style="font-size:12px">Ping je Stunde (Linie Ø, hell Spitze) · rot = Stunden mit Ausfall</div><canvas id="ms-ping" style="width:100%;height:170px;display:block"></canvas>
+      ${ifs.length?`<div style="display:flex;gap:8px;align-items:center;margin-top:14px"><span class="muted" style="font-size:12px">Traffic</span><select id="ms-if" class="orgsw">${ifs.map((f,i)=>`<option value="${i}">${esc(f.name)}</option>`).join('')}</select><span class="muted" style="font-size:12px"><span style="color:var(--acc)">■</span> rein <span style="color:#6366f1">■</span> raus · Ø je Stunde, hell = Spitze</span></div><canvas id="ms-tr" style="width:100%;height:170px;display:block"></canvas>`:`<p class="muted" style="font-size:12px;margin-top:12px">Kein Traffic erfasst${MP.list&&(MP.list.find(m=>m.id===MP.id)||{}).snmpComm?' – das Gerät antwortet nicht auf SNMP oder wird nicht abgefragt (Sektoren und mit „SNMP an“ markierte Geräte).':' – SNMP ist für diese Karte nicht eingerichtet (📶 Traffic).'}</p>`}
+      <div class="muted" style="font-size:12px;margin:14px 0 4px">Ausfälle</div><div style="max-height:200px;overflow:auto;font-size:13px">${(r.outages||[]).slice(0,200).map(o=>`<div class="num" style="display:flex;gap:10px;padding:2px 0"><span style="min-width:150px">${fmtDT(o[0],false)}</span><span>${o[1]?fmtDur(o[1]-o[0]):'<b style="color:var(--bad)">läuft seit '+fmtDur(Date.now()-o[0])+'</b>'}</span></div>`).join('')||'<span class="muted">Keine im Zeitraum.</span>'}</div>`;
+    drawMsPing(r.hours); if(ifs.length){ drawMsTr(ifs[0]); $('#ms-if').onchange=e=>drawMsTr(ifs[+e.target.value]); }
+    return; }
+  const days=r.days||[];
+  body.innerHTML=`<div class="muted" style="font-size:12px">${r.devices} Geräte · Verfügbarkeit je Tag</div><canvas id="ms-days-c" style="width:100%;height:150px;display:block"></canvas>
+    <div class="muted" style="font-size:12px;margin:14px 0 4px">Geräte mit den meisten Ausfällen</div><div style="max-height:300px;overflow:auto;font-size:13px">${(r.worst||[]).map(d=>`<div style="display:flex;gap:8px;align-items:center;padding:2px 0"><a href="#" data-msn="${esc(d.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name||d.addr)}</a><span class="muted num" style="font-size:12px">${d.outs} Ausfälle</span><b class="num" style="min-width:70px;text-align:right;color:var(${d.avail>=99.5?'--ok':d.avail>=95?'--warn':'--bad'})">${fmtPct(d.avail)}</b></div>`).join('')||'<span class="muted">Keine Ausfälle im Zeitraum.</span>'}</div>`;
+  body.querySelectorAll('[data-msn]').forEach(a=>a.onclick=e=>{ e.preventDefault(); openMapStat({node:a.dataset.msn}); });
+  drawMsDays(days); }
+function msAxes(c){ const {g,W,H}=setupCanvas(c); const cs=getComputedStyle(document.body); return {g,W,H,acc:cs.getPropertyValue('--acc').trim(),mut:cs.getPropertyValue('--mut').trim(),line:cs.getPropertyValue('--line').trim()}; }
+function drawMsPing(hs){ const c=$('#ms-ping'); if(!c) return; const {g,W,H,acc,mut,line}=msAxes(c);
+  if(!hs.length){ g.fillStyle=mut; g.font='13px system-ui'; g.fillText('Noch keine Daten – Werte kommen mit jeder Prüfung (alle 5 Minuten).',10,24); return; }
+  const L=52,R=8,T=8,B=20, t1=Date.now(), t0=t1-MS.days*864e5; const max=Math.max(5,...hs.map(h=>Math.min(h.max,hs.reduce((a,x)=>a+x.avg,0)/hs.length*6)))*1.1;
+  const x=t=>L+(W-L-R)*(t-t0)/(t1-t0), y=v=>T+(H-T-B)*(1-Math.min(v,max)/max), bw=Math.max(1,(W-L-R)*36e5/(t1-t0));
+  g.strokeStyle=line; g.fillStyle=mut; g.font='11px system-ui'; g.lineWidth=1;
+  for(let k=0;k<=4;k++){ const v=max*k/4, yy=y(v); g.beginPath(); g.moveTo(L,yy); g.lineTo(W-R,yy); g.stroke(); g.fillText(Math.round(v)+' ms',4,yy+4); }
+  g.fillText(fmtDT(t0,false),L,H-4); const te=fmtDT(t1,false); g.fillText(te,W-R-g.measureText(te).width,H-4);
+  for(const h of hs) if(h.d>0){ g.fillStyle=`rgba(220,38,38,${Math.min(.85,.25+h.d/h.n)})`; g.fillRect(x(h.t),T,bw,H-T-B); }
+  g.globalAlpha=.3; g.fillStyle=acc; for(const h of hs) if(h.n>h.d){ g.fillRect(x(h.t),y(h.max),bw,y(h.avg)-y(h.max)); } g.globalAlpha=1;
+  g.strokeStyle=acc; g.lineWidth=1.6; g.beginPath(); let prev=null; for(const h of hs){ if(h.n<=h.d){ prev=null; continue; } const X=x(h.t)+bw/2,Y=y(h.avg); if(prev!==null&&h.t-prev<=36e5) g.lineTo(X,Y); else g.moveTo(X,Y); prev=h.t; } g.stroke(); }
+function drawMsTr(f){ const c=$('#ms-tr'); if(!c) return; const {g,W,H,acc,mut,line}=msAxes(c); const p=f.p||[];
+  const L=64,R=8,T=8,B=20, t1=Date.now(), t0=t1-MS.days*864e5; const max=Math.max(1e3,...p.map(v=>Math.max(v[3],v[4])))*1.1;
+  const x=t=>L+(W-L-R)*(t-t0)/(t1-t0), y=v=>T+(H-T-B)*(1-v/max), bw=Math.max(1,(W-L-R)*36e5/(t1-t0));
+  g.strokeStyle=line; g.fillStyle=mut; g.font='11px system-ui'; g.lineWidth=1;
+  for(let k=0;k<=4;k++){ const v=max*k/4, yy=y(v); g.beginPath(); g.moveTo(L,yy); g.lineTo(W-R,yy); g.stroke(); g.fillText(fmtBit(v),4,yy+4); }
+  g.fillText(fmtDT(t0,false),L,H-4); const te=fmtDT(t1,false); g.fillText(te,W-R-g.measureText(te).width,H-4);
+  for(const [ai,mi,col] of [[1,3,acc],[2,4,'#6366f1']]){ g.globalAlpha=.25; g.fillStyle=col; for(const v of p) g.fillRect(x(v[0]),y(v[mi]),bw,Math.max(1,y(v[ai])-y(v[mi]))); g.globalAlpha=1;
+    g.strokeStyle=col; g.lineWidth=1.6; g.beginPath(); let prev=null; for(const v of p){ const X=x(v[0])+bw/2,Y=y(v[ai]); if(prev!==null&&v[0]-prev<=36e5) g.lineTo(X,Y); else g.moveTo(X,Y); prev=v[0]; } g.stroke(); } }
+function drawMsDays(ds){ const c=$('#ms-days-c'); if(!c) return; const {g,W,H,mut,line}=msAxes(c); const L=52,R=8,T=8,B=20;
+  const v=ds.filter(d=>d.avail>=0); if(!v.length){ g.fillStyle=mut; g.font='13px system-ui'; g.fillText('Noch keine Daten – Werte kommen mit jeder Prüfung (alle 5 Minuten).',10,24); return; }
+  const lo=Math.max(0,Math.floor(Math.min(...v.map(d=>d.avail))-1)), y=a=>T+(H-T-B)*(1-(a-lo)/(100-lo)), bw=(W-L-R)/ds.length;
+  g.strokeStyle=line; g.fillStyle=mut; g.font='11px system-ui'; g.lineWidth=1;
+  for(let k=0;k<=4;k++){ const a=lo+(100-lo)*k/4, yy=y(a); g.beginPath(); g.moveTo(L,yy); g.lineTo(W-R,yy); g.stroke(); g.fillText(a.toFixed(lo>90?1:0)+' %',4,yy+4); }
+  ds.forEach((d,i)=>{ if(d.avail<0) return; g.fillStyle=d.avail>=99.5?'#16a34a':d.avail>=95?'#d97706':'#dc2626'; g.fillRect(L+i*bw+bw*.15,y(d.avail),bw*.7,H-B-y(d.avail)); });
+  g.fillStyle=mut; const f=d=>d.day.slice(8,10)+'.'+d.day.slice(5,7)+'.'; g.fillText(f(ds[0]),L,H-4); const te=f(ds[ds.length-1]); g.fillText(te,W-R-g.measureText(te).width,H-4); }
+$('#map-stat').onclick=()=>openMapStat({zone:MP.zone||''});
+$('#map-snmp').onclick=()=>{ const m=MP.list&&MP.list.find(x=>x.id===MP.id); if(!m) return; const f=$('#sn2-form'); f.comm.value=m.snmpComm||''; f.scope.value=m.snmpScope||''; $('#sn2-err').textContent='';
+  const sn=MP.data&&MP.data.snmp; $('#sn2-state').textContent=!m.pingSite?'Erst oben die Erreichbarkeitsprüfung über einen Agenten einschalten.':sn&&sn.at?`Letzte Abfrage ${fmtTime(sn.at,false)} · ${sn.ok} Geräte haben geantwortet.`:(m.snmpComm?'Noch keine Antwort – erste Werte nach ca. 10 Minuten (Agent ab Version 1.6.5).':'');
+  $('#dlg-msnmp').showModal(); };
+$('#sn2-form').addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); const f=e.target;
+  try{ await api('/api/maps',{method:'POST',body:JSON.stringify({id:MP.id,snmpComm:f.comm.value.trim(),snmpScope:f.scope.value})}); $('#dlg-msnmp').close(); toast('Gespeichert – erste Traffic-Werte nach ca. 10 Minuten'); await loadMaps(true); }catch(err){ $('#sn2-err').textContent=err.message; } });
+
 /* Netzwerk-Scan & UniFi-Import */
 const idlg=$('#dlg-import'), imf=$('#im-form'); let IM={};
 function openImport(site,kind){ IM={site,kind,rows:[]}; $('#im-title').textContent=(kind==='scan'?'Netzwerk scannen':'UniFi-Geräte importieren')+' · '+siteName(site);
@@ -3112,7 +3199,7 @@ function mpPane(){ const p=$('#map-pane'); const n=MP.sel&&MP.data&&MP.data.node
   const nb=MP.data.links.filter(l=>l.a===n.id||l.b===n.id).map(l=>{ const o=ns[MP.idx[l.a===n.id?l.b:l.a]]; return o?{o,l}:null; }).filter(Boolean);
   p.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-start"><span class="dot" style="margin-top:6px;background:${mpColor(n)||'transparent'};border:1px solid var(--mut)"></span><div style="min-width:0"><b style="word-break:break-word">${esc(n.name||'–')}</b><div class="muted num" style="font-size:13px">${esc(n.addr||'keine Adresse')}${n.zone?' · 📍 '+esc(n.zone):''}</div></div><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div>
     <div style="margin:10px 0;font-size:13px">${h?`Überwacht als <a href="#/host/${h.id}">${esc(h.name)}</a> · <span style="color:var(${st[1]})">${st[0]}</span>${n.auto?' <span class="muted">(über die IP zugeordnet)</span>':''}`:(mpReach(n)===null?'<span class="muted">Nicht überwacht</span>':mpReach(n)>=0?`<span style="color:var(--ok)">Erreichbar</span> <span class="muted">· ${(mpReach(n)/10).toLocaleString('de-DE',{maximumFractionDigits:1})} ms · nicht überwacht</span>`:'<span style="color:var(--bad)">Nicht erreichbar</span> <span class="muted">· nicht überwacht</span>')}</div>
-    <div class="row ed" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="mp-rule">🔔 Melden</button>${h?`<button class="btn sm" id="mp-unl">Verknüpfung lösen</button>`:`<button class="btn sm pri" id="mp-host"${n.addr?'':' disabled'}>Als Host überwachen</button><button class="btn sm" id="mp-pick">Mit Host verknüpfen</button>`}${MP.edit?`<button class="btn sm" id="mp-link">${MP.linkFrom===n.id?'Ziel anklicken …':'Verbinden mit …'}</button><button class="btn sm" id="mp-ren">Umbenennen</button><button class="btn sm" id="mp-zone">Ort</button><button class="btn sm danger" id="mp-del">Entfernen</button>`:''}</div>
+    <div style="margin-bottom:6px"><button class="btn sm" id="mp-stat"${n.addr?'':' disabled'}>📈 Statistik</button></div><div class="row ed" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="mp-rule">🔔 Melden</button>${h?`<button class="btn sm" id="mp-unl">Verknüpfung lösen</button>`:`<button class="btn sm pri" id="mp-host"${n.addr?'':' disabled'}>Als Host überwachen</button><button class="btn sm" id="mp-pick">Mit Host verknüpfen</button>`}${MP.edit?`<button class="btn sm" id="mp-link">${MP.linkFrom===n.id?'Ziel anklicken …':'Verbinden mit …'}</button><button class="btn sm" id="mp-ren">Umbenennen</button><button class="btn sm" id="mp-zone">Ort</button><button class="btn sm" id="mp-snmp" title="Traffic dieses Geräts per SNMP erfassen (Sektoren werden automatisch erfasst)">SNMP ${n.snmp?'an':'aus'}</button><button class="btn sm danger" id="mp-del">Entfernen</button>`:''}</div>
     ${nb.length?`<div class="muted" style="font-size:12px;margin:12px 0 4px">Verbunden mit (${nb.length})</div>`+nb.slice(0,30).map(({o,l})=>`<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0"><span class="dot" style="background:${mpColor(o)||'transparent'};border:1px solid var(--mut)"></span><a href="#" data-mpgo="${esc(o.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.name)}</a>${l.type?`<span class="muted" style="font-size:11px">${esc(l.type)}</span>`:''}${MP.edit?`<a href="#" data-mpun="${esc(o.id)}" title="Verbindung entfernen">✕</a>`:''}</div>`).join(''):''}`;
   $('#mp-x').onclick=()=>{ MP.sel=null; MP.linkFrom=null; drawMap(); mpPane(); };
   const b=id=>p.querySelector('#'+id);
@@ -3122,6 +3209,8 @@ function mpPane(){ const p=$('#map-pane'); const n=MP.sel&&MP.data&&MP.data.node
   if(b('mp-link')) b('mp-link').onclick=()=>{ MP.linkFrom=MP.linkFrom===n.id?null:n.id; mpPane(); drawMap(); };
   if(b('mp-ren')) b('mp-ren').onclick=async()=>{ const v=await uiPrompt('Name:',n.name||''); if(v===null) return; const a=await uiPrompt('IP / Adresse:',n.addr||''); if(a===null) return; mpEdit({set:[{id:n.id,name:v.trim(),addr:a.trim()}]}); };
   if(b('mp-rule')) b('mp-rule').onclick=()=>{ const leafs=MP.data.links.filter(l=>l.a===n.id||l.b===n.id).length; openMapRules({scope:leafs>2?'sector':'node',target:n.id,min:leafs>2?3:1,confirm:1,push:true,customers:true,name:n.name}); };
+  if(b('mp-stat')) b('mp-stat').onclick=()=>openMapStat({node:n.id});
+  if(b('mp-snmp')) b('mp-snmp').onclick=()=>mpEdit({set:[{id:n.id,snmp:!n.snmp}]});
   if(b('mp-zone')) b('mp-zone').onclick=async()=>{ const v=await uiPrompt('Ort / Zone (leer = keiner):',n.zone||''); if(v===null) return; mpEdit({set:[{id:n.id,zone:v.trim()}]}); };
   if(b('mp-del')) b('mp-del').onclick=async()=>{ if(!await uiConfirm(`„${n.name}“ von der Karte entfernen? (Ein verknüpfter Host bleibt bestehen.)`)) return; MP.sel=null; mpEdit({del:[n.id]}); };
   p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); });

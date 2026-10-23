@@ -269,6 +269,10 @@ func (s *Server) handleAgentJob(w http.ResponseWriter, r *http.Request) {
 	if actionKinds[st.Kind] != "" {
 		go s.m.actionJobDone(st.ID, st.Kind, req.Error, req.Result)
 	}
+	if st.Kind == "snmpif" {
+		go s.m.mapSNMPResult(st.ID, req.Error, req.Result)
+		st.Result = nil
+	}
 	if st.Kind == "ping" {
 		s.m.mapPingResult(st.ID, req.Error, req.Result)
 		st.Result = nil // nicht im Speicher halten
@@ -309,6 +313,8 @@ func (a *Agent) runJob(j agentJob) {
 		}
 	case "ping": // Erreichbarkeit einer Liste von Adressen (Netzkarte), ohne Namensauflösung
 		res = pingList(strings.Split(j.Params["ips"], ","))
+	case "snmpif": // Schnittstellenzähler mehrerer Geräte (Netzkarte); Communities der Reihe nach probieren
+		res = snmpIfList(strings.Split(j.Params["ips"], ","), strings.Split(j.Params["communities"], ","))
 	case "unifi":
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
@@ -544,6 +550,51 @@ func scanOne(ip net.IP) (scanHit, bool) {
 		}
 	}
 	return scanHit{}, false
+}
+
+// snmpIfList: Schnittstellen (nur aktive, höchstens 16) je Gerät; erste antwortende Community gilt.
+func snmpIfList(list, comms []string) map[string][]ifSample {
+	out := map[string][]ifSample{}
+	var mu sync.Mutex
+	sem := make(chan struct{}, 32)
+	var wg sync.WaitGroup
+	for _, a := range list {
+		ip := net.ParseIP(strings.TrimSpace(a)).To4()
+		if ip == nil {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(ip string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			for _, c := range comms {
+				c = strings.TrimSpace(c)
+				if c == "" {
+					continue
+				}
+				ifs, err := snmpInterfaces(HostCfg{ID: "map:" + ip, Addr: ip, Port: 161, Community: c})
+				if err != nil || len(ifs) == 0 {
+					continue
+				}
+				var up []ifSample
+				for _, x := range ifs {
+					if x.Up && (x.In > 0 || x.Out > 0) && !strings.HasPrefix(strings.ToLower(x.Name), "lo") {
+						up = append(up, x)
+					}
+				}
+				if len(up) > 16 {
+					up = up[:16]
+				}
+				mu.Lock()
+				out[ip] = up
+				mu.Unlock()
+				return
+			}
+		}(ip.String())
+	}
+	wg.Wait()
+	return out
 }
 
 // pingList: jede Adresse einmal anpingen (bei fehlender Antwort typische Ports), parallel.

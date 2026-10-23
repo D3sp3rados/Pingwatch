@@ -28,7 +28,8 @@ var mapPing = struct {
 	jobs  map[string]string    // Auftrag → Karte
 	reach map[string]*mapReach // Karte → Ergebnis
 	ips   map[string]int       // Auftrag → Anzahl Adressen
-}{last: map[string]time.Time{}, jobs: map[string]string{}, reach: map[string]*mapReach{}, ips: map[string]int{}}
+	list  map[string][]string  // Karte → geprüfte Adressen der laufenden Runde
+}{last: map[string]time.Time{}, jobs: map[string]string{}, reach: map[string]*mapReach{}, ips: map[string]int{}, list: map[string][]string{}}
 
 // mapPingTick: fällige Karten an den Agenten geben (aus housekeeping, jede Minute).
 func (m *Monitor) mapPingTick() {
@@ -94,6 +95,9 @@ func (m *Monitor) queueMapPing(mp NetMap) {
 	if len(ips) == 0 {
 		return
 	}
+	mapPing.Lock()
+	mapPing.list[mp.ID] = ips
+	mapPing.Unlock()
 	for i := 0; i < len(ips); i += 1500 { // in Paketen
 		end := min(i+1500, len(ips))
 		j := agentJob{ID: randHex(8), Kind: "ping", Params: map[string]string{"ips": strings.Join(ips[i:end], ",")}}
@@ -160,6 +164,12 @@ func (m *Monitor) mapPingResult(jobID, errText string, result json.RawMessage) {
 	r.At, r.Err, r.Wait = time.Now().UnixMilli(), "", busy
 	if !busy {
 		done = mid
+		list := mapPing.list[mid]
+		rtt := make(map[string]int32, len(r.RTT))
+		for k, v := range r.RTT {
+			rtt[k] = v
+		}
+		go m.recordMapReach(mid, list, rtt, time.Now())
 	}
 }
 
