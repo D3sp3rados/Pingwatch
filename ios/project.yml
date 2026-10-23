@@ -9,8 +9,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: "20261023"
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "202610231"
     DEVELOPMENT_TEAM: ""          # Team-ID hier eintragen oder in Xcode wählen
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.9"
@@ -27,6 +27,8 @@ targets:
       properties:
         aps-environment: development
         com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.developer.associated-domains:
+          - webcredentials:app.pingwacht.de
         com.apple.security.application-groups:
           - group.de.rst.pingwatch
     info:

@@ -64,11 +64,34 @@ struct LoginView: View {
                         }
                     }
                     .disabled(busy || server.isEmpty || password.isEmpty)
+                    Button {
+                        Task { await passkeyLogin() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Mit Passkey anmelden", systemImage: "person.badge.key.fill")
+                            Spacer()
+                        }
+                    }
+                    .disabled(busy || server.isEmpty)
                 } footer: {
                     Text("Gleiche Zugangsdaten wie im Dashboard. Danach fragt die App, ob sie Benachrichtigungen senden darf.")
                 }
             }
         }
+    }
+
+    private func passkeyLogin() async {
+        busy = true
+        error = nil
+        do {
+            try await model.loginWithPasskey(server: server)
+        } catch {
+            if !isPasskeyCancel(error) {
+                self.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+        busy = false
     }
 
     private func login() async {

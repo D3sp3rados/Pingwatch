@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var testResult: String?
     @State private var confirmLogout = false
+    @State private var passkeyResult: String?
 
     var body: some View {
         @Bindable var m = model
@@ -45,6 +46,28 @@ struct SettingsView: View {
                 }
                 .disabled(model.deviceToken == nil || model.state?.push != true)
                 if let testResult { Text(testResult).font(.caption) }
+            }
+
+            Section {
+                Button {
+                    Task {
+                        do {
+                            try await model.addPasskey()
+                            passkeyResult = "Passkey angelegt – ab jetzt geht die Anmeldung mit Face ID."
+                        } catch {
+                            if !isPasskeyCancel(error) {
+                                passkeyResult = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Passkey für dieses iPhone anlegen", systemImage: "person.badge.key")
+                }
+                if let passkeyResult { Text(passkeyResult).font(.caption) }
+            } header: {
+                Text("Passkey")
+            } footer: {
+                Text("Anmelden mit Face ID statt Passwort. Gilt auch im Dashboard für Updates, Neustarts und Scripts.")
             }
 
             Section("Server") {
