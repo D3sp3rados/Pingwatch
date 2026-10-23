@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OverviewView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("ovMode") private var mode = "group"
 
     var body: some View {
         List {
@@ -18,55 +19,44 @@ struct OverviewView: View {
                 }
                 let groups = st.groups ?? []
                 if !groups.isEmpty {
-                    ForEach(groups) { g in
-                        let hosts = st.hosts.filter { $0.group == g.id }
-                        if !hosts.isEmpty {
+                    Section {
+                        Picker("Ansicht", selection: $mode) {
+                            Text("Gruppen").tag("group")
+                            Text("Standorte").tag("site")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+                if !groups.isEmpty && mode == "group" {
+                    Section {
+                        ForEach(pwFolders(st)) { f in
+                            NavigationLink {
+                                FolderView(folderID: f.id)
+                            } label: {
+                                FolderRow(folder: f)
+                            }
+                        }
+                    }
+                } else {
+                    ForEach(st.sites) { site in
+                        let hosts = st.hosts.filter { $0.site == site.id }
+                        if !hosts.isEmpty || site.unifi?.on == true {
                             Section {
                                 ForEach(hosts) { h in
                                     NavigationLink(value: h.id) {
                                         HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
                                     }
                                 }
+                                if let u = site.unifi, u.on {
+                                    UniFiSection(summary: u, siteName: site.name)
+                                }
                             } header: {
-                                Label(g.name, systemImage: "folder")
+                                SiteHeader(site: site)
                             }
                         }
                     }
-                    let rest = st.hosts.filter { h in !groups.contains { $0.id == h.group } }
-                    if !rest.isEmpty {
-                        Section("Ohne Gruppe") {
-                            ForEach(rest) { h in
-                                NavigationLink(value: h.id) {
-                                    HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
-                                }
-                            }
-                        }
-                    }
-                    ForEach(st.sites.filter { $0.unifi?.on == true }) { site in
-                        Section {
-                            if let u = site.unifi { UniFiSection(summary: u, siteName: site.name) }
-                        } header: {
-                            SiteHeader(site: site)
-                        }
-                    }
-                } else {
-                ForEach(st.sites) { site in
-                    let hosts = st.hosts.filter { $0.site == site.id }
-                    if !hosts.isEmpty || site.unifi?.on == true {
-                        Section {
-                            ForEach(hosts) { h in
-                                NavigationLink(value: h.id) {
-                                    HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
-                                }
-                            }
-                            if let u = site.unifi, u.on {
-                                UniFiSection(summary: u, siteName: site.name)
-                            }
-                        } header: {
-                            SiteHeader(site: site)
-                        }
-                    }
-                }
                 }
             } else if model.lastError == nil {
                 HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
@@ -342,6 +332,306 @@ struct UniFiDeviceView: View {
                             .font(.caption).foregroundStyle(.secondary)
                         }
                     }
+                }
+            }
+        }
+        .navigationTitle(device.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ k: String, _ v: String) -> some View {
+        HStack {
+            Text(k).foregroundStyle(.secondary)
+            Spacer()
+            Text(v).multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+
+// MARK: - Gruppen zum Durchklicken (Ordner → Inhalt → UniFi mit Auswahl)
+
+struct PWFolder: Identifiable {
+    let id: String          // Gruppen-ID, "-" = ohne Gruppe, "u:<Standort>" = nur UniFi
+    let name: String
+    let hosts: [HostView]
+    let sites: [SiteView]   // Standorte mit UniFi, die zu den Hosts gehören
+    var unifiOnly: Bool { id.hasPrefix("u:") }
+
+    var problems: Int {
+        var n = hosts.filter { !$0.paused && $0.status == "down" }.count
+        for s in sites {
+            n += s.unifi?.offline ?? 0
+            n += (s.unifi?.protect?.devs ?? []).filter { !$0.online }.count
+            if let e = s.unifi?.err, !e.isEmpty { n += 1 }
+        }
+        return n
+    }
+    var warnings: Int {
+        var n = hosts.filter { !$0.paused && ($0.status == "loss" || $0.status == "spike") }.count
+        for s in sites { n += (s.unifi?.protect?.devs ?? []).filter { $0.lowBattery }.count }
+        return n
+    }
+}
+
+func pwFolders(_ st: StateResponse) -> [PWFolder] {
+    let groups = st.groups ?? []
+    var used = Set<String>()
+    func make(_ id: String, _ name: String, _ hosts: [HostView]) -> PWFolder {
+        let ids = Set(hosts.map { $0.site })
+        let sites = st.sites.filter { ids.contains($0.id) && $0.unifi?.on == true }
+        sites.forEach { used.insert($0.id) }
+        return PWFolder(id: id, name: name, hosts: hosts, sites: sites)
+    }
+    var out: [PWFolder] = []
+    for g in groups {
+        let hs = st.hosts.filter { $0.group == g.id }
+        if !hs.isEmpty { out.append(make(g.id, g.name, hs)) }
+    }
+    let rest = st.hosts.filter { h in !groups.contains { $0.id == h.group } }
+    if !rest.isEmpty { out.append(make("-", "Ohne Gruppe", rest)) }
+    for s in st.sites where s.unifi?.on == true && !used.contains(s.id) {
+        out.append(PWFolder(id: "u:" + s.id, name: "UniFi · " + s.name, hosts: [], sites: [s]))
+    }
+    return out
+}
+
+struct FolderRow: View {
+    let folder: PWFolder
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                StatusDot(color: folder.problems > 0 ? PW.bad : folder.warnings > 0 ? PW.warn : PW.ok)
+                Image(systemName: folder.unifiOnly ? "wifi.router" : "folder.fill").foregroundStyle(PW.accent)
+                Text(folder.name).font(.headline).lineLimit(1)
+                Spacer()
+                if folder.problems > 0 {
+                    Text("\(folder.problems) Störung\(folder.problems == 1 ? "" : "en")")
+                        .font(.caption.bold()).foregroundStyle(PW.bad)
+                } else if folder.warnings > 0 {
+                    Text("\(folder.warnings) Warnung\(folder.warnings == 1 ? "" : "en")")
+                        .font(.caption.bold()).foregroundStyle(PW.warn)
+                }
+            }
+            Text(counts).font(.caption).foregroundStyle(.secondary)
+            if !folder.hosts.isEmpty {
+                Text(folder.hosts.prefix(5).map { $0.name }.joined(separator: " · ") + (folder.hosts.count > 5 ? " · +\(folder.hosts.count - 5)" : ""))
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var counts: String {
+        var l: [String] = []
+        if !folder.hosts.isEmpty { l.append("\(folder.hosts.count) Host\(folder.hosts.count == 1 ? "" : "s")") }
+        let net = folder.sites.reduce(0) { $0 + ($1.unifi?.devices?.count ?? 0) }
+        let prot = folder.sites.flatMap { $0.unifi?.protect?.devs ?? [] }
+        if net > 0 { l.append("\(net) UniFi") }
+        let cams = prot.filter { !$0.isSensor }.count, sens = prot.filter { $0.isSensor }.count
+        if cams > 0 { l.append("\(cams) Protect") }
+        if sens > 0 { l.append("\(sens) Sensor\(sens == 1 ? "" : "en")") }
+        return l.isEmpty ? "leer" : l.joined(separator: " · ")
+    }
+}
+
+struct FolderView: View {
+    @Environment(AppModel.self) private var model
+    let folderID: String
+
+    var body: some View {
+        let folder = model.state.flatMap { st in pwFolders(st).first { $0.id == folderID } }
+        List {
+            if let f = folder {
+                if !f.hosts.isEmpty {
+                    Section("Hosts") {
+                        ForEach(f.hosts) { h in
+                            NavigationLink(value: h.id) {
+                                HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
+                            }
+                        }
+                    }
+                }
+                if !f.sites.isEmpty {
+                    Section("UniFi") {
+                        ForEach(f.sites) { s in
+                            NavigationLink {
+                                UniFiSiteView(siteID: s.id)
+                            } label: {
+                                UniFiSiteRow(site: s)
+                            }
+                        }
+                    }
+                }
+            } else {
+                ContentUnavailableView("Gruppe nicht gefunden", systemImage: "folder")
+            }
+        }
+        .navigationTitle(folder?.name ?? "Gruppe")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await model.refresh() }
+    }
+}
+
+struct UniFiSiteRow: View {
+    let site: SiteView
+
+    var body: some View {
+        let u = site.unifi
+        let devs = u?.devices ?? []
+        let prot = u?.protect?.devs ?? []
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.router").foregroundStyle(PW.accent)
+                Text(site.name).font(.headline)
+                Spacer()
+                let off = (u?.offline ?? 0) + prot.filter { !$0.online }.count
+                if let e = u?.err, !e.isEmpty {
+                    Text("nicht erreichbar").font(.caption.bold()).foregroundStyle(PW.bad)
+                } else if off > 0 {
+                    Text("\(off) offline").font(.caption.bold()).foregroundStyle(PW.bad)
+                } else {
+                    Text("alle online").font(.caption).foregroundStyle(PW.ok)
+                }
+            }
+            Text(summary(devs, prot)).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func summary(_ devs: [UniFiDevice], _ prot: [ProtectDev]) -> String {
+        var l: [String] = []
+        for (cat, name) in [("gateway", "Gateway"), ("switch", "Switches"), ("ap", "APs"), ("other", "Sonstige")] {
+            let n = devs.filter { $0.cat == cat }.count
+            if n > 0 { l.append("\(name) \(n)") }
+        }
+        let cams = prot.filter { !$0.isSensor }.count, sens = prot.filter { $0.isSensor }.count
+        if cams > 0 { l.append("Protect \(cams)") }
+        if sens > 0 { l.append("Sensoren \(sens)") }
+        return l.joined(separator: " · ")
+    }
+}
+
+/// UniFi eines Standorts mit Auswahl: Alle, Gateway, Switches, APs, Protect, Sensoren.
+struct UniFiSiteView: View {
+    @Environment(AppModel.self) private var model
+    let siteID: String
+    @State private var cat = "all"
+
+    var body: some View {
+        let site = model.state?.sites.first { $0.id == siteID }
+        let devs = site?.unifi?.devices ?? []
+        let prot = site?.unifi?.protect?.devs ?? []
+        let cats: [(String, String, Int)] = [
+            ("all", "Alle", devs.count + prot.count),
+            ("gateway", "Gateway", devs.filter { $0.cat == "gateway" }.count),
+            ("switch", "Switches", devs.filter { $0.cat == "switch" }.count),
+            ("ap", "APs", devs.filter { $0.cat == "ap" }.count),
+            ("other", "Sonstige", devs.filter { $0.cat == "other" }.count),
+            ("protect", "Protect", prot.filter { !$0.isSensor }.count),
+            ("sensor", "Sensoren", prot.filter { $0.isSensor }.count),
+        ].filter { $0.0 == "all" || $0.2 > 0 }
+        let shownDevs = devs.filter { cat == "all" || $0.cat == cat }
+        let shownProt = prot.filter { cat == "all" || (cat == "sensor" && $0.isSensor) || (cat == "protect" && !$0.isSensor) }
+        List {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(cats, id: \.0) { c in
+                            Button {
+                                cat = c.0
+                            } label: {
+                                Text("\(c.1) \(c.2)")
+                                    .font(.subheadline.weight(cat == c.0 ? .semibold : .regular))
+                                    .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .background(cat == c.0 ? PW.accent.opacity(0.2) : Color.gray.opacity(0.12), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            if let e = site?.unifi?.err, !e.isEmpty {
+                Section { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(PW.bad) }
+            }
+            if !shownDevs.isEmpty {
+                Section("Netzwerk") {
+                    ForEach(shownDevs) { d in
+                        NavigationLink {
+                            UniFiDeviceView(device: d, siteName: site?.name ?? "")
+                        } label: {
+                            UniFiDeviceRow(device: d)
+                        }
+                    }
+                }
+            }
+            if !shownProt.isEmpty {
+                Section("UniFi Protect") {
+                    ForEach(shownProt) { d in
+                        NavigationLink {
+                            ProtectDeviceView(device: d, siteName: site?.name ?? "")
+                        } label: {
+                            ProtectRow(device: d)
+                        }
+                    }
+                }
+            }
+            if shownDevs.isEmpty && shownProt.isEmpty {
+                Text("Keine Geräte in dieser Auswahl.").foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("UniFi · " + (site?.name ?? ""))
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await model.refresh() }
+    }
+}
+
+struct ProtectRow: View {
+    let device: ProtectDev
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                StatusDot(color: device.online ? (device.lowBattery ? PW.warn : PW.ok) : PW.bad, size: 8)
+                Image(systemName: device.symbol).foregroundStyle(.secondary)
+                Text(device.name).font(.subheadline.bold()).lineLimit(1)
+                Spacer()
+                Text(device.kindName).font(.caption).foregroundStyle(.secondary)
+            }
+            let v = device.valuesText
+            Text(device.online ? (v.isEmpty ? (device.model ?? "online") : v) : "offline")
+                .font(.caption)
+                .foregroundStyle(device.online ? Color.secondary : PW.bad)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct ProtectDeviceView: View {
+    let device: ProtectDev
+    let siteName: String
+
+    var body: some View {
+        List {
+            Section {
+                row("Status", device.online ? "online" : "offline")
+                row("Art", device.kindName)
+                if let m = device.model, !m.isEmpty { row("Modell", m) }
+                row("Standort", siteName)
+            }
+            Section("Werte") {
+                if let b = device.bat, b >= 0 { row("Akku", "\(b) %" + (device.lowBattery ? " (schwach)" : "")) }
+                if let t = device.temp { row("Temperatur", String(format: "%.1f °C", t)) }
+                if let h = device.hum { row("Luftfeuchte", "\(Int(h.rounded())) %") }
+                if let l = device.lux { row("Helligkeit", "\(Int(l.rounded())) lx") }
+                if let o = device.open { row("Tür/Fenster", o ? "offen" : "zu") }
+                if device.leak == true { row("Wasser", "erkannt") }
+                ForEach((device.vals ?? [:]).sorted(by: { $0.key < $1.key }), id: \.key) { kv in
+                    row(kv.key.uppercased(), String(format: "%.0f", kv.value))
                 }
             }
         }

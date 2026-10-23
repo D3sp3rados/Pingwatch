@@ -216,6 +216,71 @@ struct UniFiSummary: Decodable, Hashable {
     var boots: Int?
     var wanDown: Int?
     var devices: [UniFiDevice]?
+    var protect: ProtectSummary?
+}
+
+/// UniFi Protect: Kameras, Sensoren, Lichter … (nur Status)
+struct ProtectDev: Decodable, Hashable, Identifiable {
+    let id: String
+    let kind: String
+    let name: String
+    var model: String?
+    var state: String?
+    var bat: Int?
+    var batLow: Bool?
+    var temp: Double?
+    var hum: Double?
+    var lux: Double?
+    var open: Bool?
+    var leak: Bool?
+    var vals: [String: Double]?
+
+    var online: Bool { (state ?? "").isEmpty || state == "CONNECTED" }
+    var lowBattery: Bool { (batLow ?? false) || ((bat ?? -1) >= 0 && (bat ?? -1) <= 15) }
+    var isSensor: Bool { kind == "sensor" }
+    var kindName: String {
+        switch kind {
+        case "camera": return "Kamera"
+        case "sensor": return "Sensor"
+        case "light": return "Licht"
+        case "chime": return "Gong"
+        case "viewer": return "Viewer"
+        case "nvr": return "NVR"
+        default: return kind
+        }
+    }
+    var symbol: String {
+        switch kind {
+        case "camera": return "video"
+        case "sensor": return "sensor"
+        case "light": return "lightbulb"
+        case "chime": return "bell"
+        case "viewer": return "tv"
+        case "nvr": return "externaldrive"
+        default: return "questionmark.circle"
+        }
+    }
+    /// Messwerte kurz: „23,5 °C · 41 % · zu · 🔋 96 %“
+    var valuesText: String {
+        var l: [String] = []
+        if let t = temp { l.append(String(format: "%.1f °C", t).replacingOccurrences(of: ".", with: ",")) }
+        if let h = hum { l.append("\(Int(h.rounded())) %") }
+        if let o = open { l.append(o ? "offen" : "zu") }
+        if leak == true { l.append("Wasser!") }
+        for (k, v) in (vals ?? [:]).sorted(by: { $0.key < $1.key }) {
+            let name = ["co2": "CO₂", "voc": "VOC", "tvoc": "TVOC", "pm25": "PM2,5", "pm2_5": "PM2,5", "pm10": "PM10", "aqi": "AQI"][k] ?? k
+            l.append("\(name) \(Int(v.rounded()))")
+        }
+        if let b = bat, b >= 0 { l.append("🔋 \(b) %") }
+        return l.joined(separator: " · ")
+    }
+}
+
+struct ProtectSummary: Decodable, Hashable {
+    var at: Int64?
+    var err: String?
+    var version: String?
+    var devs: [ProtectDev]?
 }
 
 struct PWGroup: Decodable, Hashable, Identifiable {
