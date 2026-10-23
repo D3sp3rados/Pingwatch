@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -113,6 +114,10 @@ func randHex(n int) string {
 }
 
 func (h *HostCfg) normalize() {
+	h.Addr = strings.TrimSpace(h.Addr)
+	if h.Addr == "" { // ohne Adresse nur als pausierter Platzhalter
+		h.Paused, h.PauseUntil = true, 0
+	}
 	if h.IntervalMs < 500 {
 		h.IntervalMs = 1000
 	}
@@ -321,6 +326,7 @@ func (m *Monitor) Start() {
 	}
 	m.mu.Unlock()
 	m.loadSysState()
+	m.loadProtectState()
 	go m.housekeeping()
 }
 

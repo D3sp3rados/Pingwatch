@@ -894,7 +894,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		var hc HostCfg
-		if err := json.NewDecoder(r.Body).Decode(&hc); err != nil || strings.TrimSpace(hc.Addr) == "" {
+		if err := json.NewDecoder(r.Body).Decode(&hc); err != nil || (strings.TrimSpace(hc.Addr) == "" && !hc.Paused) {
 			http.Error(w, "Adresse fehlt", 400)
 			return
 		}
@@ -902,6 +902,10 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		hc.Name = strings.TrimSpace(hc.Name)
 		if hc.Name == "" {
 			hc.Name = hc.Addr
+		}
+		if hc.Name == "" {
+			http.Error(w, "Name oder Adresse fehlt", 400)
+			return
 		}
 		if hc.ID != "" {
 			if s.hostFor(r, hc.ID) == nil {

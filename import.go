@@ -89,6 +89,9 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 				hp = h.Port
 			}
 			existing[strings.ToLower(normImportType(h.Method)+"|"+h.Addr+"|"+strconv.Itoa(hp))] = true
+			if h.Addr == "" {
+				existing[strings.ToLower("name|"+h.Name)] = true
+			}
 		}
 	}
 	groups := map[string]string{}
@@ -115,11 +118,11 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		port, _ := strconv.Atoi(strings.TrimSpace(row.Port))
 		res.Method, res.Addr = method, addr
 		switch {
-		case addr == "":
+		case addr == "" && (!row.Paused || res.Name == ""):
 			res.Status, res.Message = "fehler", "Adresse fehlt"
 		case method == "?":
 			res.Status, res.Message = "fehler", "Prüfart unbekannt: "+row.Type
-		case method == "tcp" && (port < 1 || port > 65535):
+		case method == "tcp" && addr != "" && (port < 1 || port > 65535):
 			res.Status, res.Message = "fehler", "Port fehlt"
 		case isCheckMethod(method) && !checks:
 			res.Status, res.Message = "fehler", "Webseiten-/DNS-Prüfungen gibt es im Paket Pro"
@@ -136,6 +139,9 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 			kp = port
 		}
 		key := strings.ToLower(method + "|" + addr + "|" + strconv.Itoa(kp))
+		if addr == "" { // Platzhalter ohne Adresse: am Namen erkennen
+			key = strings.ToLower("name|" + res.Name)
+		}
 		if res.Status == "" && existing[key] {
 			res.Status, res.Message = "vorhanden", "gibt es schon – übersprungen"
 		}

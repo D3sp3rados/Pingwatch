@@ -238,9 +238,10 @@ func (u *unifiAPI) protect() (*protectSnap, error) {
 // ---------- Server ----------
 
 type protectSite struct {
-	snap   *protectSnap
-	open   map[string]*Event // offline seit
-	batLow map[string]bool
+	restored bool // aus der Datenbank geladen (nach Neustart), noch keine neue Meldung
+	snap     *protectSnap
+	open     map[string]*Event // offline seit
+	batLow   map[string]bool
 }
 
 var protectState = struct {
@@ -260,12 +261,18 @@ func (m *Monitor) ingestProtect(site SiteCfg, snap *protectSnap) {
 	maint := m.inMaintSite(site.Org, site.ID, now)
 	protectState.Lock()
 	ps := protectState.bySite[site.ID]
-	first := ps == nil
+	first := ps == nil || ps.restored
 	if ps == nil {
 		ps = &protectSite{open: map[string]*Event{}, batLow: map[string]bool{}}
 		protectState.bySite[site.ID] = ps
 	}
+	ps.restored = false
 	ps.snap = snap
+	if bs, ok := m.store.(blobStore); ok {
+		if b, err := json.Marshal(snap); err == nil {
+			go bs.SaveBlob("protect:"+site.ID, b)
+		}
+	}
 	var notes []notice
 	seen := map[string]bool{}
 	for _, d := range snap.Devs {
@@ -352,4 +359,34 @@ func protectSiteView(siteID string) *protectView {
 		}
 	}
 	return v
+}
+
+// loadProtectState: letzten Protect-Stand je Standort nach einem Neustart anzeigen,
+// bis der Agent/die Cloud wieder neu abgefragt hat.
+func (m *Monitor) loadProtectState() {
+	bs, ok := m.store.(blobStore)
+	if !ok {
+		return
+	}
+	m.mu.RLock()
+	ids := make([]string, 0, len(m.cfg.Sites))
+	for _, s := range m.cfg.Sites {
+		ids = append(ids, s.ID)
+	}
+	m.mu.RUnlock()
+	for _, id := range ids {
+		b, err := bs.LoadBlob("protect:" + id)
+		if err != nil || len(b) == 0 {
+			continue
+		}
+		var snap protectSnap
+		if json.Unmarshal(b, &snap) != nil {
+			continue
+		}
+		protectState.Lock()
+		if protectState.bySite[id] == nil {
+			protectState.bySite[id] = &protectSite{restored: true, snap: &snap, open: map[string]*Event{}, batLow: map[string]bool{}}
+		}
+		protectState.Unlock()
+	}
 }
