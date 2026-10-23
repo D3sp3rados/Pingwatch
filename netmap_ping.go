@@ -114,9 +114,15 @@ func (m *Monitor) queueMapPing(mp NetMap) {
 }
 
 // mapPingResult: Ergebnis eines Ping-Auftrags übernehmen (aus handleAgentJob).
-func mapPingResult(jobID, errText string, result json.RawMessage) {
+func (m *Monitor) mapPingResult(jobID, errText string, result json.RawMessage) {
 	mapPing.Lock()
-	defer mapPing.Unlock()
+	done := ""
+	defer func() {
+		mapPing.Unlock()
+		if done != "" {
+			go m.evalMapRules(done)
+		}
+	}()
 	mid, ok := mapPing.jobs[jobID]
 	if !ok {
 		return
@@ -152,6 +158,9 @@ func mapPingResult(jobID, errText string, result json.RawMessage) {
 	}
 	r.IPs += n
 	r.At, r.Err, r.Wait = time.Now().UnixMilli(), "", busy
+	if !busy {
+		done = mid
+	}
 }
 
 func mapReachView(id string) *mapReach {

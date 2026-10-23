@@ -26,6 +26,8 @@ type NetMap struct {
 	Source  string `json:"source,omitempty"` // z. B. „The Dude“
 	// Erreichbarkeit aller Geräte über den Agenten dieses Standorts prüfen (nur Anzeige)
 	PingSite string `json:"pingSite,omitempty"`
+	// Meldungen (einzelne Geräte, Sektoren, Orte, ganze Karte)
+	Rules []MapRule `json:"rules,omitempty"`
 }
 
 type mapNode struct {

@@ -270,7 +270,7 @@ func (s *Server) handleAgentJob(w http.ResponseWriter, r *http.Request) {
 		go s.m.actionJobDone(st.ID, st.Kind, req.Error, req.Result)
 	}
 	if st.Kind == "ping" {
-		mapPingResult(st.ID, req.Error, req.Result)
+		s.m.mapPingResult(st.ID, req.Error, req.Result)
 		st.Result = nil // nicht im Speicher halten
 	}
 	writeJSON(w, map[string]bool{"ok": true})
