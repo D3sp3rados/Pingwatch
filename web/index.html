@@ -285,7 +285,9 @@ table.tbl{width:100%;border-collapse:collapse}
 .field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--mut);flex:1;min-width:150px}
 .field input,.field select{padding:8px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--bg);color:var(--fg);font-size:14px}
 .field small{font-size:11.5px}
-.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg)}
+.check{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;color:var(--fg)}
+.check>input[type=checkbox],.check>input[type=radio]{flex-shrink:0;margin:2px 0 0}
+.check+.check{margin-top:12px}
 dialog{max-height:calc(100dvh - 24px);overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--fg);padding:0;width:min(560px,calc(100vw - 24px));box-shadow:0 20px 60px rgba(0,0,0,.35)}
 dialog::backdrop{background:rgba(2,6,23,.55)}
 .dlg-h{padding:16px 18px 4px;font-weight:650;font-size:16px}
