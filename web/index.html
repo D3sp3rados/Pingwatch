@@ -443,7 +443,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div class="stats" id="fz-stats"></div>
     <div class="panel" id="fz-chartbox" style="padding:12px;margin-top:10px"><div class="muted" style="font-size:12.5px">Sync-Rate Download, letzte 24 h <span id="fz-range"></span></div><canvas id="fz-chart" style="width:100%;height:110px;display:block;margin-top:6px"></canvas></div>
     <div id="fz-x" style="display:none;margin-top:12px">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="seg" id="fz-tabs"></div><input id="fz-q" placeholder="Suchen …" style="max-width:200px;display:none" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"><span class="muted" id="fz-xsub" style="font-size:12px"></span></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="seg" id="fz-tabs"></div><input id="fz-q" placeholder="Suchen …" style="max-width:200px;display:none" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf><span class="muted" id="fz-xsub" style="font-size:12px"></span></div>
       <div class="panel" style="overflow-x:auto;margin-top:8px" id="fz-xbody"></div>
     </div>
   </div>
@@ -471,7 +471,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <div><h2>Hardware</h2><div class="panel" style="overflow-x:auto"><table class="tbl kvt" id="inv-hw"></table></div></div>
       <div><h2>Betriebssystem</h2><div class="panel" style="overflow-x:auto"><table class="tbl kvt" id="inv-os"></table></div></div>
     </div>
-    <h2>Installierte Software <span class="sub muted" id="inv-swn" style="font-weight:400;font-size:12.5px"></span> <input type="search" id="inv-q" placeholder="Software suchen …" style="margin-left:auto;width:220px;max-width:50%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></h2>
+    <h2>Installierte Software <span class="sub muted" id="inv-swn" style="font-weight:400;font-size:12.5px"></span> <input type="search" id="inv-q" placeholder="Software suchen …" style="margin-left:auto;width:220px;max-width:50%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></h2>
     <div class="panel" style="overflow-x:auto;max-height:60vh;overflow-y:auto"><table class="tbl" id="inv-sw"></table></div>
     <h2>Änderungen</h2>
     <div class="panel" style="padding:8px 14px" id="inv-ch"></div>
@@ -543,7 +543,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
     <div style="padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="hosts-sum">Hosts</b><span class="muted" style="font-size:13px" id="hosts-sub"></span><span id="hosts-tog" style="display:none"></span></div>
-    <div style="padding:0 14px 10px"><input type="search" id="hosts-q" placeholder="Hosts filtern (Name, Adresse, Kunde) …" style="width:100%;max-width:360px;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></div>
+    <div style="padding:0 14px 10px"><input type="search" id="hosts-q" placeholder="Hosts filtern (Name, Adresse, Kunde) …" style="width:100%;max-width:360px;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></div>
     <div class="hosts-wrap"><table class="tbl" id="hosts-tbl"></table></div>
   </div>
 
@@ -560,10 +560,10 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>☁️ UniFi-Cloud (ohne Agent)</b><span id="uc-state" class="tag"></span>
       <button class="btn sm pri ed" id="uc-addsite" style="margin-left:auto">+ UniFi-Cloud-Standort</button></div>
     <p class="muted" style="font-size:13px;margin:6px 0 10px">UniFi-Konsolen ohne Agent vor Ort überwachen: PingWacht fragt die Konsole über die UniFi-Cloud von Ubiquiti ab – Geräte, Status, Laufzeit und Auslastung wie mit Agent. Ein Key gilt für alle Konsolen Ihres UniFi-Kontos.</p>
-    <div class="formrow ed" style="padding:0;align-items:flex-end">
-      <label class="field" style="flex:1;min-width:220px">UniFi-Cloud-Key (Site Manager API)<input id="uc-key" type="password" autocomplete="off" placeholder="API-Key einfügen"></label>
-      <button class="btn" id="uc-save">Speichern</button><button class="btn danger" id="uc-del">Entfernen</button>
-    </div>
+    <form class="formrow ed" style="padding:0;align-items:flex-end" onsubmit="return false" autocomplete="off">
+      <label class="field" style="flex:1;min-width:220px">UniFi-Cloud-Key (Site Manager API)<input id="uc-key" type="password" autocomplete="new-password" data-1p-ignore data-lpignore="true" data-bwignore placeholder="API-Key einfügen"></label>
+      <button class="btn" type="button" id="uc-save">Speichern</button><button class="btn danger" type="button" id="uc-del">Entfernen</button>
+    </form>
     <details style="margin-top:8px;font-size:13px"><summary style="cursor:pointer;color:var(--acc)">So bekommen Sie den Key</summary>
       <ol style="margin:6px 0 0;padding-left:20px;color:var(--mut)"><li><b>unifi.ui.com</b> öffnen und mit dem UniFi-Konto anmelden, dem die Konsolen gehören.</li><li>Links <b>„API“</b> (Site Manager API) bzw. Profil → <b>API Keys</b> → <b>„Create API Key“</b>.</li><li>Key kopieren (wird nur einmal angezeigt) und hier einfügen.</li><li>Dann <b>„+ UniFi-Cloud-Standort“</b> anlegen oder bei einem Standort „UniFi-Livestatus“ → Quelle „UniFi-Cloud“ wählen.</li></ol>
       <div style="margin-top:6px;color:var(--mut)">Voraussetzung: Konsole ab Firmware 5.0.3, UniFi Network ab 9.3. Der Key wird nur auf dem Server gespeichert und nie wieder angezeigt.</div></details>
@@ -629,23 +629,24 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div id="pf-wrap">
   <h2>Mein Konto</h2>
   <div class="panel" id="pf-box">
-    <div class="formrow" style="flex-wrap:wrap;align-items:flex-end">
+    <form class="formrow" style="flex-wrap:wrap;align-items:flex-end" onsubmit="return false">
       <label class="field">Name<input id="pf-name" maxlength="60" autocomplete="name"></label>
       <label class="field">E-Mail-Adresse (Login)<input id="pf-email" type="email" autocomplete="email"></label>
       <label class="field" id="pf-curf" style="display:none">Aktuelles Passwort (zur Bestätigung)<input id="pf-cur" type="password" autocomplete="current-password"></label>
-      <button class="btn pri" id="pf-save">Speichern</button>
-    </div>
+      <button class="btn pri" type="button" id="pf-save">Speichern</button>
+    </form>
     <div class="help" style="border-top:1px solid var(--line)">Nach einer Änderung der E-Mail-Adresse melden Sie sich künftig mit der neuen Adresse an.</div>
   </div>
   </div>
   <h2 id="g-pwh">Passwort ändern</h2>
   <div class="panel" id="g-pwbox">
-    <div class="formrow" id="g-pw" style="flex-wrap:wrap;align-items:flex-end">
+    <form class="formrow" id="g-pw" style="flex-wrap:wrap;align-items:flex-end" onsubmit="return false">
+      <input type="text" name="username" autocomplete="username" id="g-user" style="display:none" tabindex="-1" aria-hidden="true">
       <label class="field">Aktuelles Passwort<input type="password" id="g-old" autocomplete="current-password"></label>
       <label class="field">Neues Passwort (min. 8 Zeichen)<input type="password" id="g-new" autocomplete="new-password"></label>
       <label class="field">Neues Passwort wiederholen<input type="password" id="g-new2" autocomplete="new-password"></label>
-      <button class="btn pri" id="g-pwsave">Passwort ändern</button>
-    </div>
+      <button class="btn pri" type="button" id="g-pwsave">Passwort ändern</button>
+    </form>
   </div>
   <h2>Benachrichtigungen aufs Handy <button class="btn sm" id="push-test">Testnachricht senden</button></h2>
   <div class="panel" id="my-notify" style="padding:14px;margin-bottom:10px">
@@ -720,14 +721,14 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       </div>
       <div class="panel" style="padding:12px 14px">
         <b>Auftrag an die Box</b> <span class="muted" style="font-size:12px">– wird beim nächsten Kontakt ausgeführt</span>
-        <div class="formrow" style="margin-top:6px"><label class="field">Parameter (Pfad)<input id="acs-path" value="InternetGatewayDevice.DeviceInfo." autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></label><button class="btn sm" id="acs-get">Werte lesen</button><button class="btn sm" id="acs-names">Namen auflisten</button></div>
-        <div class="formrow" style="margin-top:6px"><label class="field">Parameter setzen<input id="acs-sn" placeholder="InternetGatewayDevice.…" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></label><label class="field" style="max-width:160px">Wert<input id="acs-sv" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></label><label class="field" style="max-width:130px">Typ<select id="acs-st"><option>xsd:string</option><option>xsd:unsignedInt</option><option>xsd:int</option><option>xsd:boolean</option></select></label><button class="btn sm" id="acs-set">Setzen</button></div>
-        <div class="formrow" style="margin-top:6px"><label class="field">Firmware-URL<input id="acs-fw" placeholder="https://…/fritzbox.image" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></label><button class="btn sm" id="acs-dl">Firmware laden</button></div>
+        <div class="formrow" style="margin-top:6px"><label class="field">Parameter (Pfad)<input id="acs-path" value="InternetGatewayDevice.DeviceInfo." autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></label><button class="btn sm" id="acs-get">Werte lesen</button><button class="btn sm" id="acs-names">Namen auflisten</button></div>
+        <div class="formrow" style="margin-top:6px"><label class="field">Parameter setzen<input id="acs-sn" placeholder="InternetGatewayDevice.…" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></label><label class="field" style="max-width:160px">Wert<input id="acs-sv" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></label><label class="field" style="max-width:130px">Typ<select id="acs-st"><option>xsd:string</option><option>xsd:unsignedInt</option><option>xsd:int</option><option>xsd:boolean</option></select></label><button class="btn sm" id="acs-set">Setzen</button></div>
+        <div class="formrow" style="margin-top:6px"><label class="field">Firmware-URL<input id="acs-fw" placeholder="https://…/fritzbox.image" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></label><button class="btn sm" id="acs-dl">Firmware laden</button></div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" id="acs-reboot">🔄 Neu starten</button><button class="btn sm danger" id="acs-reset">Werkseinstellungen</button><button class="btn sm danger" id="acs-del" style="margin-left:auto">Gerät entfernen</button></div>
       </div>
     </div>
     <h2>Aufträge</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="acs-tasks"></table></div>
-    <h2>Parameter <input type="search" id="acs-pq" class="rm-in" placeholder="Parameter suchen …" style="margin-left:8px;font-weight:400" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></h2><div class="panel" style="overflow:auto;max-height:50vh"><table class="tbl" id="acs-params"></table></div>
+    <h2>Parameter <input type="search" id="acs-pq" class="rm-in" placeholder="Parameter suchen …" style="margin-left:8px;font-weight:400" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></h2><div class="panel" style="overflow:auto;max-height:50vh"><table class="tbl" id="acs-params"></table></div>
     <h2>Protokoll</h2><div class="panel" style="padding:8px 12px;font-size:12.5px;line-height:1.6;max-height:300px;overflow:auto" id="acs-log"></div>
   </div>
   </div>
@@ -799,7 +800,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <section id="v-admin">
   <div class="panel kv" id="a-kpi"></div>
   <h2>Kunden <button class="btn sm pri" id="a-new">+ Kunde anlegen</button> <a class="btn sm" href="/api/admin/orgs?format=csv">Abrechnung (CSV)</a>
-    <input type="search" id="a-q" placeholder="Suchen …" style="margin-left:auto;width:200px;max-width:45%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></h2>
+    <input type="search" id="a-q" placeholder="Suchen …" style="margin-left:auto;width:200px;max-width:45%;font:inherit;font-size:13px;font-weight:400;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="a-tbl"></table></div>
 </section>
 <footer style="text-align:center;font-size:12.5px;color:var(--mut);padding:24px 0 8px">PingWacht · <a href="/impressum" style="color:var(--mut)">Impressum</a> · <a href="/datenschutz" style="color:var(--mut)">Datenschutz</a></footer>
@@ -860,7 +861,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">Kundennummer (optional)<input name="number" maxlength="40" placeholder="z. B. 11848"></label>
       <label class="field">Notiz (optional)<input name="note" maxlength="200" placeholder="Ansprechpartner, Telefon …"></label>
       <div style="margin-top:10px"><b style="font-size:13px">Standorte dieses Kunden</b>
-        <div class="msel"><div id="cu-chips" class="msel-chips"></div><input type="search" id="cu-q" placeholder="Standort suchen und hinzufügen …" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"><div id="cu-dd" class="msel-dd"></div></div></div>
+        <div class="msel"><div id="cu-chips" class="msel-chips"></div><input type="search" id="cu-q" placeholder="Standort suchen und hinzufügen …" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf><div id="cu-dd" class="msel-dd"></div></div></div>
     </div>
     <div class="dlg-err" id="cu-err"></div>
     <div class="dlg-f"><button class="btn danger" type="button" id="cu-del" style="margin-right:auto">Löschen</button><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
@@ -959,7 +960,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div class="dlg-b" style="display:block">
       <label class="field">Name (z. B. Kunde)<input name="name" maxlength="80" required placeholder="Oli Pfeiffer"></label>
       <label class="field">Notiz (optional)<input name="note" maxlength="200" placeholder="Ansprechpartner, Telefon …"></label>
-      <div style="margin-top:10px"><b style="font-size:13px">Diese Hosts gehören dazu</b> <input type="search" id="gf-q" placeholder="filtern …" style="float:right;font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false">
+      <div style="margin-top:10px"><b style="font-size:13px">Diese Hosts gehören dazu</b> <input type="search" id="gf-q" placeholder="filtern …" style="float:right;font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--fg)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf>
         <div id="gf-hosts" style="margin-top:8px;max-height:45vh;overflow:auto;display:grid;gap:4px"></div></div>
     </div>
     <div class="dlg-err" id="gf-err"></div>
@@ -1064,7 +1065,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
         <label class="field">Konsole<select name="console" id="ul-console"><option value="">– bitte „Konsolen laden“ –</option></select></label>
         <div class="row" style="margin:4px 0 8px"><button class="btn sm" type="button" id="ul-load">Konsolen laden</button><button class="btn sm" type="button" id="ul-sites">Sites laden</button><button class="btn sm" type="button" id="ul-test">Verbindung testen</button></div>
         <details style="font-size:13px"><summary style="cursor:pointer;color:var(--acc)">Anderer Key nur für diesen Standort</summary>
-          <label class="field" style="margin-top:6px">UniFi-Cloud-Key (optional)<input name="ckey" type="password" autocomplete="off" placeholder="leer = Key aus „UniFi-Cloud (ohne Agent)“"><small>Z. B. wenn die Konsole einem anderen UniFi-Konto gehört.</small></label></details>
+          <label class="field" style="margin-top:6px">UniFi-Cloud-Key (optional)<input name="ckey" type="password" autocomplete="new-password" data-1p-ignore data-lpignore="true" data-bwignore placeholder="leer = Key aus „UniFi-Cloud (ohne Agent)“"><small>Z. B. wenn die Konsole einem anderen UniFi-Konto gehört.</small></label></details>
         <div id="ul-steps" style="margin:8px 0"></div>
       </div>
       <label class="field">UniFi-Site (leer = alle)<input name="usite" placeholder="Default" list="ul-sitelist" autocomplete="off"><datalist id="ul-sitelist"></datalist><small id="ul-sitehint"></small></label>
@@ -1340,7 +1341,7 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   // gestörte Kunden zuerst, sonst alphabetisch
   const rank=g=>({bad:0,warn:1,ok:2,off:3})[worstH(g.sites.map(s=>H[s.id]))]; groups.sort((a,b)=>(a.id==='-')-(b.id==='-')||rank(a)-rank(b)||a.name.localeCompare(b.name,'de'));
   const nb=Object.values(H).filter(x=>x==='bad').length;
-  let html=`<div class="tr-search"><input id="tr-q" placeholder="Kunde, Standort oder Nr. suchen" value="${esc(OVF.q||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></div>`;
+  let html=`<div class="tr-search"><input id="tr-q" placeholder="Kunde, Standort oder Nr. suchen" value="${esc(OVF.q||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></div>`;
   html+=`<div class="tr-i${!OVF.c&&!OVF.s?' on':''}" data-tc=""><span class="tr-x"></span><span class="dot" style="background:var(${HCOL[worstH(Object.values(H))]})"></span><span class="tr-t"><b>Alle</b></span><span class="tr-n">${nb?`<b style="color:var(--bad)">${nb} gestört</b> · `:''}${sites.length}</span></div>`;
   for(const g of groups){ const gm=match(g.name+' '+(g.number||'')); const ss=g.sites.filter(s=>gm||match(s.name+' '+(s.number||''))); if(q&&!gm&&!ss.length) continue;
     const open=g.flat||(q&&ss.length)||exp[g.id]||OVF.c===g.id||g.sites.some(s=>s.id===OVF.s), gb=g.sites.filter(s=>H[s.id]==='bad').length;
@@ -1423,7 +1424,7 @@ function rmIcons(m){ const r=m.cur||{}, av=r.av, out=[];
   if(m.notes) out.push('<span title="Notiz vorhanden">📝</span>');
   return out.join(' '); }
 function renderOvRMM(root,st){
-  if(!root.querySelector('.rmm')){ root.dataset.thtml=''; root.innerHTML=`<div class="rmm"><div class="rm-bar"><div class="seg" id="rm-cats"></div><input type="search" id="rm-q" class="rm-in" placeholder="Suchen (Name, Benutzer, IP …)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"></div>
+  if(!root.querySelector('.rmm')){ root.dataset.thtml=''; root.innerHTML=`<div class="rmm"><div class="rm-bar"><div class="seg" id="rm-cats"></div><input type="search" id="rm-q" class="rm-in" placeholder="Suchen (Name, Benutzer, IP …)" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></div>
     <div class="panel rm-top" id="rm-top"></div><div class="rm-split" id="rm-split" title="Ziehen, um die Höhe zu ändern"></div><div class="panel rm-pane" id="rm-pane"></div></div>`;
     const q=$('#rm-q'); q.value=RM.q; q.oninput=()=>{ RM.q=q.value; renderOvRMM(root,ovFiltered(S.state)); };
     const sp=$('#rm-split'); sp.onpointerdown=e=>{ e.preventDefault(); const top=$('#rm-top'), y0=e.clientY, h0=top.offsetHeight; sp.setPointerCapture(e.pointerId);
@@ -1495,7 +1496,7 @@ function rmPane(force){ const pane=$('#rm-pane'); if(!pane) return; const sel=RM
     +(()=>{ const a=RM.acts.filter(x=>x.kind!=='script'); return a.length?'<div class="rm-sec">Updates &amp; Neustarts</div><table class="tbl" data-acts="upd">'+actRows(a,false)+'</table>':''; })()
     +(actOK?'':'<p class="muted" style="font-size:12.5px">Updates und Neustarts sind für diesen Standort nicht eingeschaltet (Einstellungen → Standorte → 💻 Rechner-Überwachung).</p>');
   if(t==='sw'){ const sw=(inv&&inv.sw)||[], q=(RM.swq||'').toLowerCase(), l=sw.filter(x=>!q||(x.n+' '+(x.p||'')).toLowerCase().includes(q));
-    body=inv?`<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><input type="search" id="rm-swq" class="rm-in" placeholder="Software suchen …" value="${esc(RM.swq||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false"><span class="muted" style="font-size:12.5px">${sw.length} Programme${q?' · '+l.length+' gefunden':''} · Stand ${fmtDT(inv.at,false)}</span></div><table class="tbl"><tr><th>Name</th><th>Version</th><th class="hide-m">Hersteller</th><th class="hide-m">Installiert</th></tr>${l.map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${esc(x.v||'')}</td><td class="hide-m">${esc(x.p||'')}</td><td class="hide-m num">${esc(x.d||'')}</td></tr>`).join('')}</table>`:'<div class="empty">'+(RM.inv?'Noch keine Inventur vom Agenten.':'Lädt …')+'</div>'; }
+    body=inv?`<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><input type="search" id="rm-swq" class="rm-in" placeholder="Software suchen …" value="${esc(RM.swq||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf><span class="muted" style="font-size:12.5px">${sw.length} Programme${q?' · '+l.length+' gefunden':''} · Stand ${fmtDT(inv.at,false)}</span></div><table class="tbl"><tr><th>Name</th><th>Version</th><th class="hide-m">Hersteller</th><th class="hide-m">Installiert</th></tr>${l.map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${esc(x.v||'')}</td><td class="hide-m">${esc(x.p||'')}</td><td class="hide-m num">${esc(x.d||'')}</td></tr>`).join('')}</table>`:'<div class="empty">'+(RM.inv?'Noch keine Inventur vom Agenten.':'Lädt …')+'</div>'; }
   if(t==='scr'){ const a=RM.acts.filter(x=>x.kind==='script'); body=(actOK&&!ro?'<div style="margin-bottom:8px"><button class="btn sm pri" data-a="script">▶ Script ausführen</button> <a class="btn sm" href="#/settings/updates">Script-Bibliothek &amp; Pläne</a></div>':'')+'<table class="tbl" data-acts="scr">'+actRows(a,false)+'</table>'; }
   if(t==='hist') body='<div class="evlist" id="rm-evs"></div>';
   if(t==='notes') body=`<label class="field">Beschreibung (erscheint in der Liste)<input id="rm-desc" maxlength="200" value="${esc(m.desc||'')}" placeholder="z. B. Empfang, Buchhaltung, DC01"${ro?' disabled':''}></label>
@@ -2060,6 +2061,7 @@ function renderSettings(){
   const hasUser=!!(st.me&&st.me.id);
   $('#pf-admin').style.display=hasUser?'none':''; $('#pf-wrap').style.display=hasUser?'':'none';
   const pwOk=hasUser||(sup&&!st.envPassword); $('#g-pwh').style.display=pwOk?'':'none'; $('#g-pwbox').style.display=pwOk?'':'none';
+  { const gu=$('#g-user'); if(gu) gu.value=(st.me&&st.me.email)||'admin'; }
   if(hasUser){ const sig=(st.me.name||'')+'|'+(st.me.email||''); const pn=$('#pf-name'), pe=$('#pf-email');
     if(pn.dataset.sig!==sig&&document.activeElement!==pn&&document.activeElement!==pe){ pn.value=st.me.name||''; pe.value=st.me.email||''; pn.dataset.sig=sig; $('#pf-curf').style.display='none'; } }
   if(st.org) $('#team-sub').textContent=st.org.name;
@@ -3099,6 +3101,9 @@ function renderACS(){ const d=ACS.data; if(!d) return;
   $('#acs-profsave').onclick=()=>{ ACS.filled=null; acsPost({action:'profile',id:x.id,profile:{pppUser:$('#acs-ppu').value.trim(),pppPass:$('#acs-ppp').value,interval:+$('#acs-iv').value||0,voip:voipParse($('#acs-voip').value),extra:extraParse($('#acs-extra').value)}},'Profil gespeichert – wird beim nächsten Kontakt gesendet'); };
 }
 $('#acs-pq').addEventListener('input',()=>renderACS());
+/* Suchfelder: Browser/Passwort-Manager füllen schreibgeschützte Felder nicht aus – Schutz erst beim Antippen aufheben */
+const noafOpen=e=>{ const t=e.target; if(t&&t.matches&&t.matches('input[data-noaf][readonly]')) t.removeAttribute('readonly'); };
+document.addEventListener('pointerdown',noafOpen,true); document.addEventListener('focusin',noafOpen,true);
 $('#acs-pf-new').onclick=()=>acsPfFill(null);
 $('#acs-pf-save').onclick=()=>{ const code=$('#acs-pf-code').value.trim(); if(!code){ uiAlert('Bitte einen Provisioning-Code eingeben (oder * für alle Boxen).'); return; }
   acsPost({action:'codeprofile',code,name:$('#acs-pf-name').value.trim(),profile:{pppUser:$('#acs-pf-ppu').value.trim(),pppPass:$('#acs-pf-ppp').value,interval:+$('#acs-pf-iv').value||0,voip:voipParse($('#acs-pf-voip').value),extra:extraParse($('#acs-pf-extra').value)}},'Profil gespeichert').then(()=>acsPfFill(null)); };
