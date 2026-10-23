@@ -331,7 +331,7 @@ func (s *Server) handleAgentInventory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMachineInventory(w http.ResponseWriter, r *http.Request) {
 	p := principal(r)
 	mc, ok := s.m.machineByID(r.URL.Query().Get("id"))
-	if !ok || mc.Org != p.Org {
+	if !ok || mc.Org != p.Org || !p.canMachine(mc.ID, false) {
 		http.Error(w, "unbekannter Rechner", 404)
 		return
 	}

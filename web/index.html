@@ -285,6 +285,14 @@ table.tbl{width:100%;border-collapse:collapse}
 .field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--mut);flex:1;min-width:150px}
 .field input,.field select{padding:8px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--bg);color:var(--fg);font-size:14px}
 .field small{font-size:11.5px}
+.scoped-hide{}
+body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.scoped #tab-billing,body.scoped #ov-group,body.scoped .scoped-off{display:none!important}
+.acc-list{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px}
+.acc-list .acc-h{position:sticky;top:0;background:var(--panel);font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;padding:8px 10px 4px}
+.acc-list .acc-r{display:flex;align-items:center;gap:8px;padding:5px 10px;border-top:1px solid var(--line);font-size:13px}
+.acc-list .acc-r span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-list .acc-r select{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+.acc-list .acc-r.on{background:var(--acc-a)}
 .check{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;color:var(--fg)}
 .check>input[type=checkbox],.check>input[type=radio]{flex-shrink:0;margin:2px 0 0}
 .check+.check{margin-top:12px}
@@ -849,6 +857,10 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field">E-Mail-Adresse<input name="email" type="email" required placeholder="kollege@firma.de"></label>
       <label class="field">Name (optional)<input name="name" maxlength="60"></label>
       <label class="field">Rechte<select name="role"></select></label>
+      <div class="field" id="uf-accf">Zugriff
+        <div class="seg" id="uf-accmode" style="margin-top:4px"><button type="button" data-m="all" class="on">Ganzes Konto</button><button type="button" data-m="sel">Nur ausgewählte Kunden / Hosts</button></div>
+        <div id="uf-acc" style="display:none"></div>
+      </div>
       <label class="check" id="uf-superf" style="margin-top:8px"><input type="checkbox" name="super"> <span><b>Betreiber</b> – sieht und verwaltet zusätzlich alle Kunden (nur für RST-Mitarbeiter)</span></label>
       <label class="check" style="margin-top:8px"><input type="checkbox" name="test"> <span><b>Testzugang</b> – Anmeldung nur bis zu einem Datum möglich</span></label>
       <label class="field" id="uf-expf" style="display:none;max-width:220px">Gültig bis<input type="date" name="expires"></label>
@@ -856,6 +868,18 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
     <div class="dlg-err" id="uf-err"></div>
     <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Einladen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-acc">
+  <form method="dialog" id="ac2-form">
+    <div class="dlg-h" id="ac2-title">Zugriff</div>
+    <div class="dlg-b" style="display:block">
+      <div class="seg" id="ac2-mode"><button type="button" data-m="all" class="on">Ganzes Konto</button><button type="button" data-m="sel">Nur ausgewählte Kunden / Hosts</button></div>
+      <div id="ac2-acc" style="display:none"></div>
+    </div>
+    <div class="dlg-err" id="ac2-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
   </form>
 </dialog>
 
@@ -2028,7 +2052,7 @@ function verNewer(a,b){ if(!a||!b) return false; const pa=a.split('.').map(Numbe
 $('#hosts-q').addEventListener('input',()=>renderSettings());
 /* Einstellungen in Reitern: #/settings/<kategorie>, zuletzt gewählte wird gemerkt */
 const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','system','acs'];
-function setCat(c){ if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
+function setCat(c){ if(document.body.classList.contains('scoped')) c='konto'; if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
   try{ localStorage.setItem('pw_setcat',c); }catch(e){}
   if(c==='updates') loadUpdates(); if(c==='konto'){ renderTF(); renderPK(); } if(c==='acs') loadACS();
   $$('#v-settings .setcat').forEach(d=>d.style.display=d.dataset.cat===c?'':'none');
@@ -2655,11 +2679,13 @@ let usersAt=0;
 async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-tbl').dataset.sig) return; usersAt=Date.now(); let us; try{ us=await api('/api/users'); }catch(e){ return; }
   const st=S.state, me=st.me||{}, canEd=me.role!=='viewer', own=me.role==='owner'||me.super;
   const sig=JSON.stringify(us)+me.role; if($('#users-tbl').dataset.sig===sig) return; $('#users-tbl').dataset.sig=sig;
-  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="tag">Sie</span>':''}${u.super?' <span class="tag ok">Betreiber</span>':''}${u.expires?` <span class="tag ${u.expires<Date.now()?'bad':'warn'}">bis ${fmtDate(u.expires)}</span>`:''}</td><td>${esc(u.email)}</td>
+  $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Zugriff</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="tag">Sie</span>':''}${u.super?' <span class="tag ok">Betreiber</span>':''}${u.expires?` <span class="tag ${u.expires<Date.now()?'bad':'warn'}">bis ${fmtDate(u.expires)}</span>`:''}</td><td>${esc(u.email)}</td>
     <td>${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<select data-role="${u.id}">${Object.entries(ROLES).filter(([k])=>k!=='owner'||own).map(([k,v])=>`<option value="${k}"${k===u.role?' selected':''}>${v}</option>`).join('')}</select>`:ROLES[u.role]||u.role}</td>
+    <td>${u.role==='owner'?'<span class="muted">ganzes Konto</span>':(u.access||[]).length?`<b>${u.access.length} Freigabe${u.access.length>1?'n':''}</b>`:'<span class="muted">ganzes Konto</span>'}${canEd&&u.id!==me.id&&u.role!=='owner'?` <button class="btn sm" data-uacc="${u.id}">Ändern</button>`:''}${u.guest?' <span class="tag">aus anderem Konto</span>':''}</td>
     <td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td>
     <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`${me.super&&st.org&&st.org.id==='default'?`<button class="btn sm" data-sup="${u.id}">${u.super?'Betreiber entziehen':'Zum Betreiber'}</button> `:''}<button class="btn sm" data-uexp="${u.id}">Gültig bis</button> <button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
   $$('#users-tbl [data-role]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:sel.dataset.role,role:sel.value})}); toast('Rolle geändert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
+  $$('#users-tbl [data-uacc]').forEach(b=>b.onclick=()=>openAccess(us.find(x=>x.id===b.dataset.uacc)));
   $$('#users-tbl [data-sup]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.sup);
     if(!u.super&&!await uiConfirm(`${u.email} zum Betreiber machen? Er sieht und verwaltet dann alle Kunden.`)) return;
     try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,super:!u.super})}); toast('Gespeichert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
@@ -2669,7 +2695,7 @@ async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-
     try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,expires:ms})}); toast('Gespeichert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
   $$('#users-tbl [data-rpw]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.rpw); if(!await uiConfirm(`Neues Passwort für ${u.email} erzeugen? Das alte gilt dann nicht mehr.`)) return;
     try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify({id:u.id,role:u.role,resetPassword:true})}); showTemp(u.email,r.tempPassword); }catch(e){ uiAlert(e.message); } });
-  $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!await uiConfirm(`${u.email} entfernen?`)) return;
+  $$('#users-tbl [data-udel]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.udel); if(!await uiConfirm(u.guest?`${u.email} aus diesem Konto entfernen? Sein Login und seine anderen Konten bleiben.`:`${u.email} entfernen?`)) return;
     try{ await api('/api/users?id='+u.id,{method:'DELETE'}); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(e){ uiAlert(e.message); } });
 }
 /* Zugangsdaten anzeigen / per Mail senden */
@@ -2688,14 +2714,46 @@ $('#add-user').onclick=()=>{ const st=S.state, me=st.me||{}, own=me.role==='owne
   uf.reset(); $('#uf-err').textContent=''; $('#uf-expf').style.display='none';
   uf.role.innerHTML=(own?'<option value="owner">Inhaber – alles, inkl. Abo und Benutzer</option>':'')+'<option value="admin" selected>Admin – Hosts, Standorte, Alarme, Benutzer</option><option value="viewer">Nur lesen – sieht alles, ändert nichts</option>';
   $('#uf-superf').style.display=me.super&&st.org&&st.org.id==='default'?'':'none';
+  UF_ACC=accPicker($('#uf-acc'),[]); ufAccMode('all');
+  uf.role.onchange=()=>{ $('#uf-accf').style.display=uf.role.value==='owner'?'none':''; }; uf.role.onchange();
   udlg.showModal(); setTimeout(()=>uf.email.focus(),50); };
 uf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const email=uf.email.value.trim().toLowerCase(), body={email,name:uf.name.value.trim(),role:uf.role.value};
   if(uf.test.checked&&uf.expires.value) body.expires=new Date(uf.expires.value+'T23:59:59').getTime();
   if($('#uf-superf').style.display!=='none') body.super=uf.super.checked;
-  try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify(body)}); udlg.close(); $('#users-tbl').dataset.sig=''; loadUsers(true); showTemp(email,r.tempPassword,uf.mail.checked); }
+  if(body.role!=='owner'&&$('#uf-accmode .on').dataset.m==='sel'){ body.access=UF_ACC(); if(!body.access.length){ $('#uf-err').textContent='Bitte mindestens einen Kunden, Standort, eine Gruppe oder einen Host auswählen.'; return; } }
+  try{ const r=await api('/api/users',{method:'POST',body:JSON.stringify(body)}); udlg.close(); $('#users-tbl').dataset.sig=''; loadUsers(true);
+    if(r.added) uiAlert(`${email} hat schon einen PingWacht-Zugang und wurde diesem Konto hinzugefügt. Er meldet sich wie bisher an und wechselt oben über die Kontoauswahl.`);
+    else showTemp(email,r.tempPassword,uf.mail.checked); }
   catch(err){ $('#uf-err').textContent=err.message; } });
 uf.test.onchange=()=>{ $('#uf-expf').style.display=uf.test.checked?'':'none'; if(uf.test.checked&&!uf.expires.value){ const d=new Date(Date.now()+14*864e5); uf.expires.value=d.toISOString().slice(0,10); } };
+
+/* Zugriff je Benutzer: Kunden, Standorte, Gruppen, Hosts, Rechner – lesen oder Admin */
+let UF_ACC=()=>[];
+function ufAccMode(m){ $$('#uf-accmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===m)); $('#uf-acc').style.display=m==='sel'?'':'none'; }
+$$('#uf-accmode button').forEach(b=>b.onclick=()=>ufAccMode(b.dataset.m));
+function accPicker(box,rules){ const st=S.state||{}, cur={}; for(const r of rules||[]) cur[r.kind+':'+r.id]=r.admin?'admin':'read';
+  const secs=[['customer','Kunden',(st.customers||[]).map(c=>[c.id,(c.number?c.number+' · ':'')+c.name])],
+    ['site','Standorte',(st.sites||[]).filter(s=>s.id!=='cloud').map(s=>[s.id,s.name+(s.customer?' · '+((st.customers||[]).find(c=>c.id===s.customer)||{}).name:'')])],
+    ['group','Gruppen',(st.groups||[]).map(g=>[g.id,g.name])],
+    ['machine','Rechner',(st.machines||[]).map(m=>[m.id,m.name+' · '+siteName(m.site)])],
+    ['host','Einzelne Hosts',(st.hosts||[]).map(h=>[h.id,h.name+(h.addr?' · '+h.addr:'')])]].filter(x=>x[2].length);
+  const draw=()=>{ const q=(box.querySelector('.acc-q')||{}).value||''; const f=q.toLowerCase();
+    box.querySelector('.acc-list').innerHTML=secs.map(([k,t,l])=>{ const rows=l.filter(([id,n])=>!f||n.toLowerCase().includes(f)||cur[k+':'+id]); if(!rows.length) return '';
+      return `<div class="acc-h">${t}</div>`+rows.map(([id,n])=>{ const v=cur[k+':'+id]||''; return `<div class="acc-r${v?' on':''}"><span title="${esc(n)}">${esc(n)}</span><select data-k="${k}:${esc(id)}"><option value="">–</option><option value="read"${v==='read'?' selected':''}>Lesen</option><option value="admin"${v==='admin'?' selected':''}>Admin</option></select></div>`; }).join(''); }).join('')||'<div class="empty" style="padding:12px">Nichts gefunden.</div>';
+    box.querySelectorAll('select[data-k]').forEach(s=>s.onchange=()=>{ if(s.value) cur[s.dataset.k]=s.value; else delete cur[s.dataset.k]; s.closest('.acc-r').classList.toggle('on',!!s.value); }); };
+  box.innerHTML=`<input class="acc-q" placeholder="Suchen …" autocomplete="off" data-1p-ignore data-lpignore="true" style="width:100%;margin-top:6px;font:inherit;font-size:13px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"><div class="acc-list"></div><p class="muted" style="font-size:12px;margin:6px 0 0">Ein Kunde gibt alle seine Standorte frei, ein Standort alle Hosts und Rechner dort, eine Gruppe alle Hosts und Rechner der Gruppe. <b>Lesen</b> = nur ansehen, <b>Admin</b> = auch bearbeiten, pausieren, Updates/Scripts.</p>`;
+  box.querySelector('.acc-q').oninput=draw; draw();
+  return ()=>Object.entries(cur).map(([k,v])=>{ const i=k.indexOf(':'); return {kind:k.slice(0,i),id:k.slice(i+1),admin:v==='admin'}; }); }
+async function openAccess(u){ if(!u) return; const dlg=$('#dlg-acc'); $('#ac2-title').textContent='Zugriff · '+(u.name||u.email); $('#ac2-err').textContent='';
+  const all=!(u.access||[]).length; ac2Mode(all?'all':'sel'); AC2=accPicker($('#ac2-acc'),u.access||[]); AC2U=u; dlg.showModal(); }
+let AC2=()=>[], AC2U=null;
+function ac2Mode(m){ $$('#ac2-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===m)); $('#ac2-acc').style.display=m==='sel'?'':'none'; }
+$$('#ac2-mode button').forEach(b=>b.onclick=()=>ac2Mode(b.dataset.m));
+$('#ac2-form').addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const sel=$('#ac2-mode .on').dataset.m==='sel', access=sel?AC2():[];
+  if(sel&&!access.length){ $('#ac2-err').textContent='Bitte mindestens einen Eintrag auswählen – oder „Ganzes Konto“.'; return; }
+  try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:AC2U.id,role:AC2U.role,access})}); $('#dlg-acc').close(); toast('Zugriff gespeichert'); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(err){ $('#ac2-err').textContent=err.message; } });
 
 /* Abo */
 const eur=c=>(c/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
@@ -2801,7 +2859,7 @@ function renderAdmin(){ const q=($('#a-q').value||'').toLowerCase();
   $$('#a-tbl [data-opw]').forEach(b=>b.onclick=()=>openOrgUsers(b.dataset.opw));
 }
 $('#a-q').oninput=renderAdmin;
-async function switchOrg(id,go){ try{ await api('/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ uiAlert(e.message); return; }
+async function switchOrg(id,go,member){ try{ await api(member?'/api/me/org':'/api/admin/switch',{method:'POST',body:JSON.stringify({org:id})}); }catch(e){ uiAlert(e.message); return; }
   $('#ov').dataset.sig=''; $$('[data-sig]').forEach(e=>e.dataset.sig=''); SP=null; $('#sp-box').dataset.done=''; AL=null; MT=[]; mtAt=0; $('#users-tbl').dataset.sig='';
   await refreshState(); await refreshOverview(); if(go&&location.hash!==go) location.hash=go; else route(); toast('Geöffnet: '+(S.state.org?S.state.org.name:id)); }
 const odlg=$('#dlg-org'), of=$('#org-form');
@@ -2828,12 +2886,16 @@ $('#a-new').onclick=()=>openOrg();
 /* Kopfzeile: Organisation */
 function renderOrgBox(){ const st=S.state; if(!st) return; const me=st.me||{}, o=st.org||{};
   document.body.classList.toggle('viewer',me.role==='viewer'&&!me.super);
+  document.body.classList.toggle('scoped',!!me.scoped);
   $('#tab-admin').style.display=me.super?'':'none';
   $('#tab-billing').style.display=me.super||(o.plan&&o.plan!=='internal')?'':'none';
   const box=$('#orgbox');
   if(me.super&&st.orgs&&st.orgs.length>1){ const sig=JSON.stringify(st.orgs)+o.id; if(box.dataset.sig===sig) return; box.dataset.sig=sig;
     box.innerHTML=`<select class="orgsw" id="orgsw" title="Kunde wechseln">${st.orgs.map(x=>`<option value="${x.id}"${x.id===o.id?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
     $('#orgsw').onchange=e=>switchOrg(e.target.value); }
+  else if(!me.super&&st.myOrgs&&st.myOrgs.length>1){ const sig='m'+JSON.stringify(st.myOrgs)+o.id; if(box.dataset.sig===sig) return; box.dataset.sig=sig;
+    box.innerHTML=`<select class="orgsw" id="orgsw" title="Konto wechseln">${st.myOrgs.map(x=>`<option value="${x.id}"${x.id===o.id?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
+    $('#orgsw').onchange=e=>switchOrg(e.target.value,null,true); }
   else { const html=o.name&&(me.super||o.plan!=='internal')?`<span class="pill" title="${esc(me.email||'')}">${esc(o.name)} · ${esc(o.planName||'')}</span>`:''; if(box.innerHTML!==html) box.innerHTML=html; box.dataset.sig=''; }
 }
 

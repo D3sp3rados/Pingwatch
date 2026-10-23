@@ -288,13 +288,28 @@ func (m *Monitor) pushLoop() {
 		devs := append([]Device(nil), m.cfg.Devices...)
 		group := m.hostGroupLocked(n.hostID)
 		prefs := map[string]*NotifyPrefs{}
+		users := map[string]User{}
 		for _, u := range m.cfg.Users {
+			users[u.ID] = u
 			if u.Notify != nil {
 				cp := *u.Notify
 				prefs[u.ID] = &cp
 			}
 		}
 		m.mu.RUnlock()
+		seen := map[string]bool{} // Benutzer → darf Meldung sehen (einmal je Meldung berechnet)
+		visible := func(uid string) bool {
+			u, ok := users[uid]
+			if !ok {
+				return true
+			}
+			if v, ok := seen[uid]; ok {
+				return v
+			}
+			v := m.noticeVisible(&u, n)
+			seen[uid] = v
+			return v
+		}
 		now := time.Now().UnixMilli()
 		var bad []string
 		for _, d := range devs {
@@ -302,6 +317,9 @@ func (m *Monitor) pushLoop() {
 				continue
 			}
 			if p := prefs[d.User]; p != nil && (p.NoPush || p.suppressed(group, now)) {
+				continue
+			}
+			if !d.AllOrgs && !visible(d.User) {
 				continue
 			}
 			if !d.wants(n) {

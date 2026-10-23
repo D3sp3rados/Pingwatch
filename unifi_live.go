@@ -725,6 +725,10 @@ func (s *Server) handleUniFiIgnore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Standort unbekannt", 404)
 		return
 	}
+	if p := principal(r); !p.canSite(site.ID, true) {
+		http.Error(w, "Keine Berechtigung", 403)
+		return
+	}
 	k := strings.TrimSpace(req.Key)
 	if len(k) < 3 || len(k) > 200 || (!strings.HasPrefix(k, "n:") && !strings.HasPrefix(k, "p:")) {
 		http.Error(w, "Gerät unbekannt", 400)

@@ -69,6 +69,10 @@ type User struct {
 	Terms       *Consent  `json:"terms,omitempty"`   // Zustimmung zu den Nutzungsbedingungen
 	Devices     []string  `json:"devices,omitempty"` // bekannte Geräte (Hash) für die Neu-Anmelde-Mail
 	Passkeys    []Passkey `json:"passkeys,omitempty"`
+	// Zugriff im Hauptkonto auf bestimmte Kunden/Standorte/Gruppen/Hosts beschränkt (leer = alles)
+	Access []AccessRule `json:"access,omitempty"`
+	// weitere Konten, in denen der Benutzer Mitglied ist
+	Memberships []Membership `json:"memberships,omitempty"`
 }
 
 // Plan beschreibt ein Paket. Preise netto in Cent pro Standort und Monat.
@@ -202,9 +206,12 @@ type Principal struct {
 	Super bool   // Betreiber: sieht und verwaltet alle Kunden
 	Org   string // aktuell gewählte Org
 	Role  string // owner, admin, viewer
+	Scope *scope // nil = ganzes Konto; sonst nur freigegebene Objekte
 }
 
-func (p *Principal) canEdit() bool { return p.Super || p.Role == "owner" || p.Role == "admin" }
+func (p *Principal) canEdit() bool {
+	return p.Scope == nil && (p.Super || p.Role == "owner" || p.Role == "admin")
+}
 func (p *Principal) isOwner() bool { return p.Super || p.Role == "owner" }
 
 type ctxKey struct{}
@@ -316,6 +323,7 @@ func (s *Server) authenticate(r *http.Request) *Principal {
 		}
 		p.Org = org
 	}
+	s.applyMembership(r, p)
 	return p
 }
 
@@ -499,7 +507,7 @@ func (s *Server) hostFor(r *http.Request, id string) *Host {
 	h.mu.Lock()
 	o := h.cfg.Org
 	h.mu.Unlock()
-	if p == nil || o != p.Org {
+	if p == nil || o != p.Org || !p.canHost(id, false) {
 		return nil
 	}
 	return h
@@ -510,7 +518,7 @@ func (s *Server) siteFor(r *http.Request, id string) *SiteCfg {
 	s.m.mu.RLock()
 	defer s.m.mu.RUnlock()
 	for i := range s.m.cfg.Sites {
-		if s.m.cfg.Sites[i].ID == id && p != nil && s.m.cfg.Sites[i].Org == p.Org {
+		if s.m.cfg.Sites[i].ID == id && p != nil && s.m.cfg.Sites[i].Org == p.Org && p.canSite(id, false) {
 			cp := s.m.cfg.Sites[i]
 			return &cp
 		}

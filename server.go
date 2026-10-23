@@ -275,8 +275,13 @@ func (s *Server) routes() http.Handler {
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
+			// Eingeschränkte Benutzer: nur freigegebene Schnittstellen
+			if p.Scope != nil && !scopedAllowed(r) {
+				http.Error(w, "Keine Berechtigung für diesen Bereich", http.StatusForbidden)
+				return
+			}
 			// Nur-Lesen-Benutzer dürfen nichts ändern
-			if r.Method != http.MethodGet && !p.canEdit() && !readOnlyOK[r.URL.Path] {
+			if r.Method != http.MethodGet && !p.canEdit() && !readOnlyOK[r.URL.Path] && !(p.Scope != nil && scopedWrite[r.URL.Path]) && r.URL.Path != "/api/me/org" {
 				http.Error(w, "Keine Berechtigung (nur Lesezugriff)", http.StatusForbidden)
 				return
 			}
@@ -294,6 +299,8 @@ func (s *Server) routes() http.Handler {
 	}
 	s.registerTenantRoutes(mux, protect, super)
 	mux.HandleFunc("/api/admin/backup", super(s.handleAdminBackup))
+	mux.HandleFunc("/api/admin/move", super(s.handleAdminMove))
+	mux.HandleFunc("/api/me/org", protect(s.handleMyOrg))
 	mux.HandleFunc("/api/admin/restore", super(s.handleAdminRestore))
 	mux.HandleFunc("/api/admin/backup/targets", super(s.handleBackupTargets))
 	mux.HandleFunc("/", protect(func(w http.ResponseWriter, r *http.Request) {
@@ -488,6 +495,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	hv := []HostView{}
 	tnow := time.Now()
 	for _, h := range m.hostsOf(p.Org) {
+		if p.Scope != nil && !p.canHost(h.cfg.ID, false) {
+			continue
+		}
 		siteOn, _ := m.siteOnline(h.cfg.Site)
 		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
@@ -555,13 +565,13 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	m.mu.RLock()
 	var sites []SiteCfg
 	for _, sc := range m.cfg.Sites {
-		if sc.Org == p.Org {
+		if sc.Org == p.Org && p.seesSite(sc.ID) {
 			sites = append(sites, sc)
 		}
 	}
 	cnt := map[string]int{}
 	for _, hc := range m.cfg.Hosts {
-		if hc.Org == p.Org {
+		if hc.Org == p.Org && (p.Scope == nil || p.canHost(hc.ID, false)) {
 			cnt[hc.Site]++
 		}
 	}
@@ -569,6 +579,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	devs := []map[string]any{}
 	for _, d := range m.cfg.Devices {
 		if d.Org != p.Org && !(p.Super && d.AllOrgs) {
+			continue
+		}
+		if p.Scope != nil && (p.User == nil || d.User != p.User.ID) {
 			continue
 		}
 		devs = append(devs, map[string]any{"id": d.Token[:min(12, len(d.Token))], "name": d.Name, "added": d.Added,
@@ -583,7 +596,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			sy := sc.Sys.eff()
 			v.Sys = &sy
 		}
-		if sc.UniFi != nil && sc.UniFi.On {
+		if sc.UniFi != nil && sc.UniFi.On && p.canSite(sc.ID, false) {
 			u := m.unifiSiteView(&sc)
 			v.UniFi = &u
 		}
@@ -597,10 +610,13 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
 		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
-		"groups":    m.groupsOf(p.Org),
-		"customers": m.customersOf(p.Org),
-		"mutes":     m.activeMutes(p.Org),
-		"machines":  m.machinesOf(p.Org),
+		"groups":    filterGroups(p, m.groupsOf(p.Org)),
+		"customers": filterCustomers(p, m.customersOf(p.Org)),
+		"mutes":     m.activeMutesFor(p),
+		"machines":  filterMachines(p, m.machinesOf(p.Org)),
+	}
+	if p.Scope != nil {
+		out["scoped"] = true
 	}
 	for k, v := range s.accountInfo(r) {
 		out[k] = v
@@ -715,7 +731,11 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	// an Bucket-Grenzen ausrichten, damit Balken nicht "wandern"
 	from = from - from%bucket + bucket
 	out := map[string][]Agg{}
-	for _, h := range s.m.hostsOf(principal(r).Org) {
+	p := principal(r)
+	for _, h := range s.m.hostsOf(p.Org) {
+		if p.Scope != nil && !p.canHost(h.cfg.ID, false) {
+			continue
+		}
 		out[h.cfg.ID] = bucketMem(h, from, from+bucket*n, bucket)
 	}
 	writeJSON(w, map[string]any{"from": from, "bucket": bucket, "n": n, "hosts": out})
@@ -874,20 +894,40 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 || limit > 5000 {
 		limit = 300
 	}
-	if c := q.Get("cust"); c != "" {
-		evs := s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
-		if g := q.Get("group"); g != "" {
-			evs = filterEventsByHosts(evs, s.m.groupHostSet(principal(r).Org, g), 100000)
+	p := principal(r)
+	want := limit
+	if p.Scope != nil {
+		limit = 100000 // erst filtern, dann kürzen
+	}
+	out := func(evs []Event) {
+		if p.Scope != nil {
+			keep := evs[:0]
+			for i := range evs {
+				if p.canEvent(&evs[i], false) {
+					keep = append(keep, evs[i])
+				}
+			}
+			evs = keep
+			if len(evs) > want {
+				evs = evs[:want]
+			}
 		}
-		writeJSON(w, filterEventsBySites(evs, s.m.customerSiteSet(principal(r).Org, c), limit))
+		writeJSON(w, evs)
+	}
+	if c := q.Get("cust"); c != "" {
+		evs := s.m.queryEvents(p.Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
+		if g := q.Get("group"); g != "" {
+			evs = filterEventsByHosts(evs, s.m.groupHostSet(p.Org, g), 100000)
+		}
+		out(filterEventsBySites(evs, s.m.customerSiteSet(p.Org, c), limit))
 		return
 	}
 	if g := q.Get("group"); g != "" {
-		evs := s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
-		writeJSON(w, filterEventsByHosts(evs, s.m.groupHostSet(principal(r).Org, g), limit))
+		evs := s.m.queryEvents(p.Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), 100000)
+		out(filterEventsByHosts(evs, s.m.groupHostSet(p.Org, g), limit))
 		return
 	}
-	writeJSON(w, s.m.queryEvents(principal(r).Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), limit))
+	out(s.m.queryEvents(p.Org, q.Get("host"), q.Get("site"), parseTypes(r), qInt(r, "from", 0), qInt(r, "to", 0), limit))
 }
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
@@ -906,6 +946,10 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		if hc.Name == "" {
 			http.Error(w, "Name oder Adresse fehlt", 400)
+			return
+		}
+		if p.Scope != nil && !s.scopedHostWriteOK(p, hc) {
+			http.Error(w, "Keine Berechtigung für diesen Host", 403)
 			return
 		}
 		if hc.ID != "" {
@@ -964,6 +1008,10 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unbekannter Host", 404)
 			return
 		}
+		if !p.canHost(id, true) {
+			http.Error(w, "Keine Berechtigung für diesen Host", 403)
+			return
+		}
 		s.m.DeleteHost(id)
 		writeJSON(w, map[string]bool{"ok": true})
 	default:
@@ -971,7 +1019,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		defer s.m.mu.RUnlock()
 		out := []HostCfg{}
 		for _, hc := range s.m.cfg.Hosts {
-			if hc.Org == p.Org {
+			if hc.Org == p.Org && (p.Scope == nil || p.canHost(hc.ID, false)) {
 				out = append(out, publicHost(hc))
 			}
 		}

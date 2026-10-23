@@ -946,13 +946,22 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 		id = body.ID
 	}
 	mc, ok := m.machineByID(id)
-	if !ok || mc.Org != p.Org {
+	if !ok || mc.Org != p.Org || !p.canMachine(mc.ID, false) {
 		http.Error(w, "unbekannter Rechner", 404)
 		return
 	}
+	if r.Method == http.MethodPost && p.Scope != nil {
+		if !p.canMachine(mc.ID, true) || (body.Group != nil && *body.Group != mc.Group && p.Scope.groupRule[*body.Group] < 2) {
+			http.Error(w, "Keine Berechtigung für diesen Rechner", 403)
+			return
+		}
+	}
 	switch r.Method {
 	case http.MethodGet:
-		site := s.siteFor(r, mc.Site)
+		var site *SiteCfg
+		if sc, ok := m.siteByID(mc.Site); ok && sc.Org == p.Org {
+			site = &sc
+		}
 		on := site != nil && site.Sys != nil && site.Sys.On
 		d := machineDetail{machineView: m.machineView(mc, on)}
 		if site != nil {

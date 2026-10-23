@@ -73,14 +73,17 @@ func (m *Monitor) personalMails(n notice) {
 	now := time.Now()
 	m.mu.RLock()
 	group := m.hostGroupLocked(n.hostID)
-	type rcpt struct{ to, org string }
+	type rcpt struct {
+		to, org string
+		u       User
+	}
 	var to []rcpt
 	for _, u := range m.cfg.Users {
 		p := u.Notify
 		if p == nil || !p.Mail {
 			continue
 		}
-		if u.Org != n.org && !(u.Super && p.MailAll) {
+		if _, _, member := u.membership(n.org); !member && !(u.isSuper() && p.MailAll) {
 			continue
 		}
 		if u.Expires > 0 && u.Expires < now.UnixMilli() {
@@ -94,10 +97,18 @@ func (m *Monitor) personalMails(n notice) {
 			addr = u.Email
 		}
 		if validEmail(addr) {
-			to = append(to, rcpt{addr, u.Org})
+			to = append(to, rcpt{addr, u.Org, u})
 		}
 	}
 	m.mu.RUnlock()
+	// eingeschränkte Benutzer nur für ihre Kunden/Hosts
+	keep := to[:0]
+	for _, r := range to {
+		if m.noticeVisible(&r.u, n) {
+			keep = append(keep, r)
+		}
+	}
+	to = keep
 	if len(to) == 0 {
 		return
 	}

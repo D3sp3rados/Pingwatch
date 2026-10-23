@@ -54,6 +54,10 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
+	if p.Scope != nil && !p.canMute(req.Scope, req.ID) {
+		http.Error(w, "Keine Berechtigung", 403)
+		return
+	}
 	now := time.Now()
 	if req.Until != -1 && req.Until <= now.UnixMilli() {
 		http.Error(w, "Zeitpunkt liegt in der Vergangenheit", 400)

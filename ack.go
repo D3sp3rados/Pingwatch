@@ -33,7 +33,7 @@ func (s *Server) handleAck(w http.ResponseWriter, r *http.Request) {
 	var cp *Event
 	for i := len(m.events) - 1; i >= 0; i-- {
 		e := m.events[i]
-		if e.ID != req.ID || e.Org != p.Org {
+		if e.ID != req.ID || e.Org != p.Org || !p.canEvent(e, true) {
 			continue
 		}
 		if req.Undo {

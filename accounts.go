@@ -113,6 +113,13 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 		s.m.mu.RUnlock()
 		sort.Slice(orgs, func(i, j int) bool { return strings.ToLower(orgs[i]["name"]) < strings.ToLower(orgs[j]["name"]) })
 		out["orgs"] = orgs
+	} else if p.User != nil {
+		if u := s.m.userByID(p.User.ID); u != nil && len(u.Memberships) > 0 {
+			out["myOrgs"] = s.userOrgs(u)
+		}
+	}
+	if p.Scope != nil {
+		me["scoped"] = true
 	}
 	return out
 }
@@ -128,14 +135,34 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 // ---------- Benutzer der eigenen Org ----------
 
 type userView struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	Role      string `json:"role"`
-	Created   int64  `json:"created"`
-	LastLogin int64  `json:"lastLogin"`
-	Super     bool   `json:"super,omitempty"`
-	Expires   int64  `json:"expires,omitempty"`
+	ID        string       `json:"id"`
+	Email     string       `json:"email"`
+	Name      string       `json:"name"`
+	Role      string       `json:"role"`
+	Created   int64        `json:"created"`
+	LastLogin int64        `json:"lastLogin"`
+	Super     bool         `json:"super,omitempty"`
+	Expires   int64        `json:"expires,omitempty"`
+	Access    []AccessRule `json:"access,omitempty"` // leer = ganzes Konto
+	Guest     bool         `json:"guest,omitempty"`  // Hauptkonto ist ein anderes (Mitglied über Einladung)
+}
+
+// setMembershipLocked setzt Rolle und Zugriffe eines Benutzers in einem Konto.
+func (u *User) setMembership(org, role string, access []AccessRule) {
+	if role == "owner" {
+		access = nil
+	}
+	if u.Org == org {
+		u.Role, u.Access = role, access
+		return
+	}
+	for i := range u.Memberships {
+		if u.Memberships[i].Org == org {
+			u.Memberships[i].Role, u.Memberships[i].Access = role, access
+			return
+		}
+	}
+	u.Memberships = append(u.Memberships, Membership{Org: org, Role: role, Access: access})
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
@@ -146,9 +173,11 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		out := []userView{}
 		m.mu.RLock()
 		for _, u := range m.cfg.Users {
-			if u.Org == p.Org {
-				out = append(out, userView{u.ID, u.Email, u.Name, u.Role, u.Created, u.LastLogin, u.isSuper(), u.Expires})
+			role, access, ok := u.membership(p.Org)
+			if !ok {
+				continue
 			}
+			out = append(out, userView{u.ID, u.Email, u.Name, role, u.Created, u.LastLogin, u.isSuper() && u.Org == p.Org, u.Expires, access, u.Org != p.Org})
 		}
 		m.mu.RUnlock()
 		writeJSON(w, out)
@@ -156,8 +185,9 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID, Email, Name, Role, Password string
 			ResetPassword                   bool
-			Super                           *bool  // Betreiber-Admin (nur in der Betreiber-Org)
-			Expires                         *int64 // Zugang bis (ms), 0 = unbegrenzt
+			Super                           *bool         // Betreiber-Admin (nur in der Betreiber-Org)
+			Expires                         *int64        // Zugang bis (ms), 0 = unbegrenzt
+			Access                          *[]AccessRule // nil = unverändert, [] = ganzes Konto
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -171,62 +201,85 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		email := strings.ToLower(strings.TrimSpace(req.Email))
 		temp := ""
+		added := false
 		m.mu.Lock()
 		defer m.mu.Unlock()
+		var access []AccessRule
+		if req.Access != nil {
+			access = m.cleanAccessLocked(p.Org, *req.Access)
+		}
 		if req.ID == "" {
 			if !validEmail(email) {
 				http.Error(w, "E-Mail-Adresse ungültig", 400)
 				return
 			}
-			for _, u := range m.cfg.Users {
-				if strings.EqualFold(u.Email, email) {
-					http.Error(w, "Diese E-Mail ist bereits vergeben", 409)
+			// schon vorhanden? – in diesem Konto: Fehler; in einem anderen: als Mitglied hinzufügen
+			for i := range m.cfg.Users {
+				u := &m.cfg.Users[i]
+				if !strings.EqualFold(u.Email, email) {
+					continue
+				}
+				if _, _, member := u.membership(p.Org); member {
+					http.Error(w, "Diese E-Mail ist in diesem Konto schon eingetragen", 409)
 					return
 				}
+				u.setMembership(p.Org, req.Role, access)
+				added = true
+				break
 			}
-			pw := req.Password
-			if len(pw) < 8 {
-				pw = tempPassword()
-				temp = pw
+			if !added {
+				pw := req.Password
+				if len(pw) < 8 {
+					pw = tempPassword()
+					temp = pw
+				}
+				u := User{ID: randHex(6), Email: email, Name: strings.TrimSpace(req.Name), Org: p.Org, Role: req.Role,
+					PassHash: hashPassword(pw), Created: time.Now().UnixMilli(), TempPW: temp != ""}
+				if req.Role != "owner" {
+					u.Access = access
+				}
+				if req.Super != nil && p.Super && p.Org == defaultOrgID {
+					u.Super = *req.Super
+				}
+				if req.Expires != nil {
+					u.Expires = *req.Expires
+				}
+				m.cfg.Users = append(m.cfg.Users, u)
 			}
-			u := User{ID: randHex(6), Email: email, Name: strings.TrimSpace(req.Name), Org: p.Org, Role: req.Role,
-				PassHash: hashPassword(pw), Created: time.Now().UnixMilli(), TempPW: temp != ""}
-			if req.Super != nil && p.Super && p.Org == defaultOrgID {
-				u.Super = *req.Super
-			}
-			if req.Expires != nil {
-				u.Expires = *req.Expires
-			}
-			m.cfg.Users = append(m.cfg.Users, u)
 		} else {
 			found := false
 			for i := range m.cfg.Users {
 				u := &m.cfg.Users[i]
-				if u.ID != req.ID || u.Org != p.Org {
+				curRole, curAccess, member := u.membership(p.Org)
+				if u.ID != req.ID || !member {
 					continue
 				}
 				found = true
-				if u.Role == "owner" && req.Role != "owner" && m.ownerCountLocked(p.Org) <= 1 {
+				if curRole == "owner" && req.Role != "owner" && m.ownerCountLocked(p.Org) <= 1 {
 					http.Error(w, "Mindestens ein Inhaber muss bleiben", 400)
 					return
 				}
-				if u.Role == "owner" && !p.isOwner() {
+				if curRole == "owner" && !p.isOwner() {
 					http.Error(w, "Nur Inhaber können Inhaber ändern", 403)
 					return
 				}
-				u.Role = req.Role
-				if n := strings.TrimSpace(req.Name); n != "" {
+				if req.Access == nil {
+					access = curAccess
+				}
+				u.setMembership(p.Org, req.Role, access)
+				home := u.Org == p.Org // Name, Passwort, Ablauf nur im Hauptkonto
+				if n := strings.TrimSpace(req.Name); n != "" && home {
 					u.Name = n
 				}
-				if req.ResetPassword {
+				if req.ResetPassword && (home || p.Super) {
 					temp = tempPassword()
 					u.PassHash = hashPassword(temp)
 					u.TempPW = true
 				}
-				if req.Super != nil && p.Super && p.Org == defaultOrgID && (p.User == nil || p.User.ID != u.ID) {
+				if req.Super != nil && p.Super && p.Org == defaultOrgID && home && (p.User == nil || p.User.ID != u.ID) {
 					u.Super = *req.Super
 				}
-				if req.Expires != nil && (p.User == nil || p.User.ID != u.ID) {
+				if req.Expires != nil && home && (p.User == nil || p.User.ID != u.ID) {
 					u.Expires = *req.Expires
 				}
 			}
@@ -236,21 +289,36 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		m.saveConfigLocked()
-		writeJSON(w, map[string]any{"ok": true, "tempPassword": temp})
+		writeJSON(w, map[string]any{"ok": true, "tempPassword": temp, "added": added})
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		out := m.cfg.Users[:0]
 		for _, u := range m.cfg.Users {
-			if u.ID == id && u.Org == p.Org {
-				if u.Role == "owner" && m.ownerCountLocked(p.Org) <= 1 {
+			role, _, member := u.membership(p.Org)
+			if u.ID == id && member {
+				if role == "owner" && m.ownerCountLocked(p.Org) <= 1 {
 					http.Error(w, "Der letzte Inhaber kann nicht gelöscht werden", 400)
 					return
 				}
 				if p.User != nil && u.ID == p.User.ID {
 					http.Error(w, "Sie können sich nicht selbst löschen", 400)
 					return
+				}
+				if u.Org != p.Org { // nur Mitglied: aus diesem Konto entfernen
+					keep := u.Memberships[:0]
+					for _, ms := range u.Memberships {
+						if ms.Org != p.Org {
+							keep = append(keep, ms)
+						}
+					}
+					u.Memberships = keep
+					out = append(out, u)
+				} else if len(u.Memberships) > 0 { // Hauptkonto verlassen: nächstes Konto wird Hauptkonto
+					ms := u.Memberships[0]
+					u.Org, u.Role, u.Access, u.Memberships, u.Super = ms.Org, ms.Role, ms.Access, u.Memberships[1:], false
+					out = append(out, u)
 				}
 				continue
 			}
@@ -265,7 +333,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 func (m *Monitor) ownerCountLocked(org string) int {
 	n := 0
 	for _, u := range m.cfg.Users {
-		if u.Org == org && u.Role == "owner" {
+		if role, _, ok := u.membership(org); ok && role == "owner" {
 			n++
 		}
 	}
@@ -471,15 +539,19 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, "E-Mail des Inhabers ungültig", 400)
 					return
 				}
-				for _, u := range m.cfg.Users {
-					if strings.EqualFold(u.Email, e) {
-						http.Error(w, "E-Mail ist bereits vergeben", 409)
-						return
+				existing := false
+				for i := range m.cfg.Users {
+					if strings.EqualFold(m.cfg.Users[i].Email, e) {
+						// vorhandener Benutzer wird Inhaber des neuen Kontos (Mitgliedschaft)
+						m.cfg.Users[i].setMembership(o.ID, "owner", nil)
+						existing = true
 					}
 				}
-				temp = tempPassword()
-				m.cfg.Users = append(m.cfg.Users, User{ID: randHex(6), Email: e, Name: req.OwnerName, Org: o.ID, Role: "owner",
-					PassHash: hashPassword(temp), Created: o.Created, TempPW: true})
+				if !existing {
+					temp = tempPassword()
+					m.cfg.Users = append(m.cfg.Users, User{ID: randHex(6), Email: e, Name: req.OwnerName, Org: o.ID, Role: "owner",
+						PassHash: hashPassword(temp), Created: o.Created, TempPW: true})
+				}
 				if o.Email == "" {
 					o.Email = e
 				}

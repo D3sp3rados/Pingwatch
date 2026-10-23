@@ -61,7 +61,7 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		m.mu.RLock()
 		for i := len(m.cfg.Actions) - 1; i >= 0 && len(out) < 300; i-- {
 			a := m.cfg.Actions[i]
-			if a.Org == p.Org && (mid == "" || a.Machine == mid) {
+			if a.Org == p.Org && (mid == "" || a.Machine == mid) && (p.Scope == nil || p.canMachine(a.Machine, false)) {
 				out = append(out, a)
 			}
 		}
@@ -73,7 +73,7 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Methode", 405)
 		return
 	}
-	if !p.canEdit() {
+	if !p.canEdit() && p.Scope == nil {
 		http.Error(w, "Nur Inhaber und Admins dürfen Updates und Neustarts auslösen", 403)
 		return
 	}
@@ -101,6 +101,18 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 	m.mu.RUnlock()
 	if req.Scope != "machine" && req.Scope != "site" && req.Scope != "customer" {
 		targets = nil
+	}
+	if p.Scope != nil {
+		if req.Scope != "machine" && !p.canSite(req.ID, true) && !(req.Scope == "customer" && p.Scope.customerRul[req.ID] >= 2) {
+			http.Error(w, "Keine Berechtigung", 403)
+			return
+		}
+		for _, t := range targets {
+			if !p.canMachine(t.ID, true) {
+				http.Error(w, "Keine Berechtigung für "+t.Name, 403)
+				return
+			}
+		}
 	}
 	if len(targets) == 0 {
 		http.Error(w, "Keine Rechner – Updates und Neustarts sind für diesen Standort nicht erlaubt (Rechner-Überwachung → „Updates und Neustarts erlauben“)", 400)
