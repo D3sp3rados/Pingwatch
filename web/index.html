@@ -683,6 +683,16 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="setcat" data-cat="acs">
   <h2>TR-069 (ACS) <span class="tag warn" style="font-size:11px;vertical-align:middle">Prototyp</span></h2>
   <div class="panel help" id="acs-info" style="font-size:13px;line-height:1.6"></div>
+  <h2>Profile nach Provisioning-Code <span class="sub muted" style="font-weight:400;font-size:12.5px">– der RADIUS schickt den Code (TR069PROVC) bei der Einwahl, die Box meldet ihn dem ACS</span></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="acs-ptbl"></table></div>
+  <div class="panel" style="padding:12px 14px;margin-top:10px">
+    <b id="acs-pf-t">Neues Profil</b>
+    <div class="formrow" style="margin-top:6px"><label class="field" style="max-width:220px">Provisioning-Code<input id="acs-pf-code" placeholder="z. B. Kundennummer oder Line-ID · * = alle"></label><label class="field">Name<input id="acs-pf-name" placeholder="Kunde"></label></div>
+    <div class="formrow" style="margin-top:6px"><label class="field">PPPoE-Benutzer<input id="acs-pf-ppu" autocomplete="off"></label><label class="field">PPPoE-Passwort<input id="acs-pf-ppp" type="password" autocomplete="new-password" placeholder="leer = unverändert"></label><label class="field" style="max-width:150px">Inform-Intervall (s)<input id="acs-pf-iv" type="number" min="60" placeholder="3600"></label></div>
+    <label class="field" style="margin-top:6px">Rufnummern (je Zeile: Rufnummer;SIP-Benutzer;SIP-Passwort;Registrar)<textarea id="acs-pf-voip" rows="2" class="rm-in" style="width:100%" placeholder="0774112345;0774112345;geheim;sip.rst.de"></textarea></label>
+    <label class="field" style="margin-top:6px">Weitere Werte (je Zeile: Parameter=Wert)<textarea id="acs-pf-extra" rows="3" class="rm-in" style="width:100%"></textarea></label>
+    <div style="margin-top:8px;display:flex;gap:8px"><button class="btn sm pri" id="acs-pf-save">Profil speichern</button><button class="btn sm" id="acs-pf-new">Neu</button></div>
+  </div>
   <h2>Fritzboxen am ACS <span class="sub muted" id="acs-n" style="font-weight:400;font-size:12.5px"></span></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="acs-tbl"></table></div>
   <div id="acs-det" style="display:none">
@@ -691,8 +701,9 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <div class="panel" style="padding:12px 14px">
         <b>Name &amp; Notiz</b>
         <div class="formrow" style="margin-top:6px"><label class="field">Name (Kunde)<input id="acs-name"></label><label class="field">Notiz<input id="acs-note"></label><button class="btn sm" id="acs-namesave">Speichern</button></div>
-        <b style="display:block;margin-top:12px">Profil (wird beim ersten Kontakt und nach jedem Werksreset gesetzt)</b>
+        <b style="display:block;margin-top:12px">Eigenes Profil <span class="muted" style="font-weight:400">(hat Vorrang vor dem Profil zum Provisioning-Code; wird beim ersten Kontakt und nach jedem Werksreset gesetzt)</span></b>
         <div class="formrow" style="margin-top:6px"><label class="field">PPPoE-Benutzer<input id="acs-ppu" autocomplete="off"></label><label class="field">PPPoE-Passwort<input id="acs-ppp" type="password" autocomplete="new-password"></label><label class="field" style="max-width:150px">Inform-Intervall (s)<input id="acs-iv" type="number" min="60" placeholder="3600"></label></div>
+        <label class="field" style="margin-top:6px">Rufnummern (je Zeile: Rufnummer;SIP-Benutzer;SIP-Passwort;Registrar)<textarea id="acs-voip" rows="2" class="rm-in" style="width:100%"></textarea></label>
         <label class="field" style="margin-top:6px">Weitere Werte (je Zeile: Parameter=Wert)<textarea id="acs-extra" rows="3" class="rm-in" style="width:100%" placeholder="InternetGatewayDevice.Time.NTPServer1=ptbtime1.ptb.de"></textarea></label>
         <div style="margin-top:8px"><button class="btn sm pri" id="acs-profsave">Profil speichern &amp; senden</button></div>
       </div>
@@ -3024,19 +3035,29 @@ syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok
 
 
 /* ---------- TR-069 / ACS (nur Betreiber, Prototyp) ---------- */
-const ACS={data:null,sel:null};
+const ACS={data:null,sel:null,pf:null};
+const voipTxt=l=>(l||[]).map(v=>[v.number,v.user||'',v.pass||'',v.registrar||''].join(';')).join('\n');
+const voipParse=t=>t.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const [number,user,pass,registrar]=l.split(';').map(x=>(x||'').trim()); return {number,user,pass,registrar}; }).filter(v=>v.number);
+const extraTxt=l=>(l||[]).map(e=>e.n+'='+e.v).join('\n');
+const extraParse=t=>t.split('\n').map(l=>l.trim()).filter(l=>l.includes('=')).map(l=>({n:l.slice(0,l.indexOf('=')).trim(),v:l.slice(l.indexOf('=')+1).trim()}));
+function acsPfFill(cp){ ACS.pf=cp?cp.code:null; const p=(cp&&cp.profile)||{}; $('#acs-pf-t').textContent=cp?'Profil '+cp.code+' bearbeiten':'Neues Profil';
+  $('#acs-pf-code').value=cp?cp.code:''; $('#acs-pf-code').disabled=!!cp; $('#acs-pf-name').value=cp&&cp.name||''; $('#acs-pf-ppu').value=p.pppUser||''; $('#acs-pf-ppp').value=''; $('#acs-pf-iv').value=p.interval||''; $('#acs-pf-voip').value=voipTxt(p.voip); $('#acs-pf-extra').value=extraTxt(p.extra); }
 async function loadACS(){ try{ ACS.data=await api('/api/acs'); }catch(e){ $('#acs-info').textContent=e.message; return; } renderACS(); }
 async function acsPost(body,msg){ try{ await api('/api/acs',{method:'POST',body:JSON.stringify(body)}); if(msg) toast(msg); await loadACS(); }catch(e){ uiAlert(e.message); } }
 function renderACS(){ const d=ACS.data; if(!d) return;
   $('#acs-info').innerHTML=(d.enabled?`<b style="color:var(--ok)">ACS aktiv</b> · Adresse für die Boxen: <span class="num">${esc(d.url)}</span>${d.auth?' · Boxen melden sich mit Benutzer/Passwort an':' · <span style="color:var(--warn)">ohne Anmeldung der Boxen (ACS_CPE_USER/ACS_CPE_PASS setzen)</span>'}`:'<b style="color:var(--warn)">ACS ist aus.</b> Einschalten mit der Umgebungsvariable <span class="num">ACS_ENABLE=1</span> in der rstcloud (optional <span class="num">ACS_CPE_USER</span>/<span class="num">ACS_CPE_PASS</span>).')
     +'<br>So findet eine Box den ACS: per PPP-Anmeldenachricht (<span class="num">TR069URL=https://…/cwmp</span> in der PAP/CHAP-Antwort, nur wenn die Box noch keinen ACS kennt, z. B. nach Werksreset), per DHCP Option 43 oder per Provider-Konfiguration von AVM. Nur HTTPS.';
+  const pfs=d.profiles||[];
+  $('#acs-ptbl').innerHTML=pfs.length?'<tr><th>Code</th><th>Name</th><th>PPPoE</th><th>Rufnummern</th><th>Weitere Werte</th><th></th></tr>'+pfs.map(cp=>`<tr><td class="num"><b>${esc(cp.code)}</b></td><td>${esc(cp.name||(cp.code==='*'?'Grundeinstellungen für alle Boxen':''))}</td><td>${esc(cp.profile.pppUser||'–')}</td><td>${(cp.profile.voip||[]).map(v=>esc(v.number)).join(', ')||'–'}</td><td>${(cp.profile.extra||[]).length||'–'}</td><td style="white-space:nowrap"><button class="btn sm" data-pfedit="${esc(cp.code)}">Bearbeiten</button> <button class="btn sm danger" data-pfdel="${esc(cp.code)}">Löschen</button></td></tr>`).join(''):'<tr><td class="empty">Noch keine Profile. Beispiel: Code = Kundennummer, die euer RADIUS als TR069PROVC mitschickt.</td></tr>';
+  $$('#acs-ptbl [data-pfedit]').forEach(b=>b.onclick=()=>acsPfFill(pfs.find(x=>x.code===b.dataset.pfedit)));
+  $$('#acs-ptbl [data-pfdel]').forEach(b=>b.onclick=async()=>{ if(await uiConfirm('Profil '+b.dataset.pfdel+' löschen?')) acsPost({action:'codedelete',code:b.dataset.pfdel},'Gelöscht'); });
   const ds=d.devices||[]; $('#acs-n').textContent=ds.length+' Geräte';
   $('#acs-tbl').innerHTML=ds.length?'<tr><th>Box</th><th>Modell</th><th class="hide-m">FRITZ!OS</th><th class="hide-m">Externe IP</th><th>Letzter Kontakt</th><th>Offen</th></tr>'+ds.map(x=>{ const open=(x.tasks||[]).filter(t=>t.state==='queued'||t.state==='sent').length, fail=(x.tasks||[]).filter(t=>t.state==='fault').length;
     return `<tr data-acs="${esc(x.id)}" style="cursor:pointer${ACS.sel===x.id?';background:var(--acc-a)':''}"><td><b>${esc(x.name||x.serial)}</b><div class="muted" style="font-size:12px">${esc(x.serial)}${x.provCode?' · '+esc(x.provCode):''}</div></td><td>${esc(x.model||x.class)}</td><td class="hide-m num">${esc(x.sw||'')}</td><td class="hide-m num">${esc(x.extIP||x.ip||'')}</td><td class="num">${fmtDT(x.last,false)}<div class="muted" style="font-size:12px">${esc((x.events||[]).join(', '))}</div></td><td>${open?open+' offen':'–'}${fail?` · <span style="color:var(--bad)">${fail} Fehler</span>`:''}</td></tr>`; }).join(''):'<tr><td class="empty">Noch keine Box hat sich gemeldet.</td></tr>';
   $$('#acs-tbl [data-acs]').forEach(tr=>tr.onclick=()=>{ ACS.sel=tr.dataset.acs; ACS.filled=null; renderACS(); });
   const x=ds.find(y=>y.id===ACS.sel); $('#acs-det').style.display=x?'':'none'; if(!x) return;
   $('#acs-dt').textContent=(x.name||x.model||'Fritzbox')+' · '+x.serial;
-  if(ACS.filled!==x.id){ ACS.filled=x.id; $('#acs-name').value=x.name||''; $('#acs-note').value=x.note||''; const p=x.profile||{}; $('#acs-ppu').value=p.pppUser||''; $('#acs-ppp').value=''; $('#acs-ppp').placeholder=p.pppPass?'gespeichert – leer = unverändert':''; $('#acs-iv').value=p.interval||''; $('#acs-extra').value=(p.extra||[]).map(e=>e.n+'='+e.v).join('\n'); }
+  if(ACS.filled!==x.id){ ACS.filled=x.id; $('#acs-name').value=x.name||''; $('#acs-note').value=x.note||''; const p=x.profile||{}; $('#acs-ppu').value=p.pppUser||''; $('#acs-ppp').value=''; $('#acs-ppp').placeholder=p.pppPass?'gespeichert – leer = unverändert':''; $('#acs-iv').value=p.interval||''; $('#acs-voip').value=voipTxt(p.voip); $('#acs-extra').value=extraTxt(p.extra); }
   const TS={queued:['wartet','--mut'],sent:['gesendet','--warn'],done:['erledigt','--ok'],fault:['Fehler','--bad']};
   const tl=(x.tasks||[]).slice().reverse();
   $('#acs-tasks').innerHTML=tl.length?'<tr><th>Zeit</th><th>Auftrag</th><th>Von</th><th>Status</th><th></th></tr>'+tl.map(t=>{ const [l,c]=TS[t.state]||[t.state,'']; const what=t.kind==='set'?(t.values||[]).map(v=>v.n+'='+v.v).join(', '):t.kind==='download'?t.url:(t.names||[]).join(', ');
@@ -3054,10 +3075,12 @@ function renderACS(){ const d=ACS.data; if(!d) return;
   $('#acs-reset').onclick=async()=>{ if(await uiConfirm('Box auf WERKSEINSTELLUNGEN zurücksetzen? Danach braucht sie den ACS-Bootstrap (PPP/DHCP), um wieder erreichbar zu sein.')) task({kind:'factoryreset'}); };
   $('#acs-del').onclick=async()=>{ if(await uiConfirm('Gerät aus der Liste entfernen? Meldet es sich wieder, erscheint es neu.')){ ACS.sel=null; acsPost({action:'delete',id:x.id},'Entfernt'); } };
   $('#acs-namesave').onclick=()=>acsPost({action:'name',id:x.id,name:$('#acs-name').value,note:$('#acs-note').value},'Gespeichert');
-  $('#acs-profsave').onclick=()=>{ const extra=$('#acs-extra').value.split('\n').map(l=>l.trim()).filter(l=>l.includes('=')).map(l=>({n:l.slice(0,l.indexOf('=')).trim(),v:l.slice(l.indexOf('=')+1).trim()}));
-    ACS.filled=null; acsPost({action:'profile',id:x.id,profile:{pppUser:$('#acs-ppu').value.trim(),pppPass:$('#acs-ppp').value,interval:+$('#acs-iv').value||0,extra}},'Profil gespeichert – wird beim nächsten Kontakt gesendet'); };
+  $('#acs-profsave').onclick=()=>{ ACS.filled=null; acsPost({action:'profile',id:x.id,profile:{pppUser:$('#acs-ppu').value.trim(),pppPass:$('#acs-ppp').value,interval:+$('#acs-iv').value||0,voip:voipParse($('#acs-voip').value),extra:extraParse($('#acs-extra').value)}},'Profil gespeichert – wird beim nächsten Kontakt gesendet'); };
 }
 $('#acs-pq').addEventListener('input',()=>renderACS());
+$('#acs-pf-new').onclick=()=>acsPfFill(null);
+$('#acs-pf-save').onclick=()=>{ const code=$('#acs-pf-code').value.trim(); if(!code){ uiAlert('Bitte einen Provisioning-Code eingeben (oder * für alle Boxen).'); return; }
+  acsPost({action:'codeprofile',code,name:$('#acs-pf-name').value.trim(),profile:{pppUser:$('#acs-pf-ppu').value.trim(),pppPass:$('#acs-pf-ppp').value,interval:+$('#acs-pf-iv').value||0,voip:voipParse($('#acs-pf-voip').value),extra:extraParse($('#acs-pf-extra').value)}},'Profil gespeichert').then(()=>acsPfFill(null)); };
 /* ---------- Nutzungsbedingungen: neue Fassung einmal bestätigen ---------- */
 let TERMS_ASKED=false;
 async function askTerms(){ const me=(S.state&&S.state.me)||{}; if(!me.termsPending||TERMS_ASKED) return; TERMS_ASKED=true;

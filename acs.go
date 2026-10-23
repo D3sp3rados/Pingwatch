@@ -57,6 +57,7 @@ type AcsProfile struct {
 	PPPPass  string     `json:"pppPass,omitempty"` // nie an den Browser
 	Extra    []AcsParam `json:"extra,omitempty"`
 	Interval int        `json:"interval,omitempty"` // PeriodicInformInterval in s (Standard 3600)
+	Voip     []AcsVoip  `json:"voip,omitempty"`
 }
 
 type AcsDevice struct {
@@ -69,7 +70,8 @@ type AcsDevice struct {
 	SW       string            `json:"sw,omitempty"`
 	HW       string            `json:"hw,omitempty"`
 	ProvCode string            `json:"provCode,omitempty"`
-	IP       string            `json:"ip,omitempty"` // Absender der letzten Sitzung
+	Root     string            `json:"root,omitempty"` // "InternetGatewayDevice." oder "Device."
+	IP       string            `json:"ip,omitempty"`   // Absender der letzten Sitzung
 	ExtIP    string            `json:"extIP,omitempty"`
 	First    int64             `json:"first"`
 	Last     int64             `json:"last"`
@@ -310,11 +312,20 @@ func acsNewID() string {
 	return fmt.Sprintf("t%d%03d", time.Now().Unix(), n%1000)
 }
 
-// wanPrefix: Pfad der PPP-Verbindung aus den bekannten Parametern (Glasfaser-Boxen nutzen teils andere Indizes).
+// root: Datenmodell der Box – TR-098 ("InternetGatewayDevice.") oder TR-181 ("Device.").
+func (d *AcsDevice) root() string {
+	if d.Root != "" {
+		return d.Root
+	}
+	return "InternetGatewayDevice."
+}
+
+// wanPPPPrefix: Pfad der PPP-Verbindung aus den bekannten Parametern (Glasfaser-Boxen nutzen teils andere Indizes).
 func (d *AcsDevice) wanPPPPrefix() string {
 	best := ""
 	for k := range d.Params {
-		if i := strings.Index(k, ".WANPPPConnection."); i > 0 && strings.HasSuffix(k, ".Username") {
+		isPPP := (strings.Contains(k, ".WANPPPConnection.") || strings.HasPrefix(k, "Device.PPP.Interface.")) && strings.HasSuffix(k, ".Username")
+		if isPPP {
 			p := k[:len(k)-len("Username")]
 			if best == "" || p < best {
 				best = p
@@ -322,38 +333,108 @@ func (d *AcsDevice) wanPPPPrefix() string {
 		}
 	}
 	if best == "" {
-		best = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1."
+		if d.root() == "Device." {
+			best = "Device.PPP.Interface.1."
+		} else {
+			best = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1."
+		}
 	}
 	return best
 }
 
-// profileTasks: Aufträge, die das Profil auf die Box bringen.
-func (d *AcsDevice) profileTasks() []AcsTask {
-	p := d.Profile
-	if p == nil {
-		return nil
-	}
+// AcsVoip: eine Rufnummer (SIP-Konto) für die Box (TR-104, VoiceProfile 1).
+type AcsVoip struct {
+	Number    string `json:"number"`
+	User      string `json:"user,omitempty"`
+	Pass      string `json:"pass,omitempty"` // nie an den Browser
+	Registrar string `json:"registrar,omitempty"`
+	Proxy     string `json:"proxy,omitempty"`
+	Domain    string `json:"domain,omitempty"`
+}
+
+// AcsCodeProfile: Profil für alle Boxen mit diesem Provisioning-Code (kommt z. B. vom RADIUS über
+// TR069PROVC=… in der PPP-Anmeldung). Code "*" = Grundeinstellungen für alle Boxen (nur weitere Werte).
+type AcsCodeProfile struct {
+	Code    string     `json:"code"`
+	Name    string     `json:"name,omitempty"`
+	Profile AcsProfile `json:"profile"`
+}
+
+// profileValues: alle Soll-Werte eines Profils für diese Box.
+func (d *AcsDevice) profileValues(p *AcsProfile, global []AcsParam) []AcsParam {
+	r := d.root()
 	var vals []AcsParam
-	if p.PPPUser != "" {
+	if p != nil && p.PPPUser != "" {
 		pre := d.wanPPPPrefix()
 		vals = append(vals, AcsParam{Name: pre + "Username", Value: p.PPPUser}, AcsParam{Name: pre + "Password", Value: p.PPPPass})
 	}
-	iv := p.Interval
-	if iv <= 0 {
-		iv = 3600
+	iv := 3600
+	if p != nil && p.Interval > 0 {
+		iv = p.Interval
 	}
-	vals = append(vals, AcsParam{Name: "InternetGatewayDevice.ManagementServer.PeriodicInformEnable", Value: "1", Type: "xsd:boolean"},
-		AcsParam{Name: "InternetGatewayDevice.ManagementServer.PeriodicInformInterval", Value: fmt.Sprint(iv), Type: "xsd:unsignedInt"})
-	vals = append(vals, p.Extra...)
-	now := time.Now().UnixMilli()
-	return []AcsTask{{ID: acsNewID(), Kind: "set", Values: vals, Created: now, State: "queued", By: "Profil", Secret: p.PPPPass != ""}}
+	vals = append(vals, AcsParam{Name: r + "ManagementServer.PeriodicInformEnable", Value: "1", Type: "xsd:boolean"},
+		AcsParam{Name: r + "ManagementServer.PeriodicInformInterval", Value: fmt.Sprint(iv), Type: "xsd:unsignedInt"})
+	if p != nil && len(p.Voip) > 0 && r == "InternetGatewayDevice." {
+		vp := r + "Services.VoiceService.1.VoiceProfile.1."
+		v0 := p.Voip[0]
+		if v0.Registrar != "" {
+			vals = append(vals, AcsParam{Name: vp + "SIP.RegistrarServer", Value: v0.Registrar})
+		}
+		if v0.Proxy != "" {
+			vals = append(vals, AcsParam{Name: vp + "SIP.ProxyServer", Value: v0.Proxy})
+		}
+		if v0.Domain != "" {
+			vals = append(vals, AcsParam{Name: vp + "SIP.UserAgentDomain", Value: v0.Domain})
+		}
+		for i, v := range p.Voip {
+			lp := fmt.Sprintf("%sLine.%d.", vp, i+1)
+			vals = append(vals, AcsParam{Name: lp + "Enable", Value: "Enabled"}, AcsParam{Name: lp + "DirectoryNumber", Value: v.Number},
+				AcsParam{Name: lp + "SIP.AuthUserName", Value: v.User}, AcsParam{Name: lp + "SIP.AuthPassword", Value: v.Pass},
+				AcsParam{Name: lp + "SIP.URI", Value: v.Number})
+		}
+	}
+	vals = append(vals, global...)
+	if p != nil {
+		vals = append(vals, p.Extra...)
+	}
+	return vals
+}
+
+// profileTasks: Aufträge, die das Profil auf die Box bringen.
+func (d *AcsDevice) profileTasks(p *AcsProfile, global []AcsParam) []AcsTask {
+	if p == nil && len(global) == 0 {
+		return nil
+	}
+	vals := d.profileValues(p, global)
+	secret := p != nil && (p.PPPPass != "" || len(p.Voip) > 0)
+	return []AcsTask{{ID: acsNewID(), Kind: "set", Values: vals, Created: time.Now().UnixMilli(), State: "queued", By: "Profil", Secret: secret}}
+}
+
+// effectiveProfile: eigenes Profil der Box, sonst das Profil zu ihrem Provisioning-Code; dazu die Grundeinstellungen ("*").
+func (m *Monitor) effectiveProfile(d *AcsDevice) (*AcsProfile, []AcsParam, string) {
+	var global []AcsParam
+	var p *AcsProfile
+	src := ""
+	for i := range m.cfg.AcsProfiles {
+		cp := &m.cfg.AcsProfiles[i]
+		if cp.Code == "*" {
+			global = cp.Profile.Extra
+		} else if d.ProvCode != "" && strings.EqualFold(cp.Code, d.ProvCode) {
+			p, src = &cp.Profile, "Code "+cp.Code
+		}
+	}
+	if d.Profile != nil {
+		p, src = d.Profile, "eigenes Profil"
+	}
+	return p, global, src
 }
 
 // standardabfrage nach dem Inform: Grunddaten der Box.
-var acsBasicParams = []string{
-	"InternetGatewayDevice.DeviceInfo.",
-	"InternetGatewayDevice.ManagementServer.",
-	"InternetGatewayDevice.WANDevice.",
+func (d *AcsDevice) basicParams() []string {
+	if d.root() == "Device." {
+		return []string{"Device.DeviceInfo.", "Device.ManagementServer.", "Device.PPP.Interface."}
+	}
+	return []string{"InternetGatewayDevice.DeviceInfo.", "InternetGatewayDevice.ManagementServer.", "InternetGatewayDevice.WANDevice."}
 }
 
 // ---------- HTTP ----------
@@ -517,6 +598,13 @@ func (m *Monitor) acsInform(in *soapIn, ip string) string {
 	d.Last, d.IP, d.Events = now, ip, events
 	for _, p := range params {
 		d.Params[p.Name] = p.Value
+		if d.Root == "" {
+			if strings.HasPrefix(p.Name, "Device.") {
+				d.Root = "Device."
+			} else if strings.HasPrefix(p.Name, "InternetGatewayDevice.") {
+				d.Root = "InternetGatewayDevice."
+			}
+		}
 		switch {
 		case strings.HasSuffix(p.Name, "DeviceInfo.SoftwareVersion"):
 			d.SW = p.Value
@@ -547,7 +635,7 @@ func (m *Monitor) acsInform(in *soapIn, ip string) string {
 	}
 	// Grunddaten beim ersten Kontakt und nach jedem Neustart lesen
 	if (isNew || boot) && pending < 20 {
-		d.Tasks = append(d.Tasks, AcsTask{ID: acsNewID(), Kind: "get", Names: acsBasicParams, Created: now, State: "queued", By: "automatisch"})
+		d.Tasks = append(d.Tasks, AcsTask{ID: acsNewID(), Kind: "get", Names: d.basicParams(), Created: now, State: "queued", By: "automatisch"})
 	}
 	// Profil: nach BOOTSTRAP (Werkseinstellungen) oder wenn noch nie gesetzt
 	bootstrap := false
@@ -556,10 +644,10 @@ func (m *Monitor) acsInform(in *soapIn, ip string) string {
 			bootstrap = true
 		}
 	}
-	if d.Profile != nil && (bootstrap || d.Applied == 0) {
-		d.Tasks = append(d.Tasks, d.profileTasks()...)
+	if prof, global, src := m.effectiveProfile(d); (prof != nil || len(global) > 0) && (bootstrap || d.Applied == 0) {
+		d.Tasks = append(d.Tasks, d.profileTasks(prof, global)...)
 		d.Applied = now
-		d.logf("Profil eingeplant (%s)", map[bool]string{true: "Werkseinstellungen", false: "erster Kontakt"}[bootstrap])
+		d.logf("Profil eingeplant (%s, %s)", map[bool]string{true: "Werkseinstellungen", false: "erster Kontakt"}[bootstrap], map[bool]string{true: src, false: "Grundeinstellungen"}[src != ""])
 	}
 	if len(d.Tasks) > 100 {
 		d.Tasks = d.Tasks[len(d.Tasks)-100:]
@@ -680,14 +768,46 @@ func (m *Monitor) acsMaybeSave(force bool) {
 
 // ---------- Betreiber-API ----------
 
+// maskProfile: Profil ohne Passwörter (für den Browser).
+func maskProfile(p AcsProfile) AcsProfile {
+	if p.PPPPass != "" {
+		p.PPPPass = "••••"
+	}
+	vs := make([]AcsVoip, len(p.Voip))
+	for i, v := range p.Voip {
+		if v.Pass != "" {
+			v.Pass = "••••"
+		}
+		vs[i] = v
+	}
+	p.Voip = vs
+	return p
+}
+
+// keepSecrets: leere oder maskierte Passwörter aus dem alten Profil übernehmen.
+func keepSecrets(np *AcsProfile, old *AcsProfile) {
+	if old == nil {
+		return
+	}
+	if np.PPPPass == "" || np.PPPPass == "••••" {
+		np.PPPPass = old.PPPPass
+	}
+	for i := range np.Voip {
+		if np.Voip[i].Pass == "" || np.Voip[i].Pass == "••••" {
+			for _, o := range old.Voip {
+				if o.Number == np.Voip[i].Number {
+					np.Voip[i].Pass = o.Pass
+				}
+			}
+		}
+	}
+}
+
 // acsView: Gerät ohne Passwörter.
 func acsView(d AcsDevice) AcsDevice {
 	v := d
 	if d.Profile != nil {
-		p := *d.Profile
-		if p.PPPPass != "" {
-			p.PPPPass = "••••"
-		}
+		p := maskProfile(*d.Profile)
 		v.Profile = &p
 	}
 	v.Tasks = make([]AcsTask, len(d.Tasks))
@@ -695,7 +815,7 @@ func acsView(d AcsDevice) AcsDevice {
 		if t.Secret || t.Kind == "set" {
 			vals := make([]AcsParam, len(t.Values))
 			for j, x := range t.Values {
-				if t.Secret && strings.Contains(strings.ToLower(x.Name), "password") {
+				if strings.Contains(strings.ToLower(x.Name), "password") {
 					x.Value = "••••"
 				}
 				vals[j] = x
@@ -732,12 +852,18 @@ func (s *Server) handleACS(w http.ResponseWriter, r *http.Request) {
 			out = append(out, acsView(d))
 		}
 		m.mu.RUnlock()
+		profs := make([]AcsCodeProfile, 0, len(m.cfg.AcsProfiles))
+		for _, cp := range m.cfg.AcsProfiles {
+			cp.Profile = maskProfile(cp.Profile)
+			profs = append(profs, cp)
+		}
 		sort.Slice(out, func(i, j int) bool { return out[i].Last > out[j].Last })
-		writeJSON(w, map[string]any{"enabled": acsEnabled(), "auth": os.Getenv("ACS_CPE_USER") != "", "url": publicBase(r) + "/cwmp", "devices": out})
+		writeJSON(w, map[string]any{"enabled": acsEnabled(), "auth": os.Getenv("ACS_CPE_USER") != "", "url": publicBase(r) + "/cwmp", "devices": out, "profiles": profs})
 		return
 	}
 	var req struct {
-		Action  string     `json:"action"` // task, profile, name, delete, cancel
+		Action  string     `json:"action"` // task, profile, name, delete, cancel, codeprofile, codedelete
+		Code    string     `json:"code"`
 		ID      string     `json:"id"`
 		Task    AcsTask    `json:"task"`
 		Profile AcsProfile `json:"profile"`
@@ -750,6 +876,35 @@ func (s *Server) handleACS(w http.ResponseWriter, r *http.Request) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if req.Action == "codeprofile" || req.Action == "codedelete" {
+		code := strings.TrimSpace(req.Code)
+		if code == "" || len(code) > 64 {
+			http.Error(w, "Provisioning-Code fehlt (höchstens 64 Zeichen)", 400)
+			return
+		}
+		idx := -1
+		for i := range m.cfg.AcsProfiles {
+			if strings.EqualFold(m.cfg.AcsProfiles[i].Code, code) {
+				idx = i
+			}
+		}
+		if req.Action == "codedelete" {
+			if idx >= 0 {
+				m.cfg.AcsProfiles = append(m.cfg.AcsProfiles[:idx], m.cfg.AcsProfiles[idx+1:]...)
+			}
+		} else {
+			np := req.Profile
+			if idx >= 0 {
+				keepSecrets(&np, &m.cfg.AcsProfiles[idx].Profile)
+				m.cfg.AcsProfiles[idx] = AcsCodeProfile{Code: code, Name: strings.TrimSpace(req.Name), Profile: np}
+			} else {
+				m.cfg.AcsProfiles = append(m.cfg.AcsProfiles, AcsCodeProfile{Code: code, Name: strings.TrimSpace(req.Name), Profile: np})
+			}
+		}
+		m.saveConfigLocked()
+		writeJSON(w, map[string]bool{"ok": true})
+		return
+	}
 	d := m.acsDevice(req.ID)
 	if d == nil {
 		http.Error(w, "Gerät unbekannt", 404)
@@ -798,17 +953,13 @@ func (s *Server) handleACS(w http.ResponseWriter, r *http.Request) {
 		}
 	case "profile":
 		np := req.Profile
-		if np.PPPPass == "" || np.PPPPass == "••••" {
-			if d.Profile != nil {
-				np.PPPPass = d.Profile.PPPPass // leer = unverändert
-			}
-		}
-		if np.PPPUser == "" && len(np.Extra) == 0 && np.Interval == 0 {
+		keepSecrets(&np, d.Profile) // leer = unverändert
+		if np.PPPUser == "" && len(np.Extra) == 0 && np.Interval == 0 && len(np.Voip) == 0 {
 			d.Profile = nil
 		} else {
 			d.Profile = &np
-			d.Applied = 0 // beim nächsten Kontakt setzen
-			d.Tasks = append(d.Tasks, d.profileTasks()...)
+			_, global, _ := m.effectiveProfile(d)
+			d.Tasks = append(d.Tasks, d.profileTasks(d.Profile, global)...)
 			d.Applied = now
 		}
 		d.logf("Profil geändert von %s", who)
