@@ -28,6 +28,20 @@ type UniFiCfg struct {
 	KeySet      bool   `json:"keySet,omitempty"`      // nur Ausgabe: Key am Standort hinterlegt
 	// WAN-Anschlüsse, die nicht überwacht werden (z. B. vorbereitet, aber ungenutzt): "WAN3"
 	WanIgnore []string `json:"wanIgnore,omitempty"`
+	// Pausierte Geräte (nicht melden, nicht als offline zählen): "n:<MAC>" Netzwerk, "p:<Art>:<ID>" Protect
+	Ignore []string `json:"ignore,omitempty"`
+}
+
+func (u *UniFiCfg) ignores(key string) bool {
+	if u == nil {
+		return false
+	}
+	for _, x := range u.Ignore {
+		if x == key {
+			return true
+		}
+	}
+	return false
 }
 
 // ignoresWAN: WAN-Anschluss in der Ignorier-Liste des Standorts?
@@ -238,7 +252,7 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 		for len(cur.boots) > 0 && cur.boots[0] < cut {
 			cur.boots = cur.boots[1:]
 		}
-		off := unifiOffline(d.State)
+		off := unifiOffline(d.State) && !site.UniFi.ignores("n:"+key)
 		e := st.open[key]
 		switch {
 		case off && e == nil && !first:
@@ -249,7 +263,10 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 			// beim ersten Abruf bereits offline: Ereignis ohne Alarm anlegen
 			st.open[key] = m.newDevEvent(site, "device", devLabel(d), key, nowMs, true)
 		case !off && e != nil:
-			ends = append(ends, m.closeSiteEvent(e, nowMs))
+			ce := m.closeSiteEvent(e, nowMs)
+			if !site.UniFi.ignores("n:" + key) {
+				ends = append(ends, ce)
+			}
 			delete(st.open, key)
 		}
 	}
@@ -440,6 +457,9 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		nc := &UniFiCfg{On: req.On, URL: u, Key: key, Site: strings.TrimSpace(req.USite), WanIgnore: parseWANList(req.WanIgnore)}
+		if sc.UniFi != nil {
+			nc.Ignore = sc.UniFi.Ignore
+		}
 		if cloud {
 			nc.Mode, nc.URL = unifiModeCloud, ""
 			nc.Console, nc.ConsoleName = strings.TrimSpace(req.Console), strings.TrimSpace(req.ConsoleName)
@@ -514,6 +534,8 @@ type unifiView struct {
 	WAN     []wanView  `json:"wan,omitempty"`
 	LANs    []unifiLAN `json:"lans,omitempty"`
 	WANIP   string     `json:"wanIP,omitempty"`
+	Key     string     `json:"key"`           // für „pausieren“
+	Ign     bool       `json:"ign,omitempty"` // pausiert
 }
 
 type wanView struct {
@@ -531,7 +553,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	v.On, v.URL, v.Site = site.UniFi.On, site.UniFi.URL, site.UniFi.Site
 	v.Mode, v.Console, v.ConsoleName, v.KeySet = site.UniFi.Mode, site.UniFi.Console, site.UniFi.ConsoleName, site.UniFi.Key != ""
 	v.WanIgnore = site.UniFi.WanIgnore
-	v.Protect = protectSiteView(site.ID)
+	v.Protect = protectSiteView(site.ID, site.UniFi)
 	unifiLiveState.Lock()
 	defer unifiLiveState.Unlock()
 	st := unifiLiveState.bySite[site.ID]
@@ -545,7 +567,8 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	for key, d := range st.Devices {
 		dv := unifiView{Name: devLabel(d.unifiDevice), Model: d.Model, MAC: d.MAC, IP: d.IP, State: d.State, Since: d.Since,
 			Cat: unifiCategory(d.unifiDevice), FW: d.Firmware, Uptime: d.Uptime, CPU: d.CPU, Mem: d.Mem, Tx: d.Tx, Rx: d.Rx,
-			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots), LANs: d.LANs, WANIP: d.WANIP}
+			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots), LANs: d.LANs, WANIP: d.WANIP,
+			Key: "n:" + key, Ign: site.UniFi.ignores("n:" + key)}
 		if d.Uptime > 0 && d.At > 0 {
 			dv.Uptime = d.Uptime + (now-d.At)/1000
 		}
@@ -614,7 +637,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 			dv.WAN = append(dv.WAN, wv)
 		}
 		v.Total++
-		if unifiOffline(d.State) {
+		if unifiOffline(d.State) && !dv.Ign {
 			v.Offline++
 		}
 		v.Boots += len(dv.Boots)
@@ -623,6 +646,9 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	catOrder := map[string]int{"gateway": 0, "switch": 1, "ap": 2, "other": 3}
 	sort.Slice(v.Devices, func(i, j int) bool {
 		a, b := v.Devices[i], v.Devices[j]
+		if a.Ign != b.Ign {
+			return b.Ign
+		}
 		oi, oj := unifiOffline(a.State), unifiOffline(b.State)
 		if oi != oj {
 			return oi
@@ -678,4 +704,75 @@ func (a *Agent) unifiLoop() {
 		case <-time.After(60 * time.Second):
 		}
 	}
+}
+
+// handleUniFiIgnore: einzelnes UniFi-/Protect-Gerät pausieren bzw. fortsetzen.
+// POST /api/unifi/ignore {site, key, on}
+func (s *Server) handleUniFiIgnore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	var req struct {
+		Site, Key string
+		On        bool
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	site := s.siteFor(r, req.Site)
+	if site == nil {
+		http.Error(w, "Standort unbekannt", 404)
+		return
+	}
+	k := strings.TrimSpace(req.Key)
+	if len(k) < 3 || len(k) > 200 || (!strings.HasPrefix(k, "n:") && !strings.HasPrefix(k, "p:")) {
+		http.Error(w, "Gerät unbekannt", 400)
+		return
+	}
+	m := s.m
+	m.mu.Lock()
+	for i := range m.cfg.Sites {
+		sc := &m.cfg.Sites[i]
+		if sc.ID != site.ID || sc.UniFi == nil {
+			continue
+		}
+		l := sc.UniFi.Ignore[:0:0]
+		for _, x := range sc.UniFi.Ignore {
+			if x != k {
+				l = append(l, x)
+			}
+		}
+		if req.On {
+			l = append(l, k)
+		}
+		sc.UniFi.Ignore = l
+	}
+	m.cfg.Version++
+	m.saveConfigLocked()
+	m.mu.Unlock()
+	// offene Ereignisse des Geräts still schließen
+	now := time.Now().UnixMilli()
+	if req.On {
+		if strings.HasPrefix(k, "n:") {
+			unifiLiveState.Lock()
+			if st := unifiLiveState.bySite[site.ID]; st != nil {
+				if e := st.open[k[2:]]; e != nil {
+					m.closeSiteEvent(e, now)
+					delete(st.open, k[2:])
+				}
+			}
+			unifiLiveState.Unlock()
+		} else {
+			protectState.Lock()
+			if ps := protectState.bySite[site.ID]; ps != nil {
+				if e := ps.open[k[2:]]; e != nil {
+					m.closeSiteEvent(e, now)
+					delete(ps.open, k[2:])
+				}
+			}
+			protectState.Unlock()
+		}
+	}
+	writeJSON(w, map[string]bool{"ok": true})
 }

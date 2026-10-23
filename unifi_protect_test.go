@@ -66,7 +66,7 @@ func TestProtectFetchAndNotify(t *testing.T) {
 	if len(got) != 2 || !strings.Contains(strings.Join(got, "|"), "Kamera Eingang offline") || !strings.Contains(strings.Join(got, "|"), "Akku schwach") {
 		t.Fatalf("Meldungen: %v", got)
 	}
-	v := protectSiteView("s1")
+	v := protectSiteView("s1", nil)
 	if v.Total != 3 || v.Offline != 1 || v.BatLow != 1 || v.Devs[0].Name != "Eingang" {
 		t.Fatalf("Ansicht: %+v", v)
 	}

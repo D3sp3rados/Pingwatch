@@ -32,6 +32,7 @@ type protectDev struct {
 	Leak   bool     `json:"leak,omitempty"`
 	Tamper bool     `json:"tamper,omitempty"`
 	FW     string   `json:"fw,omitempty"`
+	Ign    bool     `json:"ign,omitempty"` // pausiert (nur Anzeige)
 	// Vals: weitere Messwerte (z. B. Luftqualität: co2, voc, pm25 …), Name → Wert
 	Vals map[string]float64 `json:"vals,omitempty"`
 }
@@ -268,15 +269,13 @@ func (m *Monitor) ingestProtect(site SiteCfg, snap *protectSnap) {
 	}
 	ps.restored = false
 	ps.snap = snap
-	if bs, ok := m.store.(blobStore); ok {
-		if b, err := json.Marshal(snap); err == nil {
-			go bs.SaveBlob("protect:"+site.ID, b)
-		}
-	}
 	var notes []notice
 	seen := map[string]bool{}
 	for _, d := range snap.Devs {
 		key := d.Kind + ":" + d.ID
+		if site.UniFi.ignores("p:" + key) {
+			continue // pausiert: keine Ereignisse, keine Meldungen
+		}
 		seen[key] = true
 		label := protectKindName[d.Kind] + " " + d.Name
 		if !d.online() {
@@ -315,6 +314,11 @@ func (m *Monitor) ingestProtect(site SiteCfg, snap *protectSnap) {
 		}
 	}
 	protectState.Unlock()
+	if bs, ok := m.store.(blobStore); ok {
+		if b, err := json.Marshal(snap); err == nil {
+			bs.SaveBlob("protect:"+site.ID, b)
+		}
+	}
 	for _, n := range notes {
 		m.notify(n)
 	}
@@ -330,7 +334,7 @@ type protectView struct {
 	Devs    []protectDev `json:"devs"`
 }
 
-func protectSiteView(siteID string) *protectView {
+func protectSiteView(siteID string, uc *UniFiCfg) *protectView {
 	protectState.Lock()
 	defer protectState.Unlock()
 	ps := protectState.bySite[siteID]
@@ -339,8 +343,14 @@ func protectSiteView(siteID string) *protectView {
 	}
 	v := &protectView{At: ps.snap.At, Version: ps.snap.Version, Err: ps.snap.Err, Devs: append([]protectDev(nil), ps.snap.Devs...)}
 	order := map[string]int{"nvr": 0, "camera": 1, "sensor": 2, "light": 3, "chime": 4, "viewer": 5}
+	for i := range v.Devs {
+		v.Devs[i].Ign = uc.ignores("p:" + v.Devs[i].Kind + ":" + v.Devs[i].ID)
+	}
 	sort.Slice(v.Devs, func(i, j int) bool {
 		a, b := v.Devs[i], v.Devs[j]
+		if a.Ign != b.Ign {
+			return b.Ign
+		}
 		if a.online() != b.online() {
 			return !a.online()
 		}
@@ -351,6 +361,9 @@ func protectSiteView(siteID string) *protectView {
 	})
 	for _, d := range v.Devs {
 		v.Total++
+		if d.Ign {
+			continue
+		}
 		if !d.online() {
 			v.Offline++
 		}
