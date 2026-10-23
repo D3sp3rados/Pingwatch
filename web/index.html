@@ -1735,7 +1735,7 @@ function gdUTile(el,s){ const q=gdUniStats(s), u=s.unifi||{}, parts=[];
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
 const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
 function ovFold(root,secs,view){ const open=ovOpen();
-  for(const sec of secs){ const items=[...sec.hosts.map(h=>({c:cards[h.id],bad:OV_BAD(h)})),...(sec.machines||[]).map(m=>({c:cards['m:'+m.id],bad:MBAD(m)}))]; if(!items.length) continue;
+  for(const sec of secs){ const items=[...(sec.machines||[]).map(m=>({c:cards['m:'+m.id],bad:MBAD(m)})),...sec.hosts.map(h=>({c:cards[h.id],bad:OV_BAD(h)}))]; if(!items.length) continue;
     const g=root.querySelector(`.grid[data-sec="${sec.key}"]`), mb=root.querySelector(`.ov-more[data-sec="${sec.key}"]`); if(!g||!mb) continue;
     const bad=items.filter(x=>x.bad), good=items.filter(x=>!x.bad), order=[...bad,...good];
     const want=order.map(x=>x.c).filter(Boolean);
