@@ -48,6 +48,11 @@ struct MainView: View {
                 try? await Task.sleep(for: .seconds(5))
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pwOrgChanged)) { _ in
+            model.state = nil
+            model.overview = nil
+            Task { await model.refresh() }
+        }
         .onChange(of: model.openHostID) { _, id in
             guard let id else { return }
             tab = 0
@@ -91,14 +96,24 @@ struct DashboardWebView: UIViewRepresentable {
     let creds: Credentials
     let reload: Int
 
-    final class Box {
+    final class Box: NSObject, WKHTTPCookieStoreObserver {
         var lastReload = 0
+        /// Kontowechsel im Dashboard (Cookie „pw_org“) an die App weitergeben.
+        func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+            cookieStore.getAllCookies { cookies in
+                let org = cookies.first { $0.name == "pw_org" }?.value
+                guard let org, !org.isEmpty, org != API.currentOrg else { return }
+                API.currentOrg = org
+                DispatchQueue.main.async { NotificationCenter.default.post(name: .pwOrgChanged, object: nil) }
+            }
+        }
     }
 
     func makeCoordinator() -> Box { Box() }
 
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        web.configuration.websiteDataStore.httpCookieStore.add(context.coordinator)
         web.allowsBackForwardNavigationGestures = true
         let refresh = UIRefreshControl()
         refresh.addAction(UIAction { [weak web, weak refresh] _ in
@@ -122,7 +137,13 @@ struct DashboardWebView: UIViewRepresentable {
         var req = URLRequest(url: creds.server.appendingPathComponent("api/app/websession"))
         req.httpMethod = "POST"
         req.setValue("Bearer \(creds.token)", forHTTPHeaderField: "Authorization")
-        web.load(req)
+        // zuletzt gewähltes Konto auch im Dashboard öffnen
+        if let org = API.currentOrg, let host = creds.server.host,
+           let c = HTTPCookie(properties: [.name: "pw_org", .value: org, .domain: host, .path: "/", .secure: "TRUE"]) {
+            web.configuration.websiteDataStore.httpCookieStore.setCookie(c) { web.load(req) }
+        } else {
+            web.load(req)
+        }
     }
 }
 
@@ -240,6 +261,10 @@ struct NetMapListView: View {
         .onChange(of: hideOld) { _, _ in Task { await store.load(model, force: true) } }
         .refreshable { await store.load(model, force: true) }
         .task { await store.load(model) }
+        .onReceive(NotificationCenter.default.publisher(for: .pwOrgChanged)) { _ in
+            store.mapID = nil
+            Task { await store.load(model, force: true) }
+        }
     }
 }
 
@@ -319,4 +344,9 @@ struct MapNodeView: View {
         .navigationTitle(node.name)
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+extension Notification.Name {
+    /// Im Dashboard wurde ein anderes Konto gewählt.
+    static let pwOrgChanged = Notification.Name("pwOrgChanged")
 }

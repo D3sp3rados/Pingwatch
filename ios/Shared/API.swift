@@ -394,12 +394,19 @@ struct API {
         return Credentials(server: server, token: r.token)
     }
 
+    /// Im Dashboard gewähltes Konto (z. B. „RST-Datentechnik“) – gilt auch für Übersicht, Ereignisse und Netz.
+    static var currentOrg: String? {
+        get { let v = UserDefaults.standard.string(forKey: "pwOrg"); return (v?.isEmpty ?? true) ? nil : v }
+        set { UserDefaults.standard.set(newValue, forKey: "pwOrg") }
+    }
+
     private func request(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> Data {
         var comps = URLComponents(url: creds.server.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
         var req = URLRequest(url: comps.url!)
         req.httpMethod = method
         req.setValue("Bearer \(creds.token)", forHTTPHeaderField: "Authorization")
+        if let org = API.currentOrg { req.setValue(org, forHTTPHeaderField: "X-Org") }
         if let body {
             req.httpBody = body
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")

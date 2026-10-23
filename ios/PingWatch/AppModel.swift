@@ -99,6 +99,7 @@ final class AppModel {
             try? await api.unregisterDevice(token: t)
         }
         Credentials.clear()
+        API.currentOrg = nil
         creds = nil
         state = nil
         overview = nil
