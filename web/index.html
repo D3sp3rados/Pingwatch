@@ -3047,9 +3047,9 @@ function mpHostOf(n){ if(!S.state) return null; if(MP_HAS!==S.state){ MP_HAS=S.s
   if(n.host) return MP_HA.id[n.host]||null; return n.addr&&!n.noAuto?MP_HA.addr[n.addr.toLowerCase()]||null:null; }
 const MP_OLD=/gek(ü|ue)ndigt|abgebaut|abgeschaltet|weggezogen|aus\)/i;
 function mpReach(n){ const r=MP.data&&MP.data.reach; if(!r||!r.at||!r.ips||!/^\d+\.\d+\.\d+\.\d+$/.test(n.addr||'')) return null; const v=r.rtt&&r.rtt[n.addr]; return v===undefined?-1:v; }
-function mpColor(n){ const h=mpHostOf(n); if(h){ if(h.paused) return css('--warn'); const st=STATUS[h.status]; return css(st?st[1]:'--off'); }
+function mpColor(n){ const h=mpHostOf(n); if(h){ if(h.paused){ const rr=mpReach(n); return rr===null?css('--warn'):css(rr>=0?'--ok':'--bad'); } const st=STATUS[h.status]; return css(st?st[1]:'--off'); }
   const r=mpReach(n); return r===null?null:css(r>=0?'--ok':'--bad'); }
-function mpDown(n){ const h=mpHostOf(n); if(h) return !h.paused&&h.status==='down'; return mpReach(n)===-1; }
+function mpDown(n){ const h=mpHostOf(n); if(h&&!h.paused) return h.status==='down'; return mpReach(n)===-1; }
 function mpShown(n){ return (!MP.zone||n.zone===MP.zone)&&!(MP.hideOld&&MP_OLD.test(n.name||'')); }
 function mpBad(n){ const h=mpHostOf(n); return !!(h&&!h.paused&&['down','loss','spike'].includes(h.status)); }
 async function loadMaps(force){ if(MP.loading) return; MP.loading=true;
@@ -3083,8 +3083,10 @@ function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty
   // Geräte
   const r=Math.max(2.5,Math.min(9,6*Math.sqrt(MP.sc))); const label=MP.sc>0.45, full=MP.sc>1.1;
   g.font=`${full?12:11}px system-ui,-apple-system,Segoe UI,sans-serif`; g.textBaseline='top'; g.textAlign='center';
-  for(const n of ns){ if(!mpShown(n)) continue; const [x,y]=mpScr(n); if(!vis(x,y)) continue; const d=dim(n); g.globalAlpha=d?0.2:1; const col=mpColor(n);
-    g.beginPath(); g.arc(x,y,r,0,7);
+  const order=[...ns.filter(n=>!mpDown(n)),...ns.filter(mpDown)]; // ausgefallene obenauf
+  for(const n of order){ if(!mpShown(n)) continue; const [x,y]=mpScr(n); if(!vis(x,y)) continue; const d=dim(n); g.globalAlpha=d?0.2:1; const col=mpColor(n); const dn=!d&&mpDown(n);
+    if(dn){ g.fillStyle=css('--bad'); g.globalAlpha=0.25; g.beginPath(); g.arc(x,y,r*2.6,0,7); g.fill(); g.globalAlpha=1; }
+    g.beginPath(); g.arc(x,y,dn?r*1.5:r,0,7);
     if(col){ g.fillStyle=col; g.fill(); } else { g.fillStyle=css('--panel'); g.fill(); g.strokeStyle=css('--mut'); g.lineWidth=1.2; g.stroke(); }
     if(MP.sel===n.id||MP.linkFrom===n.id){ g.strokeStyle=css('--acc'); g.lineWidth=3; g.beginPath(); g.arc(x,y,r+4,0,7); g.stroke(); }
     if(label&&!d){ g.fillStyle=css('--fg'); const t=(n.name||'').length>38?n.name.slice(0,36)+'…':(n.name||''); g.fillText(t,x,y+r+3);
@@ -3092,8 +3094,11 @@ function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty
   g.globalAlpha=1;
   const sh=ns.filter(mpShown), lk=sh.filter(n=>mpHostOf(n)).length, bad=sh.filter(mpBad).length, rc=MP.data.reach, up=rc&&rc.at?sh.filter(n=>mpReach(n)>=0).length:0, dn=rc&&rc.at?sh.filter(n=>mpReach(n)===-1).length:0;
   const ps=MP.list&&MP.list.find(m=>m.id===MP.id), pss=ps&&ps.pingSite&&S.state.sites.find(x=>x.id===ps.pingSite);
-  const html=`${sh.length} Geräte${MP.zone?' in '+esc(MP.zone):''} · ${lk} überwacht${bad?` · <a href="#" data-mpl="bad" style="color:var(--bad);font-weight:600">${bad} Störung${bad>1?'en':''} ›</a>`:''}${rc&&rc.at?` · <span style="color:var(--ok)">${up} erreichbar</span> · <a href="#" data-mpl="down" style="color:var(--bad)">${dn} nicht erreichbar ›</a> <span class="muted">(Stand ${fmtTime(rc.at,false)}${pss?' über '+esc(pss.name):''})</span>`:''}${rc&&rc.wait?' · <span class="muted">Prüfung läuft …</span>':''}${rc&&rc.err?` · <span style="color:var(--warn)">${esc(rc.err)}</span>`:''}`;
-  const inf=$('#map-info'); if(inf.dataset.h!==html){ inf.innerHTML=html; inf.dataset.h=html; inf.querySelectorAll('[data-mpl]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.sel=null; MP.listMode=a.dataset.mpl; MP.filter=a.dataset.mpl; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f===MP.filter)); drawMap(); mpPane(); }); } }
+  const html0=`${sh.length} Geräte${MP.zone?' in '+esc(MP.zone):''} · ${lk} überwacht${bad?` · <a href="#" data-mpl="bad" style="color:var(--bad);font-weight:600">${bad} Störung${bad>1?'en':''} ›</a>`:''}${rc&&rc.at?` · <span style="color:var(--ok)">${up} erreichbar</span> · <a href="#" data-mpl="down" style="color:var(--bad)">${dn} nicht erreichbar ›</a> <span class="muted">(Stand ${fmtTime(rc.at,false)}${pss?' über '+esc(pss.name):''})</span>`:''}${rc&&rc.wait?' · <span class="muted">Prüfung läuft …</span>':''}${rc&&rc.err?` · <span style="color:var(--warn)">${esc(rc.err)}</span>`:''}`;
+  let zc=''; if(rc&&rc.at&&!MP.zone){ const zd={}; for(const n of ns){ if(n.zone&&mpShown(n)&&mpDown(n)) zd[n.zone]=(zd[n.zone]||0)+1; } const top=Object.entries(zd).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    if(top.length) zc='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+top.map(([z,c])=>`<a href="#" data-mpz="${esc(z)}" class="tag bad" style="text-decoration:none">📍 ${esc(z)} · ${c} nicht erreichbar</a>`).join('')+'</div>'; }
+  const html=html0+zc;
+  const inf=$('#map-info'); if(inf.dataset.h!==html){ inf.innerHTML=html; inf.dataset.h=html; inf.querySelectorAll('[data-mpz]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.zone=a.dataset.mpz; $('#map-zone').value=MP.zone; mpFitShown(); MP.listMode='down'; drawMap(); mpPane(); }); inf.querySelectorAll('[data-mpl]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.sel=null; MP.listMode=a.dataset.mpl; MP.filter=a.dataset.mpl; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f===MP.filter)); drawMap(); mpPane(); }); } }
 function mpHit(px,py){ const ns=MP.data&&MP.data.nodes; if(!ns) return null; let best=null,bd=Math.max(12,8*Math.sqrt(MP.sc))**2;
   for(const n of ns){ const [x,y]=mpScr(n); const d=(x-px)**2+(y-py)**2; if(d<bd){ bd=d; best=n; } } return best; }
 function mpPane(){ const p=$('#map-pane'); const n=MP.sel&&MP.data&&MP.data.nodes[MP.idx[MP.sel]];
