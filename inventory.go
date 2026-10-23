@@ -234,6 +234,7 @@ func (m *Monitor) dropInv(machineID string) {
 	invCache.Unlock()
 	if bs, ok := m.store.(blobStore); ok {
 		bs.DeleteBlob(invKey(machineID))
+		bs.DeleteBlob(sysKey(machineID))
 	}
 }
 

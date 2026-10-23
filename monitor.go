@@ -320,6 +320,7 @@ func (m *Monitor) Start() {
 		}
 	}
 	m.mu.Unlock()
+	m.loadSysState()
 	go m.housekeeping()
 }
 
@@ -581,6 +582,9 @@ func (m *Monitor) housekeeping() {
 			h.mu.Unlock()
 		}
 		m.checkMachines(nowMs)
+		if now.Minute()%5 == 0 && now.Second() < 5 {
+			m.saveSysState()
+		}
 		if now.Second() < 5 {
 			m.checkBackups(now)
 		}
@@ -687,6 +691,7 @@ func (m *Monitor) Shutdown() {
 	for _, h := range hosts {
 		m.closeAll(h)
 	}
+	m.saveSysState()
 	m.store.Close()
 }
 

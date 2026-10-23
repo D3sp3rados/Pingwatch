@@ -124,6 +124,9 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .rm-top{padding:0;overflow:auto;min-height:140px}
 .rm-top .rmt th{position:sticky;top:0;background:var(--panel);z-index:1}
 .rmt td,.rmt th{padding:6px 10px}
+body:has(#v-overview.on .rmm) main,body:has(#v-overview.on .rmm) .top-in{max-width:none}
+.rmt td{max-width:220px}
+@media(max-width:1600px){.rmt td,.rmt th{padding:5px 7px}.rmt td{max-width:160px}.rmt{font-size:13px}}
 .rmt tr.sel td{background:var(--acc-a)!important}
 .rm-sec{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;padding:10px 12px 4px}
 .rm-split{height:10px;cursor:row-resize;display:flex;align-items:center;justify-content:center;touch-action:none}
@@ -3383,6 +3386,7 @@ function renderRequests(){ const L=RQ.list.filter(r=>RQ.f==='alle'||RQ_OPEN.incl
 }
 window.addEventListener('hashchange',route);
 (async()=>{ await refreshState(); await refreshOverview(); route(); })();
+document.addEventListener('mouseover',e=>{const td=e.target.closest&&e.target.closest('.ovt td');if(td&&!td.title&&td.scrollWidth>td.clientWidth)td.title=td.textContent.trim();});
 </script>
 </body>
 </html>
