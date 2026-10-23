@@ -465,6 +465,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <h1 id="m-name"></h1>
     <span class="muted" id="m-sub"></span>
     <select class="ed" id="m-off" title="Meldung, wenn sich der Rechner nicht meldet" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"><option value="">🔔 Aus-Meldung: automatisch</option><option value="on">🔔 Aus-Meldung: immer</option><option value="off">🔕 Aus-Meldung: nie</option></select>
+    <select class="ed" id="m-role" title="Art des Rechners – bestimmt den RMM-Reiter und die automatische Aus-Meldung" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"><option value="">Art: automatisch</option><option value="server">🖥 Server</option><option value="workstation">💻 Arbeitsplatz</option></select>
     <button class="btn sm ed" id="m-upd" style="margin-left:auto;display:none">⬆️ Updates</button>
     <button class="btn sm ed" id="m-script" style="display:none">▶ Script</button>
     <button class="btn sm ed" id="m-reboot" style="display:none">🔄 Neu starten</button>
@@ -1415,7 +1416,7 @@ function renderOvTable(root,st){ const {rows,hasC}=ovRows(st); root.classList.re
 const RM={cat:null,sel:null,tab:'ov',q:'',sort:'sev',dir:-1,d:null,evs:[],acts:[],inv:null,loadAt:0,paneKey:''};
 try{ const x=JSON.parse(localStorage.getItem('pw_rmm')||'{}'); if(x.cat) RM.cat=x.cat; if(x.h) RM.h=x.h; if(x.tab) RM.tab=x.tab; }catch(e){}
 function rmSave(){ try{ localStorage.setItem('pw_rmm',JSON.stringify({cat:RM.cat,h:RM.h,tab:RM.tab})); }catch(e){} }
-const isSrvM=m=>{ const os=(m.cur&&m.cur.os)||''; return /server/i.test(os)||(!!os&&!/windows|mac/i.test(os)); };
+const isSrvM=m=>{ if(m.role==='server') return true; if(m.role==='workstation') return false; const os=(m.cur&&m.cur.os)||''; return /server/i.test(os)||(!!os&&!/windows|mac/i.test(os)); };
 const agoTxt=t=>{ if(!t) return '–'; const s=(Date.now()-t)/1000; return s<90?'gerade eben':s<3600?Math.round(s/60)+' min':s<86400?Math.round(s/3600)+' h':Math.round(s/86400)+' Tage'; };
 function rmMachineRows(st){ const all=S.state, cn=id=>{ const c=custOf(all,id); return c?c.name:''; };
   return (st.machines||[]).map(m=>{ const r=m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
@@ -1510,7 +1511,7 @@ function rmPane(force){ const pane=$('#rm-pane'); if(!pane) return; const sel=RM
     body=inv?`<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><input type="search" id="rm-swq" class="rm-in" placeholder="Software suchen …" value="${esc(RM.swq||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf><span class="muted" style="font-size:12.5px">${sw.length} Programme${q?' · '+l.length+' gefunden':''} · Stand ${fmtDT(inv.at,false)}</span></div><table class="tbl"><tr><th>Name</th><th>Version</th><th class="hide-m">Hersteller</th><th class="hide-m">Installiert</th></tr>${l.map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${esc(x.v||'')}</td><td class="hide-m">${esc(x.p||'')}</td><td class="hide-m num">${esc(x.d||'')}</td></tr>`).join('')}</table>`:'<div class="empty">'+(RM.inv?'Noch keine Inventur vom Agenten.':'Lädt …')+'</div>'; }
   if(t==='scr'){ const a=RM.acts.filter(x=>x.kind==='script'); body=(actOK&&!ro?'<div style="margin-bottom:8px"><button class="btn sm pri" data-a="script">▶ Script ausführen</button> <a class="btn sm" href="#/settings/updates">Script-Bibliothek &amp; Pläne</a></div>':'')+'<table class="tbl" data-acts="scr">'+actRows(a,false)+'</table>'; }
   if(t==='hist') body='<div class="evlist" id="rm-evs"></div>';
-  if(t==='notes') body=`<label class="field">Beschreibung (erscheint in der Liste)<input id="rm-desc" maxlength="200" value="${esc(m.desc||'')}" placeholder="z. B. Empfang, Buchhaltung, DC01"${ro?' disabled':''}></label>
+  if(t==='notes') body=`<label class="field" style="max-width:260px;margin-bottom:8px">Art<select id="rm-role"${ro?' disabled':''}><option value="">automatisch (${isSrvM({cur:m.cur})?'Server':'Arbeitsplatz'})</option><option value="server"${m.role==='server'?' selected':''}>Server</option><option value="workstation"${m.role==='workstation'?' selected':''}>Arbeitsplatz</option></select></label><label class="field">Beschreibung (erscheint in der Liste)<input id="rm-desc" maxlength="200" value="${esc(m.desc||'')}" placeholder="z. B. Empfang, Buchhaltung, DC01"${ro?' disabled':''}></label>
     <label class="field" style="margin-top:8px">Notizen<textarea id="rm-notes" class="rm-in" style="width:100%;resize:vertical;line-height:1.5" rows="8" maxlength="8000" placeholder="Zugänge, Besonderheiten, Ansprechpartner … (keine Passwörter)"${ro?' disabled':''}>${esc(m.notes||'')}</textarea></label>${ro?'':'<div style="margin-top:8px"><button class="btn sm pri" id="rm-nsave">Speichern</button></div>'}`;
   if(t==='inv'){ const h=(inv&&inv.hw)||{}, o=(inv&&inv.os)||{};
     body=inv?`<div class="rm-cols"><div>${kv([['Hersteller',esc(h.vendor||'')],['Modell',esc(h.model||'')],['Seriennummer',esc(h.serial||'')],['BIOS',esc(h.bios||'')],['Prozessor',esc(h.cpu||'')],['Kerne / Threads',h.cores?h.cores+' / '+(h.threads||h.cores):''],['Arbeitsspeicher',h.ram?fmtBytes(h.ram):''],...(h.disks||[]).map(x=>['Datenträger',esc((x.m||'')+' · '+fmtBytes(x.s))])])}</div>
@@ -1528,6 +1529,7 @@ function rmPane(force){ const pane=$('#rm-pane'); if(!pane) return; const sel=RM
   pane.querySelectorAll('table[data-acts]').forEach(tb=>{ const k=tb.dataset.acts, l=k==='upd'?RM.acts.filter(x=>x.kind!=='script'):k==='scr'?RM.acts.filter(x=>x.kind==='script'):RM.acts; bindActRows(tb,l); });
   if(t==='hist') renderEvents($('#rm-evs'),RM.evs,false,100);
   const swq=$('#rm-swq'); if(swq){ swq.oninput=()=>{ RM.swq=swq.value; rmPane(true); const n=$('#rm-swq'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); }; }
+  const rr=$('#rm-role'); if(rr) rr.onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:m.id,role:rr.value})}); toast('Gespeichert'); rr.blur(); await refreshState(); rmPane(true); }catch(e){ uiAlert(e.message); } };
   const ns=$('#rm-nsave'); if(ns) ns.onclick=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:m.id,desc:$('#rm-desc').value,notes:$('#rm-notes').value})}); toast('Notizen gespeichert'); document.activeElement.blur(); await refreshState(); rmPane(true); }catch(e){ uiAlert(e.message); } }; }
 function rmPaneHost(pane,force){ const h=S.state.hosts.find(x=>x.id===RM.sel.id); if(!h){ pane.innerHTML=''; return; }
   const [lbl,col]=STATUS[h.status]||STATUS.unknown, a24=agg(h.h24);
@@ -3017,7 +3019,8 @@ function renderMachine(){ const d=MD.data||machineOf(MD.id); if(!d){ $('#m-name'
   const m=machineOf(MD.id)||d, r=(MD.data&&MD.data.cur)||m.cur||{}, [lbl,col]=MSTATUS[m.status]||MSTATUS.unknown;
   $('#m-dot').style.background=`var(${col})`; $('#m-name').textContent='💻 '+m.name;
   $('#m-svcsrc').textContent=m.services?'eigene Liste für diesen Rechner':'wie Standort';
-  { const sel=$('#m-off'), srv=/server/i.test(r.os||'')||(r.os&&!/windows|mac/i.test(r.os)); sel.options[0].textContent='🔔 Aus-Meldung: automatisch ('+(srv?'Server → ja':'Arbeitsplatz → nein')+')'; if(document.activeElement!==sel) sel.value=m.offAlert||''; }
+  { const rs=$('#m-role'), osSrv=/server/i.test(r.os||'')||(!!r.os&&!/windows|mac/i.test(r.os)); rs.options[0].textContent='Art: automatisch ('+(osSrv?'Server':'Arbeitsplatz')+')'; if(document.activeElement!==rs) rs.value=m.role||''; }
+  { const sel=$('#m-off'), srv=isSrvM(m); sel.options[0].textContent='🔔 Aus-Meldung: automatisch ('+(srv?'Server → ja':'Arbeitsplatz → nein')+')'; if(document.activeElement!==sel) sel.value=m.offAlert||''; }
   { const so=S.state.sites.find(x=>x.id===m.site), ok=siteActOK(so); $('#m-upd').style.display=ok?'':'none'; $('#m-reboot').style.display=ok?'':'none'; $('#m-script').style.display=ok?'':'none'; $('#m-mute').style.marginLeft=ok?'0':'auto';
     const acts=MD.acts||[]; $('#m-actw').style.display=ok||acts.length?'':'none'; const t=$('#m-acts'); t.innerHTML=actRows(acts,false); bindActRows(t,acts); }
   $('#m-sub').textContent=[r.os,m.host&&m.host!==m.name?m.host:'',siteName(m.site),m.sysOnly?'Agent „nur Rechner“':'Standort-Agent',m.at?'Stand '+fmtTime(m.at,false):''].filter(Boolean).join(' · ');
@@ -3299,6 +3302,7 @@ sc2f.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='o
   try{ await api('/api/scripts',{method:'POST',body:JSON.stringify({id:SCR?SCR.id:'',name:sc2f.name.value,lang:sc2f.lang.value,timeout:+sc2f.timeout.value||300,desc:sc2f.desc.value,body:sc2f.body.value,check:sc2f.check.checked,code:sc2f.code.value})}); sc2dlg.close(); toast('Script gespeichert'); loadUpdates(); }catch(err){ $('#sc2-err').textContent=err.message; } });
 $('#sc2-del').onclick=async()=>{ if(!SCR) return; const c=await askCode('Script „'+SCR.name+'“ löschen? Zur Bestätigung den Zwei-Faktor-Code eingeben:'); if(!c) return; try{ await api('/api/scripts?id='+SCR.id+'&code='+encodeURIComponent(c),{method:'DELETE'}); sc2dlg.close(); loadUpdates(); }catch(e){ uiAlert(e.message); } };
 function actionOptsTxt(cat,rb){ return (cat==='all'?'alle Updates':'Sicherheitsupdates')+' · '+(rb==='ifneeded'?'Neustart wenn nötig':'kein Neustart'); }
+$('#m-role').onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:MD.id,role:$('#m-role').value})}); toast('Gespeichert'); await refreshState(); renderMachine(); }catch(e){ uiAlert(e.message); } };
 $('#m-off').onchange=async()=>{ try{ await api('/api/machine',{method:'POST',body:JSON.stringify({id:MD.id,offAlert:$('#m-off').value})}); toast('Gespeichert'); await refreshState(); renderMachine(); }catch(e){ uiAlert(e.message); } };
 $('#m-svcedit').onclick=()=>{ const m=machineOf(MD.id); if(!m) return; const so=S.state.sites.find(x=>x.id===m.site)||{}, ss=(so.sys&&so.sys.services)||[], f=$('#ms-form');
   $('#ms-title').textContent='Dienste · '+m.name; $('#ms-site').textContent=ss.length?'('+ss.join(', ')+')':'(Standort überwacht keine Dienste)'; $('#ms-err').textContent='';

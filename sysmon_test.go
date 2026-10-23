@@ -646,3 +646,20 @@ func TestParseWho(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestMachineRole(t *testing.T) {
+	ws := &sysReport{OS: "Windows 11 Pro"}
+	lin := &sysReport{OS: "Debian GNU/Linux 12"}
+	if (MachineCfg{}).isServer(ws) || !(MachineCfg{}).isServer(lin) {
+		t.Fatal("Automatik")
+	}
+	if !(MachineCfg{Role: "server"}).isServer(ws) || (MachineCfg{Role: "workstation"}).isServer(lin) {
+		t.Fatal("feste Rolle")
+	}
+	if !(MachineCfg{Role: "server"}).wantsOffAlert(ws) || (MachineCfg{Role: "workstation"}).wantsOffAlert(lin) {
+		t.Fatal("Aus-Meldung folgt der Rolle")
+	}
+	if (MachineCfg{Role: "server", OffAlert: "off"}).wantsOffAlert(ws) {
+		t.Fatal("ausdrücklich aus hat Vorrang")
+	}
+}

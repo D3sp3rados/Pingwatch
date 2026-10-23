@@ -140,6 +140,19 @@ type MachineCfg struct {
 	// OffNoted: „meldet sich nicht“ wurde gemeldet (Zeitpunkt der letzten Meldung des Rechners) –
 	// gespeichert, damit ein Server-Neustart nicht erneut meldet
 	OffNoted int64 `json:"offNoted,omitempty"`
+	// Role: "" = automatisch nach Betriebssystem, "server" oder "workstation" (Arbeitsplatz)
+	Role string `json:"role,omitempty"`
+}
+
+// isServer: Server (Aus-Meldung, RMM-Reiter „Server“) – fest eingestellt oder nach Betriebssystem.
+func (mc MachineCfg) isServer(cur *sysReport) bool {
+	switch mc.Role {
+	case "server":
+		return true
+	case "workstation":
+		return false
+	}
+	return cur == nil || isServerOS(cur.OS)
 }
 
 // ---------- Messwerte (Agent → Server) ----------
@@ -922,6 +935,7 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 		SvcMode  string   `json:"svcMode"`
 		OffAlert *string  `json:"offAlert"` // "", "on", "off"
 		Desc     *string  `json:"desc"`
+		Role     *string  `json:"role"`
 		Notes    *string  `json:"notes"`
 		Services []string `json:"services"`
 	}
@@ -964,6 +978,9 @@ func (s *Server) handleMachine(w http.ResponseWriter, r *http.Request) {
 				if n := strings.TrimSpace(*body.Name); n != "" && len(n) <= 80 {
 					x.Name = n
 				}
+			}
+			if body.Role != nil && (*body.Role == "" || *body.Role == "server" || *body.Role == "workstation") {
+				x.Role = *body.Role
 			}
 			if body.Desc != nil {
 				x.Desc = clipStr(strings.TrimSpace(strings.ReplaceAll(*body.Desc, "\n", " ")), 200)
@@ -1080,7 +1097,7 @@ func (mc MachineCfg) wantsOffAlert(cur *sysReport) bool {
 	case "off":
 		return false
 	}
-	return cur == nil || isServerOS(cur.OS)
+	return mc.isServer(cur)
 }
 
 // clipStr kürzt auf höchstens n Bytes, ohne ein UTF-8-Zeichen zu zerschneiden.
