@@ -519,19 +519,24 @@ struct UniFiSiteView: View {
     let siteID: String
     @State private var cat = "all"
 
+    /// Kategorien mit Anzahl (in eigener Funktion, damit der Compiler schnell bleibt).
+    static func categories(_ devs: [UniFiDevice], _ prot: [ProtectDev]) -> [(String, String, Int)] {
+        var all: [(String, String, Int)] = []
+        all.append(("all", "Alle", devs.count + prot.count))
+        all.append(("gateway", "Gateway", devs.filter { $0.cat == "gateway" }.count))
+        all.append(("switch", "Switches", devs.filter { $0.cat == "switch" }.count))
+        all.append(("ap", "APs", devs.filter { $0.cat == "ap" }.count))
+        all.append(("other", "Sonstige", devs.filter { $0.cat == "other" }.count))
+        all.append(("protect", "Protect", prot.filter { !$0.isSensor }.count))
+        all.append(("sensor", "Sensoren", prot.filter { $0.isSensor }.count))
+        return all.filter { $0.0 == "all" || $0.2 > 0 }
+    }
+
     var body: some View {
         let site = model.state?.sites.first { $0.id == siteID }
         let devs = site?.unifi?.devices ?? []
         let prot = site?.unifi?.protect?.devs ?? []
-        let cats: [(String, String, Int)] = [
-            ("all", "Alle", devs.count + prot.count),
-            ("gateway", "Gateway", devs.filter { $0.cat == "gateway" }.count),
-            ("switch", "Switches", devs.filter { $0.cat == "switch" }.count),
-            ("ap", "APs", devs.filter { $0.cat == "ap" }.count),
-            ("other", "Sonstige", devs.filter { $0.cat == "other" }.count),
-            ("protect", "Protect", prot.filter { !$0.isSensor }.count),
-            ("sensor", "Sensoren", prot.filter { $0.isSensor }.count),
-        ].filter { $0.0 == "all" || $0.2 > 0 }
+        let cats = Self.categories(devs, prot)
         let shownDevs = devs.filter { cat == "all" || $0.cat == cat }
         let shownProt = prot.filter { cat == "all" || (cat == "sensor" && $0.isSensor) || (cat == "protect" && !$0.isSensor) }
         List {
