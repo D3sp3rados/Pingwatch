@@ -394,14 +394,23 @@ func (m *Monitor) cleanAccessLocked(org string, in []AccessRule) []AccessRule {
 // POST /api/admin/move {from, to, group?, hosts?[]}
 func (s *Server) handleAdminMove(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		From, To, Group string
-		Hosts           []string
+		From, To, Group, Site string
+		Hosts                 []string
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
 	if s.m.orgByID(req.From) == nil || s.m.orgByID(req.To) == nil || req.From == req.To {
 		http.Error(w, "Konto unbekannt", 400)
+		return
+	}
+	if req.Site != "" {
+		h, mc, err := s.m.moveSite(req.From, req.To, req.Site)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "hosts": h, "machines": mc})
 		return
 	}
 	n, err := s.m.moveHosts(req.From, req.To, req.Group, req.Hosts)
@@ -622,4 +631,92 @@ func (m *Monitor) noticeVisible(u *User, n notice) bool {
 	}
 	p := &Principal{Org: n.org, Role: role, Scope: m.buildScope(n.org, access)}
 	return p.canEvent(&Event{HostID: n.hostID, Site: n.site}, false)
+}
+
+// moveSite verschiebt einen Standort (Agent) samt seiner Hosts, Rechner und Ereignisse in ein anderes Konto.
+// Gruppen werden im Zielkonto über den Namen zugeordnet bzw. angelegt; die Kundenzuordnung entfällt.
+func (m *Monitor) moveSite(from, to, siteID string) (int, int, error) {
+	m.mu.Lock()
+	idx := -1
+	for i, sc := range m.cfg.Sites {
+		if sc.ID == siteID && sc.Org == from {
+			idx = i
+		}
+	}
+	if idx < 0 || siteID == "cloud" {
+		m.mu.Unlock()
+		return 0, 0, errString("Standort unbekannt")
+	}
+	m.cfg.Sites[idx].Org = to
+	m.cfg.Sites[idx].Customer = ""
+	groupMap := map[string]string{}
+	mapGroup := func(old string) string {
+		if old == "" {
+			return ""
+		}
+		if g, ok := groupMap[old]; ok {
+			return g
+		}
+		name := ""
+		for _, g := range m.cfg.Groups {
+			if g.ID == old {
+				name = g.Name
+			}
+		}
+		res := ""
+		if name != "" {
+			for _, g := range m.cfg.Groups {
+				if g.Org == to && strings.EqualFold(g.Name, name) {
+					res = g.ID
+				}
+			}
+			if res == "" {
+				g := Group{ID: randHex(5), Org: to, Name: name, Created: time.Now().UnixMilli()}
+				m.cfg.Groups = append(m.cfg.Groups, g)
+				res = g.ID
+			}
+		}
+		groupMap[old] = res
+		return res
+	}
+	var hosts []HostCfg
+	ids := map[string]bool{}
+	for _, hc := range m.cfg.Hosts {
+		if hc.Site == siteID && hc.Org == from {
+			hc.Org, hc.Group, hc.Parent = to, mapGroup(hc.Group), ""
+			hosts = append(hosts, hc)
+			ids[hc.ID] = true
+		}
+	}
+	nm := 0
+	for i := range m.cfg.Machines {
+		mc := &m.cfg.Machines[i]
+		if mc.Site == siteID && mc.Org == from {
+			mc.Org, mc.Group = to, mapGroup(mc.Group)
+			ids["m:"+mc.ID] = true
+			nm++
+		}
+	}
+	m.cfg.Version++
+	m.saveConfigLocked()
+	m.mu.Unlock()
+	for _, hc := range hosts {
+		m.UpsertHost(hc)
+	}
+	m.evMu.Lock()
+	var changed []Event
+	for _, e := range m.events {
+		if e.Org == from && (e.Site == siteID || ids[e.HostID]) {
+			e.Org = to
+			changed = append(changed, *e)
+		}
+	}
+	evs := make([]*Event, len(m.events))
+	copy(evs, m.events)
+	m.evMu.Unlock()
+	for _, e := range changed {
+		m.store.AppendEvent(e)
+	}
+	m.store.RewriteEvents(evs)
+	return len(hosts), nm, nil
 }
