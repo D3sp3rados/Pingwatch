@@ -1451,7 +1451,8 @@ function renderOvRMM(root,st){
     top.querySelectorAll('th[data-sort]').forEach(t=>t.onclick=()=>{ const k=t.dataset.sort; if(RM.sort===k) RM.dir=-RM.dir; else { RM.sort=k; RM.dir=['sev','upd','at','up','val'].includes(k)?-1:1; } renderOvRMM(root,st); });
     top.querySelectorAll('tr[data-k]').forEach(tr=>{ tr.onclick=()=>rmSelect(tr.dataset.k,tr.dataset.id,tr.dataset.st);
       tr.ondblclick=()=>{ const k=tr.dataset.k, id=tr.dataset.id; if(k==='h') location.hash='#/host/'+id; else if(k==='m') location.hash='#/machine/'+id; }; }); }
-  if(RM.sel&&RM.sel.k==='m'&&!machineOf(RM.sel.id)) RM.sel=null;
+  // Auswahl gehört nicht mehr zur gefilterten Liste (anderer Kunde/Standort im Baum) → Detailbereich leeren
+  if(RM.sel){ const vis=RM.sel.k==='m'?ms.some(r=>r.id===RM.sel.id):net.some(r=>r.k===RM.sel.k&&r.id===RM.sel.id); if(!vis){ RM.sel=null; RM.paneKey=''; } }
   rmPane(false); }
 function rmSelect(k,id,site){ if(k==='p'){ RM.sel={k,id,site}; RM.paneKey=''; $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); }); rmPane(true); return; }
   if(k==='u'||k==='us'){ const s=S.state.sites.find(x=>x.id===site); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); return; }
