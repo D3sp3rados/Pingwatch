@@ -442,6 +442,14 @@ struct API {
         _ = try await request("api/events/ack", method: "POST", body: try JSONEncoder().encode(Body(id: id, note: note)))
     }
 
+    /// Netzkarte als Liste: Orte → Sektoren → Kunden.
+    func mapTree(id: String? = nil, hideOld: Bool = false) async throws -> MapTree {
+        var q: [String: String] = [:]
+        if let id { q["id"] = id }
+        if hideOld { q["old"] = "0" }
+        return try await get("api/maps/tree", q)
+    }
+
     func stats(host: String, days: Int) async throws -> StatsResponse {
         try await get("api/stats", ["host": host, "days": "\(days)"])
     }
@@ -517,4 +525,43 @@ func fmtDay(_ d: Date) -> String {
 
 func fmtDayTime(_ d: Date, seconds: Bool = false) -> String {
     fmtDay(d) + " " + fmtTime(d, seconds: seconds)
+}
+
+
+// MARK: - Netzkarte (Liste)
+
+struct MapTreeNode: Decodable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    var addr: String?
+    let st: String          // up, down, warn, paused, unknown
+    var rtt: Int?
+    var host: String?
+    var total: Int?
+    var down: Int?
+    var kids: [MapTreeNode]?
+
+    var isDown: Bool { st == "down" }
+    var rttText: String? { rtt.map { String(format: "%.1f ms", Double($0) / 10) } }
+}
+
+struct MapTreeZone: Decodable, Hashable, Identifiable {
+    var id: String { name }
+    let name: String
+    let total: Int
+    let down: Int
+    let sectors: [MapTreeNode]
+}
+
+struct MapTreeRef: Decodable, Hashable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct MapTree: Decodable {
+    var map: MapTreeRef?
+    var maps: [MapTreeRef]?
+    var at: Int64?
+    var checked: Bool?
+    let zones: [MapTreeZone]
 }

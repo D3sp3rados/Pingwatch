@@ -9,8 +9,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "1.3"
-    CURRENT_PROJECT_VERSION: "202610232"
+    MARKETING_VERSION: "1.4"
+    CURRENT_PROJECT_VERSION: "202610233"
     DEVELOPMENT_TEAM: ""          # Team-ID hier eintragen oder in Xcode wählen
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.9"
