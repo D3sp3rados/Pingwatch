@@ -303,6 +303,10 @@ body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.s
 #map-q{flex:1;min-width:200px;max-width:380px;font:inherit;font-size:13.5px;padding:6px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);color:var(--fg)}
 .map-wrap{position:relative;height:calc(100vh - 210px);min-height:420px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
 #map-cv{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#mp-ctx{position:absolute;z-index:20;min-width:210px;max-width:320px;max-height:70%;overflow:auto;padding:4px;box-shadow:0 8px 28px rgba(0,0,0,.25);font-size:13px}
+#mp-ctx .h{padding:6px 10px 4px;color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mp-ctx button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;padding:6px 10px;border-radius:6px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mp-ctx button:hover{background:var(--acc-a)}#mp-ctx button.danger{color:var(--bad)}#mp-ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 #map-pane{position:absolute;top:10px;right:10px;width:300px;max-width:calc(100% - 20px);max-height:calc(100% - 20px);overflow:auto;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
 @media(max-width:700px){#map-pane{top:auto;bottom:10px;left:10px;right:10px;width:auto;max-height:45%}}
 body.scoped [data-v=map]{display:none!important}
@@ -535,17 +539,17 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="map-bar">
     <select id="map-sel" class="orgsw"></select>
     <input id="map-q" placeholder="Suchen – Name oder IP · mehrere mit | (z. B. glas|stiegeler)" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false">
-    <select id="map-qf" class="orgsw" title="Schnellfilter – zeigt alle Treffer als Liste"><option value="">Schnellfilter …</option><option value="stiegeler">Stiegeler</option><option value="stadtwerke">Stadtwerke</option><option value="glas">Glas</option><option value="gekündigt|gekuendigt">Gekündigt</option><option value="ssid+1">SSID+1</option><option value="weggezogen|umgezogen">Weggezogen / umgezogen</option><option value="abgebaut|abgeschaltet">Abgebaut / abgeschaltet</option><option value="sektor">Sektoren</option><option value=":aus">⏸ Ping aus</option><option value=":rot">● Nicht erreichbar</option></select>
+    <select id="map-qf" class="orgsw" title="Schnellfilter – zeigt alle Treffer als Liste"><option value="">Schnellfilter …</option><option value="stiegeler">Stiegeler</option><option value="stadtwerke">Stadtwerke</option><option value="glas">Glas</option><option value="gekündigt|gekuendigt">Gekündigt</option><option value="ssid+1">SSID+1</option><option value="weggezogen|umgezogen">Weggezogen / umgezogen</option><option value="abgebaut|abgeschaltet">Abgebaut / abgeschaltet</option><option value="sektor">Sektoren</option><option value=":pruefen">⚠ Gekündigt o. ä., aber erreichbar</option><option value=":aus">⏸ Ping aus</option><option value=":rot">● Nicht erreichbar</option></select>
     <select id="map-zone" class="orgsw" title="Ort / Zone"></select>
     <span class="seg" id="map-filter"><button data-f="all" class="on">Alle</button><button data-f="bad">Störungen</button><button data-f="down">Nicht erreichbar</button><button data-f="linked">Überwacht</button></span>
     <button class="btn sm" id="map-old" title="Geräte mit „gekündigt“, „abgebaut“, „abgeschaltet“, „weggezogen“ oder „aus)“ im Namen ausblenden">Gekündigte ausblenden</button>
     <button class="btn sm" id="map-fit" title="Ganze Karte anzeigen">⤢ Alles</button>
     <button class="btn sm ed" id="map-edit">✏️ Bearbeiten</button>
     <button class="btn sm ed" id="map-msel" title="Mehrere Geräte auswählen: Strg (oder Shift/⌘) gedrückt halten und mit der Maus einen Rahmen ziehen · Strg + Klick wählt einzelne dazu/weg · Ohne Taste: diesen Knopf einschalten">⬚ Auswählen</button>
-    <button class="btn sm" id="map-stat" title="Verfügbarkeit und Ausfälle der angezeigten Geräte">📈 Statistik</button><span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-snmp" title="Traffic der Geräte per SNMP erfassen">📶 Traffic</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
+    <button class="btn sm" id="map-stat" title="Verfügbarkeit und Ausfälle der angezeigten Geräte">📈 Statistik</button><span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-snmp" title="Traffic der Geräte per SNMP erfassen">📶 Traffic</button><button class="btn sm" id="map-zlist" title="Orte als Liste bearbeiten: umbenennen, zusammenlegen, Geräte markieren">📍 Orte</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
   </div>
   <div class="muted" id="map-info" style="font-size:12.5px;margin:2px 0 8px"></div>
-  <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-pane" class="panel"></div></div>
+  <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-pane" class="panel"></div><div id="mp-ctx" class="panel" style="display:none"></div></div>
   <div class="panel empty" id="map-empty" style="display:none">Noch keine Netzkarte. <button class="btn sm pri ed" id="map-new2">+ Karte anlegen</button></div>
 </section>
 <section id="v-events">
@@ -924,6 +928,18 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div class="dlg-f"><button class="btn" value="cancel">Schließen</button></div>
   </form>
 </dialog>
+
+<dialog id="dlg-zones" style="width:min(620px,96vw)">
+  <form method="dialog">
+    <div class="dlg-h">Orte</div>
+    <div class="dlg-b" style="display:block">
+      <p class="muted" style="font-size:13px;margin:0 0 8px">Neuen Ort oder Ortsteil anlegen (z. B. „Rickenbach“, „Egg“): Geräte auf der Karte mit Strg + Ziehen markieren (oder hier bei einem Ort „Auswählen“ und mit Strg + Klick anpassen), dann rechts „Ort setzen“ und den neuen Namen eingeben. Umbenennen auf einen vorhandenen Namen legt Orte zusammen.</p>
+      <div id="zn-list" style="max-height:60vh;overflow:auto"></div>
+    </div>
+    <div class="dlg-f"><button class="btn" value="cancel">Schließen</button></div>
+  </form>
+</dialog>
+<datalist id="zn-dl"></datalist>
 
 <dialog id="dlg-msnmp">
   <form method="dialog" id="sn2-form">
@@ -1366,6 +1382,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
 function uiDialog({title='',text='',input=null,ok='OK',cancel=null,danger=false}){ return new Promise(res=>{
   const d=$('#dlg-ui'); $('#ui-t').textContent=title||'PingWacht'; $('#ui-x').textContent=text||''; const inp=$('#ui-in');
   inp.style.display=input===null?'none':''; inp.value=input===null?'':String(input);
+  if(/^Ort/.test(text||'')&&MP&&MP.data){ const z=[...new Set(MP.data.nodes.map(n=>n.zone).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'de')); $('#zn-dl').innerHTML=z.map(k=>`<option value="${esc(k)}">`).join(''); inp.setAttribute('list','zn-dl'); } else inp.removeAttribute('list');
   const okb=$('#ui-ok'), cb=$('#ui-cancel'); okb.textContent=ok; okb.className='btn '+(danger?'danger':'pri');
   cb.style.display=cancel?'':'none'; cb.textContent=cancel||'';
   const done=v=>{ d.onclose=null; d.close(); res(v); };
@@ -2488,6 +2505,7 @@ function drawMsDays(ds){ const c=$('#ms-days-c'); if(!c) return; const {g,W,H,mu
   for(let k=0;k<=4;k++){ const a=lo+(100-lo)*k/4, yy=y(a); g.beginPath(); g.moveTo(L,yy); g.lineTo(W-R,yy); g.stroke(); g.fillText(a.toFixed(lo>90?1:0)+' %',4,yy+4); }
   ds.forEach((d,i)=>{ if(d.avail<0) return; g.fillStyle=d.avail>=99.5?'#16a34a':d.avail>=95?'#d97706':'#dc2626'; g.fillRect(L+i*bw+bw*.15,y(d.avail),bw*.7,H-B-y(d.avail)); });
   g.fillStyle=mut; const f=d=>d.day.slice(8,10)+'.'+d.day.slice(5,7)+'.'; g.fillText(f(ds[0]),L,H-4); const te=f(ds[ds.length-1]); g.fillText(te,W-R-g.measureText(te).width,H-4); }
+$('#map-zlist').onclick=openZones;
 $('#map-stat').onclick=()=>openMapStat({zone:MP.zone||''});
 $('#map-snmp').onclick=()=>{ const m=MP.list&&MP.list.find(x=>x.id===MP.id); if(!m) return; const f=$('#sn2-form'); f.comm.value=m.snmpComm||''; f.scope.value=m.snmpScope||''; $('#sn2-err').textContent='';
   const sn=MP.data&&MP.data.snmp; $('#sn2-state').textContent=!m.pingSite?'Erst oben die Erreichbarkeitsprüfung über einen Agenten einschalten.':sn&&sn.at?`Letzte Abfrage ${fmtTime(sn.at,false)} · ${sn.ok} Geräte haben geantwortet.`:(m.snmpComm?'Noch keine Antwort – erste Werte nach ca. 10 Minuten (Agent ab Version 1.6.5).':'');
@@ -3178,7 +3196,7 @@ function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty
     g.beginPath(); g.arc(x,y,dn?r*1.5:r,0,7);
     if(col){ g.fillStyle=col; g.fill(); } else { g.fillStyle=css('--panel'); g.fill(); g.strokeStyle=css('--mut'); g.lineWidth=1.2; g.stroke(); }
     if(MP.multi.has(n.id)){ g.strokeStyle='#6366f1'; g.lineWidth=2.5; g.beginPath(); g.arc(x,y,r+3.5,0,7); g.stroke(); }
-    if(MP.sel===n.id||MP.linkFrom===n.id){ g.strokeStyle=css('--acc'); g.lineWidth=3; g.beginPath(); g.arc(x,y,r+4,0,7); g.stroke(); }
+    if(MP.sel===n.id||(MP.linkFrom&&[].concat(MP.linkFrom).includes(n.id))){ g.strokeStyle=css('--acc'); g.lineWidth=3; g.beginPath(); g.arc(x,y,r+4,0,7); g.stroke(); }
     if(label&&!d){ g.fillStyle=css('--fg'); const t=(n.name||'').length>38?n.name.slice(0,36)+'…':(n.name||''); g.fillText(t,x,y+r+3);
       if(full&&n.addr&&!(n.name||'').includes(n.addr)){ g.fillStyle=css('--mut'); g.fillText(n.addr,x,y+r+17); } } }
   g.globalAlpha=1;
@@ -3186,13 +3204,18 @@ function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty
   const sh=ns.filter(mpShown), lk=sh.filter(n=>mpHostOf(n)).length, bad=sh.filter(mpBad).length, rc=MP.data.reach, up=rc&&rc.at?sh.filter(n=>mpReach(n)>=0).length:0, dn=rc&&rc.at?sh.filter(n=>mpReach(n)===-1).length:0;
   const ps=MP.list&&MP.list.find(m=>m.id===MP.id), pss=ps&&ps.pingSite&&S.state.sites.find(x=>x.id===ps.pingSite);
   const html0=`${sh.length} Geräte${MP.zone?' in '+esc(MP.zone):''} · ${lk} überwacht${bad?` · <a href="#" data-mpl="bad" style="color:var(--bad);font-weight:600">${bad} Störung${bad>1?'en':''} ›</a>`:''}${rc&&rc.at?` · <span style="color:var(--ok)">${up} erreichbar</span> · <a href="#" data-mpl="down" style="color:var(--bad)">${dn} nicht erreichbar ›</a> <span class="muted">(Stand ${fmtTime(rc.at,false)}${pss?' über '+esc(pss.name):''})</span>`:''}${rc&&rc.wait?' · <span class="muted">Prüfung läuft …</span>':''}${rc&&rc.err?` · <span style="color:var(--warn)">${esc(rc.err)}</span>`:''}`;
-  let zc=''; if(rc&&rc.at&&!MP.zone){ const zd={}; for(const n of ns){ if(n.zone&&mpShown(n)&&mpDown(n)) zd[n.zone]=(zd[n.zone]||0)+1; } const top=Object.entries(zd).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  let zc=''; if(rc&&rc.at&&!MP.zone){ const zd={}; for(const n of ns){ if(n.zone&&mpShown(n)&&mpDown(n)) zd[n.zone]=(zd[n.zone]||0)+1; } const top=Object.entries(zd).sort((a,b)=>b[1]-a[1]);
     if(top.length) zc='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+top.map(([z,c])=>`<a href="#" data-mpz="${esc(z)}" class="tag bad" style="text-decoration:none">📍 ${esc(z)} · ${c} nicht erreichbar</a>`).join('')+'</div>'; }
-  const html=html0+zc;
-  const inf=$('#map-info'); if(inf.dataset.h!==html){ inf.innerHTML=html; inf.dataset.h=html; inf.querySelectorAll('[data-mpz]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.zone=a.dataset.mpz; $('#map-zone').value=MP.zone; mpFitShown(); MP.listMode='down'; drawMap(); mpPane(); }); inf.querySelectorAll('[data-mpl]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.sel=null; MP.listMode=a.dataset.mpl; MP.filter=a.dataset.mpl; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f===MP.filter)); drawMap(); mpPane(); }); } }
+  const dup=mpDups(); const html=html0+(dup.n?` · <a href="#" data-mpl="dup" style="color:var(--warn);font-weight:600">⚠ ${dup.ip} doppelte IPs${dup.name?', '+dup.name+' doppelte Namen':''} ›</a>`:'')+zc;
+  const inf=$('#map-info'); if(inf.dataset.h!==html){ inf.innerHTML=html; inf.dataset.h=html; inf.querySelectorAll('[data-mpz]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.zone=a.dataset.mpz; $('#map-zone').value=MP.zone; mpFitShown(); MP.listMode='down'; drawMap(); mpPane(); }); inf.querySelectorAll('[data-mpl]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.sel=null; MP.listMode=a.dataset.mpl; if(a.dataset.mpl==='dup'){ drawMap(); mpPane(); return; } MP.filter=a.dataset.mpl; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f===MP.filter)); drawMap(); mpPane(); }); } }
 function mpHit(px,py){ const ns=MP.data&&MP.data.nodes; if(!ns) return null; let best=null,bd=Math.max(12,8*Math.sqrt(MP.sc))**2;
   for(const n of ns){ const [x,y]=mpScr(n); const d=(x-px)**2+(y-py)**2; if(d<bd){ bd=d; best=n; } } return best; }
 function mpPane(){ const p=$('#map-pane'); if(MP.multi.size&&MP.data){ mpMultiPane(p); return; } const n=MP.sel&&MP.data&&MP.data.nodes[MP.idx[MP.sel]];
+  if(!n&&MP.listMode==='dup'&&MP.data){ const d=mpDups(); const grp=(arr,label)=>arr.map(g=>`<div style="border-top:1px solid var(--line);padding:6px 0"><div class="muted num" style="font-size:12px">${label}: <b>${esc(g.k)}</b> (${g.ns.length}×)</div>${g.ns.map(x=>`<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0"><span class="dot" style="background:${mpColor(x)||'transparent'};border:1px solid var(--mut)"></span><a href="#" data-mpgo="${esc(x.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.name)}">${esc(x.name)}</a><span class="muted" style="font-size:11px">${esc(x.zone||'')}${x.zone?' · ':''}${MP.data.links.filter(l=>l.a===x.id||l.b===x.id).length} Verb.</span></div>`).join('')}</div>`).join('');
+    p.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><b>Doppelte Einträge</b><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div><div class="muted" style="font-size:12px;margin:4px 0 6px">Antippen springt zum Gerät auf der Karte. Der Ort und die Zahl der Verbindungen helfen zu sehen, welcher Eintrag falsch ist.</div>
+      <div style="max-height:62vh;overflow:auto">${d.ipL.length?'<b style="font-size:13px">Gleiche IP ('+d.ipL.length+')</b>'+grp(d.ipL,'IP'):''}${d.nameL.length?'<div style="margin-top:10px"><b style="font-size:13px">Gleicher Name ('+d.nameL.length+')</b></div>'+grp(d.nameL,'Name'):''}</div>`;
+    $('#mp-x').onclick=()=>{ MP.listMode=null; drawMap(); mpPane(); };
+    p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); const keep='dup'; mpFocus(a.dataset.mpgo); MP.backTo=keep; }); return; }
   if(!n&&MP.listMode&&MP.data){ const l=MP.data.nodes.filter(x=>mpShown(x)&&(MP.listMode==='bad'?mpBad(x):mpDown(x)));
     p.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><b>${MP.listMode==='bad'?'Störungen':'Nicht erreichbar'} (${l.length})</b><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div><div style="margin-top:8px">${l.slice(0,300).map(x=>{ const h=mpHostOf(x), st=h&&STATUS[h.status]; return `<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:3px 0"><span class="dot" style="background:${mpColor(x)}"></span><a href="#" data-mpgo="${esc(x.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.name)}">${esc(x.name)}</a><span class="muted" style="font-size:11px">${h?esc(st?st[0]:h.status):esc(x.addr||'')}</span></div>`; }).join('')||'<span class="muted">Keine.</span>'}</div>`;
     $('#mp-x').onclick=()=>{ MP.listMode=null; MP.filter='all'; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f==='all'));
@@ -3206,21 +3229,22 @@ function mpPane(){ const p=$('#map-pane'); if(MP.multi.size&&MP.data){ mpMultiPa
     $('#mq-x').onclick=()=>{ $('#map-q').value=''; $('#map-qf').value=''; drawMap(); mpPane(); };
     const all=$('#mq-all'); if(all) all.onclick=()=>{ for(const x of l) MP.multi.add(x.id); drawMap(); mpPane(); };
     p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); }); return; }
-  if(!n){ p.innerHTML=MP.edit?'<div class="muted" style="font-size:13px"><b>Bearbeiten</b><br>Geräte ziehen zum Verschieben · Gerät anklicken für Verbindungen<br><button class="btn sm" id="mp-add" style="margin-top:8px">+ Gerät hinzufügen</button></div>':'<div class="muted" style="font-size:13px">Gerät anklicken für Details · Mausrad/zwei Finger zoomen · Hintergrund ziehen zum Verschieben</div>';
+  if(!n){ p.innerHTML=MP.edit?'<div class="muted" style="font-size:13px"><b>Bearbeiten</b><br>Geräte ziehen zum Verschieben · Gerät anklicken für Verbindungen<br><button class="btn sm" id="mp-add" style="margin-top:8px">+ Gerät hinzufügen</button></div>':'<div class="muted" style="font-size:13px">Gerät anklicken für Details · Gerät ziehen zum Verschieben · Rechtsklick auf Gerät, Linie oder Karte für Aktionen · Strg + Ziehen: mehrere auswählen · Mausrad zoomen · Hintergrund ziehen verschiebt die Ansicht</div>';
     const a=$('#mp-add'); if(a) a.onclick=mpAddNode; return; }
   const h=mpHostOf(n), st=h?(STATUS[h.paused?'paused':h.status]||STATUS.unknown):null, ns=MP.data.nodes;
   const nb=MP.data.links.filter(l=>l.a===n.id||l.b===n.id).map(l=>{ const o=ns[MP.idx[l.a===n.id?l.b:l.a]]; return o?{o,l}:null; }).filter(Boolean);
   p.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-start"><span class="dot" style="margin-top:6px;background:${mpColor(n)||'transparent'};border:1px solid var(--mut)"></span><div style="min-width:0"><b style="word-break:break-word">${esc(n.name||'–')}</b><div class="muted num" style="font-size:13px">${esc(n.addr||'keine Adresse')}${n.zone?' · 📍 '+esc(n.zone):''}</div></div><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div>
     <div style="margin:10px 0;font-size:13px">${h?`Überwacht als <a href="#/host/${h.id}">${esc(h.name)}</a> · <span style="color:var(${st[1]})">${st[0]}</span>${n.auto?' <span class="muted">(über die IP zugeordnet)</span>':''}`:(n.off?'<span class="muted">⏸ Ping aus – wird nicht geprüft</span>':mpReach(n)===null?'<span class="muted">Nicht überwacht</span>':mpReach(n)>=0?`<span style="color:var(--ok)">Erreichbar</span> <span class="muted">· ${(mpReach(n)/10).toLocaleString('de-DE',{maximumFractionDigits:1})} ms · nicht überwacht</span>`:'<span style="color:var(--bad)">Nicht erreichbar</span> <span class="muted">· nicht überwacht</span>')}</div>
-    <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="mp-stat"${n.addr?'':' disabled'}>📈 Statistik</button><button class="btn sm ed" id="mp-off" title="${n.off?'Gerät wieder anpingen':'Nicht mehr anpingen (gekündigt, Glas, weggezogen …) – grau, zählt nicht in Meldungen und Statistik'}">${n.off?'▶ Ping einschalten':'⏸ Ping aus'}</button><button class="btn sm danger ed" id="mp-del" style="margin-left:auto">🗑 Löschen</button></div><div class="row ed" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="mp-rule">🔔 Melden</button>${h?`<button class="btn sm" id="mp-unl">Verknüpfung lösen</button>`:`<button class="btn sm pri" id="mp-host"${n.addr?'':' disabled'}>Als Host überwachen</button><button class="btn sm" id="mp-pick">Mit Host verknüpfen</button>`}${MP.edit?`<button class="btn sm" id="mp-link">${MP.linkFrom===n.id?'Ziel anklicken …':'Verbinden mit …'}</button><button class="btn sm" id="mp-ren">Umbenennen</button><button class="btn sm" id="mp-zone">Ort</button><button class="btn sm" id="mp-snmp" title="Traffic dieses Geräts per SNMP erfassen (Sektoren werden automatisch erfasst)">SNMP ${n.snmp?'an':'aus'}</button>`:''}</div>
-    ${nb.length?`<div class="muted" style="font-size:12px;margin:12px 0 4px">Verbunden mit (${nb.length})</div>`+nb.slice(0,30).map(({o,l})=>`<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0"><span class="dot" style="background:${mpColor(o)||'transparent'};border:1px solid var(--mut)"></span><a href="#" data-mpgo="${esc(o.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.name)}</a>${l.type?`<span class="muted" style="font-size:11px">${esc(l.type)}</span>`:''}${MP.edit?`<a href="#" data-mpun="${esc(o.id)}" title="Verbindung entfernen">✕</a>`:''}</div>`).join(''):''}`;
-  $('#mp-x').onclick=()=>{ MP.sel=null; MP.linkFrom=null; drawMap(); mpPane(); };
+    <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="mp-stat"${n.addr?'':' disabled'}>📈 Statistik</button><button class="btn sm ed" id="mp-off" title="${n.off?'Gerät wieder anpingen':'Nicht mehr anpingen (gekündigt, Glas, weggezogen …) – grau, zählt nicht in Meldungen und Statistik'}">${n.off?'▶ Ping einschalten':'⏸ Ping aus'}</button><button class="btn sm danger ed" id="mp-del" style="margin-left:auto">🗑 Löschen</button></div><div class="row ed" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="mp-rule">🔔 Melden</button>${h?`<button class="btn sm" id="mp-unl">Verknüpfung lösen</button>`:`<button class="btn sm pri" id="mp-host"${n.addr?'':' disabled'}>Als Host überwachen</button><button class="btn sm" id="mp-pick">Mit Host verknüpfen</button>`}<button class="btn sm" id="mp-link">${MP.linkFrom===n.id?'Ziel anklicken …':'🔗 Verbinden mit …'}</button><button class="btn sm" id="mp-ren">✏️ Name / IP</button><button class="btn sm" id="mp-zone">Ort</button><button class="btn sm" id="mp-snmp" title="Traffic dieses Geräts per SNMP erfassen (Sektoren werden automatisch erfasst)">SNMP ${n.snmp?'an':'aus'}</button></div>
+    ${nb.length?`<div class="muted" style="font-size:12px;margin:12px 0 4px">Verbunden mit (${nb.length})</div>`+nb.slice(0,30).map(({o,l})=>`<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0"><span class="dot" style="background:${mpColor(o)||'transparent'};border:1px solid var(--mut)"></span><a href="#" data-mpgo="${esc(o.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.name)}</a>${l.type?`<span class="muted" style="font-size:11px">${esc(l.type)}</span>`:''}<a href="#" class="ed" data-mpun="${esc(o.id)}" title="Verbindung entfernen">✕</a></div>`).join(''):''}`;
+  $('#mp-x').onclick=()=>{ MP.sel=null; MP.linkFrom=null; if(MP.backTo){ MP.listMode=MP.backTo; MP.backTo=null; } drawMap(); mpPane(); };
+  if(MP.backTo) p.querySelector('#mp-x').insertAdjacentHTML('beforebegin','<button class="btn sm" id="mp-back" title="Zurück zur Liste">‹ Liste</button>'), $('#mp-back').onclick=()=>{ MP.sel=null; MP.listMode=MP.backTo; MP.backTo=null; drawMap(); mpPane(); };
   const b=id=>p.querySelector('#'+id);
   if(b('mp-unl')) b('mp-unl').onclick=()=>mpEdit({set:[{id:n.id,host:'-'}]});
   if(b('mp-host')) b('mp-host').onclick=()=>{ openHost(); hf.name.value=n.name||''; hf.addr.value=n.addr||''; hf.paused.checked=true; const ag=S.state.sites.find(s=>s.id!=='cloud'&&s.kind!=='unifi'); if(ag&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(n.addr||'')) hf.site.value=ag.id; MP.afterHost=n.id; };
   if(b('mp-pick')) b('mp-pick').onclick=async()=>{ const v=await uiPrompt('Name oder Adresse des Hosts:',''); if(!v) return; const f=v.toLowerCase(); const h2=S.state.hosts.find(x=>x.name.toLowerCase()===f||x.addr.toLowerCase()===f)||S.state.hosts.find(x=>x.name.toLowerCase().includes(f)); if(!h2){ uiAlert('Kein passender Host gefunden.'); return; } mpEdit({set:[{id:n.id,host:h2.id}]}); };
   if(b('mp-link')) b('mp-link').onclick=()=>{ MP.linkFrom=MP.linkFrom===n.id?null:n.id; mpPane(); drawMap(); };
-  if(b('mp-ren')) b('mp-ren').onclick=async()=>{ const v=await uiPrompt('Name:',n.name||''); if(v===null) return; const a=await uiPrompt('IP / Adresse:',n.addr||''); if(a===null) return; mpEdit({set:[{id:n.id,name:v.trim(),addr:a.trim()}]}); };
+  if(b('mp-ren')) b('mp-ren').onclick=()=>mpRename(n);
   if(b('mp-rule')) b('mp-rule').onclick=()=>{ const leafs=MP.data.links.filter(l=>l.a===n.id||l.b===n.id).length; openMapRules({scope:leafs>2?'sector':'node',target:n.id,min:leafs>2?3:1,confirm:1,push:true,customers:true,name:n.name}); };
   if(b('mp-stat')) b('mp-stat').onclick=()=>openMapStat({node:n.id});
   if(b('mp-off')) b('mp-off').onclick=()=>mpEdit({set:[{id:n.id,off:!n.off}]});
@@ -3229,10 +3253,58 @@ function mpPane(){ const p=$('#map-pane'); if(MP.multi.size&&MP.data){ mpMultiPa
   if(b('mp-del')) b('mp-del').onclick=async()=>{ if(!await uiConfirm(`Sicher löschen?\n\n„${n.name}“ wird samt seinen Verbindungen von der Karte gelöscht. Ein verknüpfter Host bleibt bestehen.`)) return; MP.sel=null; mpEdit({del:[n.id]}); };
   p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); });
   p.querySelectorAll('[data-mpun]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpEdit({unlink:[{a:n.id,b:a.dataset.mpun}]}); }); }
+const MP_CHECK=/gek(ü|ue|u)ndigt|glas(?!h(ü|ue|u)tt)|weggezogen|umgezogen|stiegeler|stadtwerke|ssid\s*\+\s*1|abgebaut|abgeschaltet/i;
+async function mpRename(n){ const v=await uiPrompt('Name:',n.name||''); if(v===null) return; const a=await uiPrompt('IP / Adresse:',n.addr||''); if(a===null) return; mpEdit({set:[{id:n.id,name:v.trim(),addr:a.trim()}]}); }
+function mpLinkHit(px,py){ const ns=MP.data.nodes; let best=null,bd=36;
+  for(const l of MP.data.links){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; if(!a||!b||!mpShown(a)||!mpShown(b)) continue; const [ax,ay]=mpScr(a),[bx,by]=mpScr(b);
+    const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy; if(!L) continue; let t=((px-ax)*dx+(py-ay)*dy)/L; if(t<0.05||t>0.95) continue; const qx=ax+t*dx-px, qy=ay+t*dy-py, d=qx*qx+qy*qy; if(d<bd){ bd=d; best=l; } } return best; }
+function mpCtxClose(){ const m=$('#mp-ctx'); if(m) m.style.display='none'; }
+function mpCtx(x,y){ const m=$('#mp-ctx'), canEd=!document.body.classList.contains('viewer'), ns=MP.data.nodes; const n=mpHit(x,y), l=n?null:mpLinkHit(x,y); const items=[];
+  const it=(t,f,cls)=>items.push({t,f,cls}), hr=()=>items.push(null); let head='';
+  if(n&&MP.multi.has(n.id)&&MP.multi.size>1){ const ids=[...MP.multi], sel=ns.filter(o=>MP.multi.has(o.id)); head=`${ids.length} Geräte ausgewählt`;
+    if(canEd){ const set=v=>mpEdit({set:ids.map(id=>Object.assign({id},v))});
+      it('🔗 Alle verbinden mit … (Ziel anklicken)',()=>{ MP.linkFrom=ids; $('#map-cv').style.cursor='copy'; toast('Jetzt das Zielgerät anklicken'); drawMap(); });
+      if(sel.some(o=>!o.off)) it('⏸ Ping aus',()=>set({off:true})); if(sel.some(o=>o.off)) it('▶ Ping ein',()=>set({off:false}));
+      it('Ort setzen …',async()=>{ const v=await uiPrompt(`Ort für ${ids.length} Geräte (leer = keiner):`,sel[0].zone||''); if(v!==null) set({zone:v.trim()}); });
+      hr(); it(`🗑 ${ids.length} Geräte löschen …`,()=>{ const d=$('#mm-del'); if(d) d.click(); },'danger'); }
+  } else if(n){ head=n.name||n.addr||'Gerät'; MP.sel=n.id; MP.multi.clear(); drawMap(); mpPane();
+    it('📈 Statistik',()=>openMapStat({node:n.id}));
+    if(canEd){ it('✏️ Name / IP ändern …',()=>mpRename(n)); it('📍 Ort …',async()=>{ const v=await uiPrompt('Ort / Zone (leer = keiner):',n.zone||''); if(v!==null) mpEdit({set:[{id:n.id,zone:v.trim()}]}); });
+      it(n.off?'▶ Ping einschalten':'⏸ Ping aus',()=>mpEdit({set:[{id:n.id,off:!n.off}]}));
+      hr(); it('🔗 Verbinden mit … (Ziel anklicken)',()=>{ MP.linkFrom=n.id; $('#map-cv').style.cursor='copy'; toast('Jetzt das Zielgerät anklicken'); drawMap(); mpPane(); });
+      const nb=MP.data.links.filter(k=>k.a===n.id||k.b===n.id); for(const k of nb.slice(0,12)){ const o=ns[MP.idx[k.a===n.id?k.b:k.a]]; if(o) it('✂ Verbindung zu '+(o.name||o.addr),()=>mpEdit({unlink:[{a:k.a,b:k.b}]})); }
+      hr(); it('🗑 Löschen …',()=>{ const d=$('#mp-del'); if(d) d.click(); },'danger'); }
+  } else if(l&&canEd){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; head=`${a.name||a.addr} ↔ ${b.name||b.addr}`;
+    it('✂ Verbindung löschen',()=>mpEdit({unlink:[{a:l.a,b:l.b}]}),'danger');
+  } else if(canEd){ head='Karte';
+    it('+ Gerät hier hinzufügen …',async()=>{ const name=await uiPrompt('Name des Geräts:',''); if(!name) return; const addr=await uiPrompt('IP / Adresse (optional):','')||''; mpEdit({add:[{name:name.trim(),addr:addr.trim(),x:(x-MP.tx)/MP.sc,y:(y-MP.ty)/MP.sc}]}); });
+    if(MP.multi.size) it('Auswahl aufheben',()=>{ MP.multi.clear(); drawMap(); mpPane(); });
+  }
+  if(!items.length){ mpCtxClose(); return; }
+  m.innerHTML=`<div class="h" title="${esc(head)}">${esc(head)}</div>`+items.map((i,k)=>i?`<button type="button" data-k="${k}" class="${i.cls||''}">${esc(i.t)}</button>`:'<hr>').join('');
+  m.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{ mpCtxClose(); items[+bt.dataset.k].f(); });
+  m.style.display=''; const W=m.parentElement.clientWidth, H=m.parentElement.clientHeight; m.style.left=Math.min(x,W-m.offsetWidth-6)+'px'; m.style.top=Math.min(y,H-m.offsetHeight-6)+'px'; }
+addEventListener('pointerdown',e=>{ const m=$('#mp-ctx'); if(m&&m.style.display!=='none'&&!m.contains(e.target)&&e.target.id!=='map-cv') mpCtxClose(); });
+function mpDups(){ const d=MP.data; if(!d) return {n:0,ip:0,name:0,ipL:[],nameL:[]}; if(d._dup&&d._dupV===d.nodes.length+':'+d._ver) return d._dup;
+  const bi={}, bn={}; for(const n of d.nodes){ const a=(n.addr||'').trim(); if(/^\d+\.\d+\.\d+\.\d+$/.test(a)) (bi[a]=bi[a]||[]).push(n); const k=(n.name||'').trim().toLowerCase(); if(k) (bn[k]=bn[k]||[]).push(n); }
+  const ipL=Object.entries(bi).filter(([,v])=>v.length>1).map(([k,ns])=>({k,ns})).sort((a,b)=>a.k.localeCompare(b.k,'de',{numeric:true}));
+  const nameL=Object.entries(bn).filter(([,v])=>v.length>1).map(([k,ns])=>({k:ns[0].name,ns})).sort((a,b)=>a.k.localeCompare(b.k,'de'));
+  d._dup={n:ipL.length+nameL.length,ip:ipL.length,name:nameL.length,ipL,nameL}; d._dupV=d.nodes.length+':'+d._ver; return d._dup; }
+/* Orte verwalten */
+function openZones(){ if(!MP.data) return; const c={}; for(const n of MP.data.nodes) if(n.zone) c[n.zone]=(c[n.zone]||0)+1; const none=MP.data.nodes.filter(n=>!n.zone).length;
+  const z=Object.keys(c).sort((a,b)=>a.localeCompare(b,'de'));
+  $('#zn-list').innerHTML=`<div class="muted" style="font-size:12px;margin-bottom:6px">${z.length} Orte · ${none} Geräte ohne Ort</div>`+z.map(k=>`<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--line)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📍 ${esc(k)}</span><span class="muted num" style="font-size:12px;min-width:44px;text-align:right">${c[k]}</span><button type="button" class="btn sm" data-zs="${esc(k)}" title="Alle Geräte dieses Orts markieren – dann z. B. Teile davon einem anderen Ort zuweisen">Auswählen</button><button type="button" class="btn sm" data-zr="${esc(k)}" title="Umbenennen oder mit anderem Ort zusammenlegen">Umbenennen</button><button type="button" class="btn sm danger" data-zd="${esc(k)}" title="Ort bei allen Geräten entfernen">✕</button></div>`).join('');
+  const all=z; const setZ=async(ids,v)=>{ for(let i=0;i<ids.length;i+=500) await api('/api/maps/edit',{method:'POST',body:JSON.stringify({id:MP.id,set:ids.slice(i,i+500).map(id=>({id,zone:v}))})}); const keep={tx:MP.tx,ty:MP.ty,sc:MP.sc}; await mpOpen(MP.id); Object.assign(MP,keep,{fitted:true}); mpZones(); drawMap(); mpPane(); openZones(); };
+  const ofZ=k=>MP.data.nodes.filter(n=>n.zone===k).map(n=>n.id);
+  $$('#zn-list [data-zs]').forEach(b=>b.onclick=()=>{ const k=b.dataset.zs; MP.multi=new Set(ofZ(k)); MP.zone=''; $('#map-zone').value=''; $('#dlg-zones').close(); MP.sel=null; const all0=MP.data.nodes; MP.data.nodes=all0.filter(n=>MP.multi.has(n.id)); mpFit(); MP.data.nodes=all0; MP.fitted=true; drawMap(); mpPane(); toast('Markiert – Strg + Klick/Ziehen nimmt Geräte dazu oder weg, dann „Ort setzen“'); });
+  $$('#zn-list [data-zr]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.zr; const v=await uiPrompt(`Neuer Name für „${k}“ (gleicher Name wie ein anderer Ort = zusammenlegen):`,k); if(v===null||!v.trim()||v.trim()===k) return; setZ(ofZ(k),v.trim()); });
+  $$('#zn-list [data-zd]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.zd; if(!await uiConfirm(`Ort „${k}“ bei ${c[k]} Geräten entfernen? Die Geräte bleiben auf der Karte.`)) return; setZ(ofZ(k),''); });
+  const dl=$('#zn-dl'); if(dl) dl.innerHTML=all.map(k=>`<option value="${esc(k)}">`).join('');
+  if(!$('#dlg-zones').open) $('#dlg-zones').showModal(); }
 function mpMultiPane(p){ const ns=MP.data.nodes.filter(n=>MP.multi.has(n.id)); const off=ns.filter(n=>n.off).length;
   p.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><b>${ns.length} Geräte ausgewählt</b><button class="btn sm" id="mm-x" style="margin-left:auto" title="Auswahl aufheben (Esc)">✕</button></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">${off<ns.length?'<button class="btn sm" id="mm-off">⏸ Ping aus</button>':''}${off?'<button class="btn sm" id="mm-on">▶ Ping ein</button>':''}<button class="btn sm" id="mm-zone">Ort setzen</button><button class="btn sm" id="mm-snmp">SNMP an</button><button class="btn sm" id="mm-snmp0">SNMP aus</button><button class="btn sm danger" id="mm-del">🗑 Löschen</button></div>
-    <div class="muted" style="font-size:12px;margin-bottom:4px">${MP.edit?'Ein ausgewähltes Gerät ziehen verschiebt alle.':'Zum gemeinsamen Verschieben ✏️ Bearbeiten einschalten.'} Strg + Klick: einzeln dazu/weg · Strg + Ziehen: Rahmen dazu.</div>
+    <div class="muted" style="font-size:12px;margin-bottom:4px">Ein ausgewähltes Gerät ziehen verschiebt alle · Rechtsklick für mehr. Strg + Klick: einzeln dazu/weg · Strg + Ziehen: Rahmen dazu.</div>
     <div style="max-height:50vh;overflow:auto">${ns.slice(0,300).map(x=>`<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0"><span class="dot" style="background:${mpColor(x)||'transparent'};border:1px solid var(--mut)"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.name)}">${esc(x.name)}</span><a href="#" data-mmrm="${esc(x.id)}" title="Aus Auswahl nehmen">✕</a></div>`).join('')}${ns.length>300?`<div class="muted" style="font-size:12px">… und ${ns.length-300} weitere</div>`:''}</div>`;
   const ids=ns.map(n=>n.id), batch=async body=>{ for(let i=0;i<ids.length;i+=500){ const part=ids.slice(i,i+500); await api('/api/maps/edit',{method:'POST',body:JSON.stringify(Object.assign({id:MP.id},body(part)))}); } };
   const run=async(f,msg)=>{ try{ await f(); toast(msg); }catch(e){ uiAlert(e.message); } const keep={tx:MP.tx,ty:MP.ty,sc:MP.sc}; await mpOpen(MP.id); Object.assign(MP,keep,{fitted:true}); for(const id of [...MP.multi]) if(MP.idx[id]===undefined) MP.multi.delete(id); drawMap(); mpPane(); };
@@ -3247,6 +3319,7 @@ function mpMultiPane(p){ const ns=MP.data.nodes.filter(n=>MP.multi.has(n.id)); c
   p.querySelectorAll('[data-mmrm]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.multi.delete(a.dataset.mmrm); drawMap(); mpPane(); }); }
 $('#map-msel').onclick=()=>{ MP.selMode=!MP.selMode; $('#map-msel').classList.toggle('pri',MP.selMode); $('#map-cv').style.cursor=MP.selMode?'crosshair':''; };
 addEventListener('keydown',e=>{ if(S.view!=='map'||document.querySelector('dialog[open]')||/INPUT|SELECT|TEXTAREA/.test((document.activeElement||{}).tagName||'')) return;
+  if(e.key==='Escape'){ mpCtxClose(); if(MP.linkFrom){ MP.linkFrom=null; $('#map-cv').style.cursor=''; drawMap(); } }
   if(e.key==='Escape'&&(MP.multi.size||MP.selMode)){ MP.multi.clear(); if(MP.selMode) $('#map-msel').click(); drawMap(); mpPane(); }
   if((e.key==='Delete'||e.key==='Backspace')&&MP.multi.size){ e.preventDefault(); const d=$('#mm-del'); if(d) d.click(); } });
 function mpFocus(id){ const n=MP.data.nodes[MP.idx[id]]; if(!n) return; const r=$('#map-cv').getBoundingClientRect(); if(MP.sc<1.2) MP.sc=1.2; MP.tx=r.width/2-n.x*MP.sc; MP.ty=r.height/2-n.y*MP.sc; MP.sel=id; drawMap(); mpPane(); }
@@ -3256,11 +3329,11 @@ async function mpAddNode(){ const name=await uiPrompt('Name des Geräts:',''); i
   mpEdit({add:[{name:name.trim(),addr:addr.trim(),x:(r.width/2-MP.tx)/MP.sc,y:(r.height/2-MP.ty)/MP.sc}]}); }
 (function(){ const c=$('#map-cv'); let down=null, moved=false;
   const pos=e=>{ const r=c.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; };
-  c.addEventListener('pointerdown',e=>{ if(!MP.data) return; c.setPointerCapture(e.pointerId); MP.ptrs.set(e.pointerId,pos(e)); moved=false;
+  c.addEventListener('pointerdown',e=>{ if(!MP.data||e.button===2) return; mpCtxClose(); c.setPointerCapture(e.pointerId); MP.ptrs.set(e.pointerId,pos(e)); moved=false;
     if(MP.ptrs.size===2){ const [a,b]=[...MP.ptrs.values()]; down={pinch:Math.hypot(a[0]-b[0],a[1]-b[1]),sc:MP.sc,mid:[(a[0]+b[0])/2,(a[1]+b[1])/2],tx:MP.tx,ty:MP.ty}; return; }
     const [x,y]=pos(e); const canEd=!document.body.classList.contains('viewer'); const hit=mpHit(x,y);
     if(canEd&&!hit&&(MP.selMode||e.shiftKey||e.ctrlKey||e.metaKey)){ down={x,y,rect:true,add:e.shiftKey||e.metaKey||e.ctrlKey}; MP.rect=[x,y,x,y]; return; }
-    const n=MP.edit?hit:null; const grp=n&&MP.multi.has(n.id)?MP.data.nodes.filter(o=>MP.multi.has(o.id)).map(o=>({o,x:o.x,y:o.y})):null;
+    const n=canEd&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey?hit:null; const grp=n&&MP.multi.has(n.id)?MP.data.nodes.filter(o=>MP.multi.has(o.id)).map(o=>({o,x:o.x,y:o.y})):null;
     down={x,y,tx:MP.tx,ty:MP.ty,node:n,nx:n&&n.x,ny:n&&n.y,grp}; });
   c.addEventListener('pointermove',e=>{ if(!down||!MP.ptrs.has(e.pointerId)) return; MP.ptrs.set(e.pointerId,pos(e));
     if(down.pinch&&MP.ptrs.size===2){ const [a,b]=[...MP.ptrs.values()]; const d=Math.hypot(a[0]-b[0],a[1]-b[1]); const s=Math.min(6,Math.max(0.02,down.sc*d/down.pinch)); const [mx,my]=down.mid;
@@ -3278,18 +3351,19 @@ async function mpAddNode(){ const name=await uiPrompt('Name des Geräts:',''); i
     if(moved&&d.grp){ try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({id:MP.id,moves:d.grp.map(g=>({id:g.o.id,x:g.o.x,y:g.o.y}))})}); }catch(err){ uiAlert(err.message); } return; }
     if(moved&&d.node){ try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({id:MP.id,moves:[{id:d.node.id,x:d.node.x,y:d.node.y}]})}); }catch(err){ uiAlert(err.message); } return; }
     if(moved) return; const [x,y]=pos(e); const n=mpHit(x,y);
-    if(MP.edit&&MP.linkFrom&&n&&n.id!==MP.linkFrom){ const a=MP.linkFrom; MP.linkFrom=null; await mpEdit({link:[{a,b:n.id}]}); MP.sel=n.id; mpPane(); return; }
+    if(MP.linkFrom&&n){ const src=[].concat(MP.linkFrom).filter(a=>a!==n.id); MP.linkFrom=null; $('#map-cv').style.cursor=MP.selMode?'crosshair':''; if(src.length) await mpEdit({link:src.map(a=>({a,b:n.id}))}); toast(src.length>1?src.length+' Verbindungen angelegt':'Verbunden'); MP.sel=n.id; mpPane(); return; }
+    if(MP.linkFrom&&!n){ MP.linkFrom=null; $('#map-cv').style.cursor=MP.selMode?'crosshair':''; toast('Verbinden abgebrochen'); }
     if(n&&(e.shiftKey||e.metaKey||e.ctrlKey||MP.selMode)&&!document.body.classList.contains('viewer')){ MP.multi.has(n.id)?MP.multi.delete(n.id):MP.multi.add(n.id); MP.sel=null; drawMap(); mpPane(); return; }
     if(!n&&MP.multi.size){ MP.multi.clear(); }
     MP.sel=n?n.id:null; drawMap(); mpPane(); };
-  c.addEventListener('pointerup',up); c.addEventListener('contextmenu',e=>e.preventDefault()); c.addEventListener('pointercancel',e=>{ MP.ptrs.delete(e.pointerId); down=null; MP.rect=null; });
+  c.addEventListener('pointerup',up); c.addEventListener('contextmenu',e=>{ e.preventDefault(); if(!MP.data||(e.ctrlKey&&e.button!==2)) return; const [x,y]=pos(e); mpCtx(x,y,e.clientX,e.clientY); }); c.addEventListener('pointercancel',e=>{ MP.ptrs.delete(e.pointerId); down=null; MP.rect=null; });
   c.addEventListener('wheel',e=>{ if(!MP.data) return; e.preventDefault(); const [x,y]=pos(e); const f=Math.exp(-e.deltaY*0.0015); const s=Math.min(6,Math.max(0.02,MP.sc*f));
     MP.tx=x-(x-MP.tx)*s/MP.sc; MP.ty=y-(y-MP.ty)*s/MP.sc; MP.sc=s; drawMap(); },{passive:false});
   addEventListener('resize',()=>{ if(S.view==='map') drawMap(); });
 })();
 $('#map-sel').onchange=e=>mpOpen(e.target.value);
 function mpQ(){ return ($('#map-q').value||'').toLowerCase().trim(); }
-function mpMatch(n,q){ return q.split('|').map(x=>x.trim()).filter(Boolean).some(t=>t===':aus'?!!n.off:t===':rot'?mpDown(n):((n.name||'').toLowerCase().includes(t)||(n.addr||'').includes(t)||(n.zone||'').toLowerCase()===t)); }
+function mpMatch(n,q){ return q.split('|').map(x=>x.trim()).filter(Boolean).some(t=>t===':aus'?!!n.off:t===':pruefen'?(!n.off&&MP_CHECK.test(n.name||'')&&(mpReach(n)??-1)>=0):t===':rot'?mpDown(n):((n.name||'').toLowerCase().includes(t)||(n.addr||'').includes(t)||(n.zone||'').toLowerCase()===t)); }
 $('#map-q').oninput=()=>{ $('#map-qf').value=''; MP.sel=null; MP.listMode=null; drawMap(); mpPane(); };
 $('#map-qf').onchange=e=>{ $('#map-q').value=e.target.value; MP.sel=null; MP.listMode=null; MP.multi.clear(); drawMap(); mpPane(); };
 $('#map-q').onkeydown=e=>{ if(e.key==='Escape'){ e.target.value=''; $('#map-qf').value=''; drawMap(); mpPane(); return; } if(e.key!=='Enter'||!MP.data) return; const q=mpQ(); const n=MP.data.nodes.find(n=>mpShown(n)&&mpMatch(n,q)); if(n) mpFocus(n.id); };
