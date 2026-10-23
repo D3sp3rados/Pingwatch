@@ -86,6 +86,7 @@ type Config struct {
 	Channels      []Channel    `json:"channels"`
 	Maints        []Maint      `json:"maints"`
 	Groups        []Group      `json:"groups"`
+	Maps          []NetMap     `json:"maps,omitempty"`
 	Customers     []Customer   `json:"customers,omitempty"` // Kunden je Konto (ordnen Standorte)
 	Actions       []ActionLog  `json:"actions,omitempty"`   // Protokoll: Updates und Neustarts über PingWacht
 	UpdatePlans   []UpdatePlan `json:"updatePlans,omitempty"`
