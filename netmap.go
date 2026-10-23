@@ -42,6 +42,7 @@ type mapNode struct {
 	Host string  `json:"host,omitempty"` // verknüpfter PingWacht-Host (leer = automatisch über die Adresse)
 	Zone string  `json:"zone,omitempty"` // Ort/Zone zum Filtern (z. B. „Laufenburg“)
 	Snmp bool    `json:"snmp,omitempty"` // Traffic per SNMP abfragen (zusätzlich zu Sektoren)
+	Off  bool    `json:"off,omitempty"`  // Ping aus (gekündigt, Glas, weggezogen …) – grau, keine Statistik/Meldung
 }
 
 type mapLink struct {
@@ -335,7 +336,7 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 		Set []struct {
 			ID                     string
 			Host, Name, Addr, Zone *string
-			Snmp                   *bool
+			Snmp, Off              *bool
 		}
 		Add    []mapNode
 		Del    []string
@@ -387,6 +388,9 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		if st.Addr != nil {
 			d.Nodes[i].Addr = *st.Addr
+		}
+		if st.Off != nil {
+			d.Nodes[i].Off = *st.Off
 		}
 		if st.Snmp != nil {
 			d.Nodes[i].Snmp = *st.Snmp

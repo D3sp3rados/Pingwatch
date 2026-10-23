@@ -94,6 +94,10 @@ func (s *Server) handleMapTree(w http.ResponseWriter, r *http.Request) {
 			t.St, t.Host = h.st, h.id
 			return t
 		}
+		if n.Off {
+			t.St = "off" // Ping aus
+			return t
+		}
 		if has {
 			t.St, t.Host = "paused", h.id // pausiert: Erreichbarkeit der Karte zeigen, falls vorhanden
 		}

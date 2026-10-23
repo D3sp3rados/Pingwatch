@@ -86,7 +86,7 @@ func (m *Monitor) queueMapPing(mp NetMap) {
 	var ips []string
 	for _, n := range d.Nodes {
 		ip := net.ParseIP(strings.TrimSpace(n.Addr)).To4()
-		if ip == nil || seen[ip.String()] {
+		if n.Off || ip == nil || seen[ip.String()] {
 			continue
 		}
 		seen[ip.String()] = true

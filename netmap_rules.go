@@ -87,7 +87,15 @@ func ruleMembers(d *mapData, r MapRule) []int {
 			out = append(out, i)
 		}
 	}
-	return out
+	// Geräte mit „Ping aus“ zählen nicht mit
+	k := 0
+	for _, i := range out {
+		if !d.Nodes[i].Off {
+			out[k] = i
+			k++
+		}
+	}
+	return out[:k]
 }
 
 // evalMapRules: nach einer vollständigen Erreichbarkeitsrunde.

@@ -169,6 +169,7 @@ private func mapStatusText(_ n: MapTreeNode) -> String {
     case "down": return "nicht erreichbar"
     case "warn": return "Paketverlust"
     case "paused": return "pausiert"
+    case "off": return "Ping aus"
     default: return "unbekannt"
     }
 }
