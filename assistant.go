@@ -196,7 +196,7 @@ func priceSheet(o *Org) string {
 // ---------- Systemprompt ----------
 
 const aiProductHelp = `PRODUKTHILFE PINGWACHT (nur das hier gilt – erfinde keine weiteren Funktionen):
-Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Installieren (#/install: Agenten für Windows/Mac/Linux/Home Assistant und Apps für iPhone/Android mit Anleitung), Einstellungen (#/settings, mit Reitern: Hosts & Gruppen, Standorte, Alarme & Wartung, Team, Statusseite, Mein Konto, System), Abo (#/billing). Oben rechts der Knopf „🔔 Meldungen“ zum Stummschalten.
+Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Netzkarte (#/map), Installieren (#/install: Agenten für Windows/Mac/Linux/Home Assistant und Apps für iPhone/Android mit Anleitung), Einstellungen (#/settings, mit Reitern: Hosts & Gruppen, Standorte, Alarme & Wartung, Team, Statusseite, Mein Konto, System), Abo (#/billing). Oben rechts der Knopf „🔔 Meldungen“ zum Stummschalten.
 - Übersicht: alle Hosts als Kacheln oder als Liste (Umschalter oben), Status, Antwortzeiten, Ausfälle.
 - Host anlegen: Einstellungen → Hosts & Gruppen → „+ Host hinzufügen“. Name, Adresse (IP oder Hostname), Standort und Methode wählen. Methoden: ICMP (klassischer Ping), TCP-Verbindung (Port), Webseite HTTP/HTTPS (Pro), DNS-Auflösung (Pro), SNMP für Switches/Router (Pro). Viele Hosts auf einmal: „Liste importieren“ (Liste aus Excel/CSV einfügen).
 - Standort „Cloud“: Prüfung aus dem Rechenzentrum, nur für öffentlich erreichbare Adressen und Webseiten. Kein Standort im Sinne der Abrechnung.
@@ -209,7 +209,9 @@ Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Install
 - UniFi-Livestatus: Standort-Karte → „UniFi-Livestatus“: Adresse der UniFi-Konsole und API-Schlüssel (UniFi Network → Einstellungen → Control Plane → Integrationen → API-Schlüssel erstellen). Geräte werden jede Minute abgefragt, Alarm bei „offline“.
 - UniFi ohne Agent (über die UniFi-Cloud): Einstellungen → Standorte → Bereich „UniFi-Cloud (ohne Agent)“: in unifi.ui.com einen API-Key erstellen (API / Site Manager API → „Create API Key“) und dort einfügen. Dann „+ UniFi-Cloud-Standort“ anlegen (oder bei einem Standort „UniFi-Livestatus“ → Quelle „Über die UniFi-Cloud“), „Konsolen laden“, Konsole wählen, „Verbindung testen“, speichern. PingWacht fragt die Konsole dann jede Minute über die Cloud von Ubiquiti ab (Geräte, Status, Laufzeit, Auslastung, Neustarts); WAN-Details des Gateways sind über die Cloud evtl. nicht verfügbar. Voraussetzung: Konsole ab Firmware 5.0.3, UniFi Network ab 9.3. Ist die Konsole über die Cloud nicht erreichbar (z. B. Internet beim Kunden weg), kommt nach 3 Minuten eine Meldung. Ping auf interne Geräte, Fritzbox und Rechner-Überwachung brauchen weiterhin einen Agenten vor Ort.
 - Fritzbox (TR-064): Host mit der LAN-IP der Fritzbox (z. B. 192.168.178.1) an einem Agent-Standort anlegen, Methode ICMP oder TCP, Haken „Fritzbox auslesen (TR-064)“, Benutzer, Passwort, Port 49000. In der Fritzbox vorher: System → FRITZ!Box-Benutzer → Benutzer anlegen mit Recht „FRITZ!Box Einstellungen“; Heimnetz → Netzwerk → Netzwerkeinstellungen → „Zugriff für Anwendungen zulassen“. Dann zeigt PingWacht Internet-Status, externe IP, Sync-Rate, Abbrüche und Neustarts und meldet „Internet getrennt“.
-- Rechner-Überwachung (ab Basis; Basis/Partner 5, Pro 25 Rechner je Standort): Einstellungen → Standorte → bei einem Standort „Rechner überwachen“ einschalten. Der Rechner mit dem Agent meldet dann jede Minute CPU, Arbeitsspeicher, Laufwerke, Laufzeit, Betriebssystem; unter Windows zusätzlich Ereignisprotokoll (kritische Einträge), ausstehende Windows-Updates, Virenschutz (Defender oder anderes Produkt) und ausstehenden Neustart; unter Linux Updates (apt) und Neustart. Dienste (z. B. „Spooler“, „MSSQLSERVER“, unter Linux „smbd“) im Feld „Dienste“ eintragen, eine pro Zeile. Schwellwerte (Laufwerk voll ab %, CPU/RAM dauerhaft hoch) dort einstellbar. Meldungen: Laufwerk fast voll, CPU/RAM dauerhaft hoch, Dienst gestoppt, Virenschutz aus/Signaturen veraltet, Neustart seit Tagen ausstehend, Rechner meldet sich nicht. Weitere Server/PCs im selben Netz: Installieren → Windows/Linux/Mac → „Weitere Rechner überwachen“: dort die agent.json „nur Rechner“ herunterladen und mit dem Agent auf den Rechner legen (Linux: Startparameter -sysonly). Diese Rechner prüfen keine Hosts und kosten keinen zusätzlichen Standort. Rechner erscheinen in der Übersicht bei ihrem Standort bzw. ihrer Gruppe; Klick zeigt Verlauf, Laufwerke, Dienste. Keine Fernsteuerung, keine Softwareverteilung, keine Skripte.
+- UniFi Protect: Kameras und NVR einer UniFi-Konsole werden mit angezeigt (je Standort im UniFi-Dialog abschaltbar); einzelne Geräte lassen sich per Klick pausieren (gelb).
+- Rechner-Überwachung (ab Basis; Basis/Partner 5, Pro 25 Rechner je Standort): Einstellungen → Standorte → bei einem Standort „Rechner überwachen“ einschalten. Der Rechner mit dem Agent meldet dann jede Minute CPU, Arbeitsspeicher, Laufwerke, Laufzeit, Betriebssystem; unter Windows zusätzlich Ereignisprotokoll (kritische Einträge), ausstehende Windows-Updates, Virenschutz (Defender oder anderes Produkt) und ausstehenden Neustart; unter Linux Updates (apt) und Neustart. Dienste (z. B. „Spooler“, „MSSQLSERVER“, unter Linux „smbd“) im Feld „Dienste“ eintragen, eine pro Zeile. Schwellwerte (Laufwerk voll ab %, CPU/RAM dauerhaft hoch) dort einstellbar. Meldungen: Laufwerk fast voll, CPU/RAM dauerhaft hoch, Dienst gestoppt, Virenschutz aus/Signaturen veraltet, Neustart seit Tagen ausstehend, Rechner meldet sich nicht. Weitere Server/PCs im selben Netz: Installieren → Windows/Linux/Mac → „Weitere Rechner überwachen“: dort die agent.json „nur Rechner“ herunterladen und mit dem Agent auf den Rechner legen (Linux: Startparameter -sysonly). Diese Rechner prüfen keine Hosts und kosten keinen zusätzlichen Standort. Rechner erscheinen in der Übersicht bei ihrem Standort bzw. ihrer Gruppe; Klick zeigt Verlauf, Laufwerke, Dienste. Keine Fernsteuerung des Bildschirms, keine Softwareverteilung.
+- Aktionen auf Rechnern (Updates, Neustarts, Scripts): je Standort einschaltbar (Standard aus, einmalige Zustimmung, Zwei-Faktor-Code nötig). Dann am Rechner: Windows-Updates installieren, Neustart, eigene Scripts aus der Script-Bibliothek ausführen – sofort oder geplant; jede Aktion wird protokolliert. Auf einem Rechner abschaltbar mit "noActions": true in der agent.json.
 - Inventar: Rechner anklicken → Reiter „Inventar“: Hardware (Hersteller, Modell, Seriennummer, BIOS, CPU, RAM, Datenträger, Netzwerkadapter), Betriebssystem (Version, Build, Windows-Aktivierungsstatus, Domäne, angemeldeter Benutzer, Installationsdatum, letzter Neustart) und installierte Software mit Suche. Wird beim Start des Agenten und alle 24 Stunden ausgelesen, Knopf „Jetzt aktualisieren“. Änderungen (Software neu/entfernt/aktualisiert, Hardware) stehen im Änderungsprotokoll und als Ereignis „Inventar“. Export: „CSV (dieser Rechner)“, „Inventarliste aller Rechner (CSV)“, „Software aller Rechner (CSV)“. Lizenz-/Produktschlüssel werden nie ausgelesen.
 - Selbstheilung (Dienste automatisch neu starten): Einstellungen → Standorte → „💻 Rechner-Überwachung“ → „Selbstheilung erlauben“ einschalten und bei einzelnen überwachten Diensten „automatisch neu starten“ anhaken (Standard: aus). Der Agent startet dann nur diese Dienste neu, wenn sie gestoppt sind: höchstens 3 Versuche im Abstand von 1 Minute, danach Meldung „Neustart fehlgeschlagen“. Erfolgreiche Neustarts erscheinen als Ereignis. Unter Windows braucht der Agent dafür Administratorrechte; auf dem Mac nicht möglich. Auf dem Rechner abschaltbar mit "noSelfHeal": true in der agent.json. Dienstnamen mit Sonderzeichen (z. B. $) können nicht automatisch neu gestartet werden.
 - Gruppen (Kunden): Einstellungen → Hosts & Gruppen → Gruppen → „+ Gruppe“: Hosts eines Kunden zusammenfassen; je Gruppe Monatsbericht per E-Mail und Stummschalten möglich.
@@ -222,11 +224,14 @@ Menü oben: Übersicht (#/), Ereignisse (#/events), Statistik (#/stats), Install
 - Öffentliche Statusseite (Pro): Einstellungen → Statusseite (nur Name und Status, keine IP-Adressen).
 - Monatsbericht PDF (Pro, Partner): Statistik → Monatsbericht; automatisch am 1. per E-Mail über einen Alarmweg mit Haken „Monatsbericht“ oder je Gruppe.
 - Team: Einstellungen → Team → „+ Benutzer einladen“. Rollen: Inhaber (alles inkl. Abo), Admin (Hosts, Standorte, Benutzer), Nur lesen.
+- Rechte: Beim Einladen (Einstellungen → Team) „Nur ausgewählte Kunden / Hosts“ wählen und Kunden, Standorte, Gruppen oder einzelne Hosts zuweisen – jeweils nur lesen oder Admin. Ein Benutzer kann Mitglied in mehreren Konten sein und oben zwischen ihnen umschalten.
+- Netzkarte (#/map): Geräte und Verbindungen wie im MikroTik Dude, Import aus dem Dude (JSON). Erreichbarkeit aller Geräte alle 5 Minuten über einen Agenten („Erreichbarkeit über …“): grün = erreichbar, rot = nicht erreichbar, grau = Ping aus. Suche mit Trefferliste und Schnellfiltern, Orte (📍 Orte: umbenennen, zusammenlegen, Geräte zuweisen), Mehrfachauswahl mit Strg + Ziehen, Rechtsklick-Menü (verbinden, Linientyp, Linie löschen, Ping aus, Ort, Name/IP), Geräte mit der Maus verschieben, doppelte IPs/Namen anzeigen, Statistik je Gerät (Verfügbarkeit, Ping, Ausfälle, Traffic per SNMP über 📶 Traffic), Meldungen bei Ausfall eines Geräts, Sektors, Orts oder vieler Geräte (🔔 Meldungen). In der iPhone-App als Liste im Reiter „Netz“.
+- Darstellung: Hell/Dunkel über den Knopf ◐ oben (folgt sonst dem System). Kacheln oder Liste in der Übersicht. Eigene Hintergründe, Farben, Logos oder Designs gibt es derzeit nicht.
 - Abo: Menü „Abo“ zeigt Paket, Standorte und Preise.
 - Testphase: Neu registrierte Konten nutzen 14 Tage alle Funktionen von Pro (ohne Kreditkarte). Danach läuft das Konto automatisch im kostenlosen Paket Free weiter (1 Standort, 5 Hosts); weitere Hosts werden pausiert, nichts wird gelöscht. Ein Paket wählt man unter „Abo“ oder beim Anbieter.
 - Verlauf: Messwerte werden je nach Paket 7 bis 365 Tage aufbewahrt.`
 
-const aiFeatureList = `PingWacht kann: Ping (ICMP), TCP-Port-, Webseiten- (HTTP/HTTPS inkl. Zertifikat), DNS- und SNMP-Prüfungen; Cloud-Prüfung und lokale Agenten (Windows, Linux/Raspberry Pi, Mac, Home-Assistant-Add-on) mit Pufferung und Selbst-Update; Netzwerk-Scan; UniFi-Import und UniFi-Livestatus; Fritzbox-Auslesung per TR-064 (Internet-Status, Sync, Abbrüche, Neustarts); Rechner-Überwachung über den Agenten (CPU, RAM, Laufwerke, Dienste, Ereignisprotokoll, Windows-Updates, Virenschutz, ausstehender Neustart; weitere Rechner per Agent im Modus „nur Rechner“) – Messen, Inventar (Hardware, Betriebssystem, installierte Software, CSV-Export) und optional eng begrenzte Selbstheilung (nur ausdrücklich markierte Dienste neu starten); keine Fernsteuerung/Softwareverteilung/Skripte; Gruppen/Kunden; Alarme per E-Mail, Microsoft Teams, Telegram, Webhook; Push (iPhone-App, Web-Push/Android); persönliche Benachrichtigungen mit Urlaubsmodus; Stummschalten/Pausieren; Wartungsfenster; öffentliche Statusseite; Monatsbericht als PDF; Statistik und Heatmap; Traceroute; Listen-Import; Team mit Rollen; Mandanten (Kunden) mit Paketen und Abrechnungs-CSV. Daten liegen auf Servern der RST in Deutschland.`
+const aiFeatureList = `PingWacht kann: Ping (ICMP), TCP-Port-, Webseiten- (HTTP/HTTPS inkl. Zertifikat), DNS- und SNMP-Prüfungen; Cloud-Prüfung und lokale Agenten (Windows, Linux/Raspberry Pi, Mac, Home-Assistant-Add-on) mit Pufferung und Selbst-Update; Netzwerk-Scan; UniFi-Import und UniFi-Livestatus; Fritzbox-Auslesung per TR-064 (Internet-Status, Sync, Abbrüche, Neustarts); Rechner-Überwachung über den Agenten (CPU, RAM, Laufwerke, Dienste, Ereignisprotokoll, Windows-Updates, Virenschutz, ausstehender Neustart; weitere Rechner per Agent im Modus „nur Rechner“) – Messen, Inventar (Hardware, Betriebssystem, installierte Software, CSV-Export) und optional eng begrenzte Selbstheilung (nur ausdrücklich markierte Dienste neu starten); Aktionen auf Rechnern je Standort einschaltbar (Windows-Updates installieren, Neustarts, eigene Scripts – sofort oder geplant, mit Zwei-Faktor-Code); keine Fernsteuerung (Bildschirm)/Softwareverteilung; Netzkarte (Geräte und Verbindungen wie im MikroTik Dude, Import, Orte, Erreichbarkeit aller Geräte über einen Agenten, Statistik je Gerät mit Ping/Ausfällen/Traffic per SNMP, Meldungen bei Ausfall vieler Geräte); Rechteverwaltung (Teammitglieder nur für bestimmte Kunden/Standorte/Gruppen/Hosts, lesend oder Admin); Gruppen/Kunden; Alarme per E-Mail, Microsoft Teams, Telegram, Webhook; Push (iPhone-App, Web-Push/Android); persönliche Benachrichtigungen mit Urlaubsmodus; Stummschalten/Pausieren; Wartungsfenster; öffentliche Statusseite; Monatsbericht als PDF; Statistik und Heatmap; Traceroute; Listen-Import; Team mit Rollen; Mandanten (Kunden) mit Paketen und Abrechnungs-CSV. Daten liegen auf Servern der RST in Deutschland.`
 
 func billingLabel(b string) string {
 	switch b {
@@ -319,15 +324,20 @@ func (s *Server) aiSystemPrompt(p *Principal, o *Org) string {
 Regeln:
 - Antworte auf Deutsch in der Sie-Form, kurz und konkret (meist 2–8 Sätze oder eine kurze Liste).
 - Beantworte nur Fragen zu PingWacht und zu diesem Konto. Bei anderen Themen freundlich ablehnen.
-- Erfinde nichts. Wenn du etwas nicht sicher weißt, sag das und verweise an den Anbieter ` + support + `.
-- Du kannst selbst nichts ändern. Erkläre, wo man es macht, und verlinke nur so: [Einstellungen](#/settings), [Abo](#/billing), [Statistik](#/stats), [Ereignisse](#/events), [Übersicht](#/).
+- Erfinde nichts. Die PRODUKTHILFE unten ist vollständig: Was dort steht, gibt es – erkläre dann genau, wo. Was dort NICHT steht, gibt es (noch) nicht – sag das klar („Das gibt es derzeit nicht.“). Prüfe jede Frage gegen die Produkthilfe. Keine ausweichenden Formulierungen wie „sofern verfügbar“, „eventuell in den Einstellungen“ oder „falls vorhanden“.
+- Gibt es etwas nicht, biete sofort an, es als Wunsch aufzunehmen (siehe ÄNDERUNGSWÜNSCHE). Verweise für Funktionen und Anpassungen NIE an den Anbieter oder eine E-Mail-Adresse – genau dafür ist der Assistent da. Den Anbieter ` + support + ` nennst du nur bei Vertrags-, Rechnungs- oder Kontoproblemen, die du nicht beantworten kannst.
+- Einstellungen am Konto änderst du nicht selbst: Erkläre, wo man es macht, und verlinke nur so: [Einstellungen](#/settings), [Abo](#/billing), [Statistik](#/stats), [Ereignisse](#/events), [Übersicht](#/).
 - Frage nie nach Passwörtern oder Schlüsseln.
 - Preise: Verwende ausschließlich die Zahlen aus PREISE unten, rechne nicht selbst. Alle Preise netto zzgl. MwSt.
 - Formatierung: nur **fett**, Listen mit „- “ und Zeilenumbrüche.
-ÄNDERUNGSWÜNSCHE: Wenn die Person eine Funktion vermisst oder etwas anders haben möchte, prüfe zuerst anhand der Produkthilfe, ob es das schon gibt, und erkläre es dann. Wenn nicht: kläre mit höchstens einer Rückfrage, was genau gewünscht ist. Sobald klar ist, was gewünscht wird, schreibe ans Ende deiner Antwort genau eine Zeile:
-[[WUNSCH: präzise Zusammenfassung des Wunsches in einem Satz]]
-Diese Zeile NUR, wenn die Person ausdrücklich etwas vermisst oder eine Änderung wünscht, die es laut Produkthilfe NICHT gibt. NIEMALS bei normalen Fragen („Wie …?“, „Was kostet …?“, „Wo finde ich …?“) oder wenn du die Frage mit vorhandenen Funktionen beantworten kannst.
-Versprich nie, dass ein Wunsch umgesetzt wird.
+ÄNDERUNGSWÜNSCHE (neue Funktionen, Anpassungen): Nimm Wünsche gerne und positiv an. Sage NIE „Ich kann nichts einbauen“ oder Ähnliches und verweise nicht pauschal an den Anbieter – du nimmst den Wunsch selbst auf, er wird anschließend geprüft.
+1. Prüfe anhand der Produkthilfe, ob es das schon gibt. Wenn ja: erkläre, wo und wie.
+2. Wenn nicht oder wenn noch unklar ist, was gemeint ist (z. B. „kannst du was einbauen?“): frage freundlich und konkret nach – Was genau soll es tun? Wo in PingWacht (z. B. Übersicht, Netzkarte, Benachrichtigungen, App)? Wofür wird es gebraucht bzw. welches Problem soll es lösen? Wie wichtig/dringend? Höchstens zwei bis drei Fragen auf einmal.
+3. Sobald klar ist, was gewünscht wird: fasse den Wunsch in zwei, drei Sätzen zusammen und frage „Soll ich den Wunsch so zur Prüfung weitergeben?“.
+4. Erst wenn die Person zustimmt (oder den Wunsch von sich aus bereits vollständig und klar beschrieben und um Weitergabe gebeten hat), schreibe ans Ende deiner Antwort genau eine Zeile:
+[[WUNSCH: präzise Zusammenfassung des Wunsches – was, wo, wofür]]
+und sage dazu, dass der Wunsch jetzt technisch, auf Verträglichkeit mit bestehenden Funktionen, auf die AGB und den Datenschutz geprüft wird und der Anbieter entscheidet, ob er umgesetzt wird.
+Diese Zeile NIEMALS bei normalen Fragen („Wie …?“, „Was kostet …?“, „Wo finde ich …?“), bei unklaren Wünschen oder wenn es das schon gibt. Versprich nie, dass ein Wunsch umgesetzt wird oder bis wann.
 
 `)
 	b.WriteString(aiProductHelp)
@@ -352,6 +362,11 @@ type ReqAssessment struct {
 	DatenschutzRecht string `json:"datenschutzRecht,omitempty"`
 	Aufwand          string `json:"aufwand"`
 	Zusammenfassung  string `json:"zusammenfassung"`
+	AGB              string `json:"agb,omitempty"`        // Vereinbarkeit mit den AGB
+	Dafuer           string `json:"dafuer,omitempty"`     // was spricht dafür
+	Dagegen          string `json:"dagegen,omitempty"`    // was spricht dagegen
+	Empfehlung       string `json:"empfehlung,omitempty"` // bauen | nicht bauen | rückfrage
+	Begruendung      string `json:"begruendung,omitempty"`
 }
 
 type FeatureRequest struct {
@@ -427,7 +442,18 @@ func parseAssessment(s string) (ReqAssessment, bool) {
 		}
 	}
 	a := ReqAssessment{OK: true, WieGenau: str("wieGenau"), Konflikte: str("konflikte"),
-		DatenschutzRecht: str("datenschutzRecht"), Zusammenfassung: str("zusammenfassung")}
+		DatenschutzRecht: str("datenschutzRecht"), Zusammenfassung: str("zusammenfassung"),
+		AGB: str("agb"), Dafuer: str("dafuer"), Dagegen: str("dagegen"), Begruendung: str("begruendung")}
+	a.Empfehlung = oneOf(strings.ToLower(str("empfehlung")), []string{"bauen", "nicht bauen", "rückfrage"}, "")
+	if a.Empfehlung == "" {
+		if e := strings.ToLower(str("empfehlung")); strings.Contains(e, "nicht") {
+			a.Empfehlung = "nicht bauen"
+		} else if strings.Contains(e, "rück") || strings.Contains(e, "rueck") {
+			a.Empfehlung = "rückfrage"
+		} else if strings.Contains(e, "bau") {
+			a.Empfehlung = "bauen"
+		}
+	}
 	switch v := raw["gibtEsSchon"].(type) {
 	case bool:
 		a.GibtEsSchon = v
@@ -442,10 +468,18 @@ func parseAssessment(s string) (ReqAssessment, bool) {
 func (s *Server) assessWish(ctx context.Context, plan, wish, chat string) ReqAssessment {
 	sys := `Du prüfst Änderungswünsche von Kunden für die Monitoring-Software PingWacht vor (für den Entwickler).
 Funktionsumfang: ` + aiFeatureList + `
-Prüfe: Gibt es das schon (dann wie genau)? Ist es technisch machbar? Gibt es Konflikte mit bestehenden Funktionen? Gibt es Datenschutz- oder Rechtsfragen (z. B. fremde personenbezogene Daten, Zugangsdaten, Aufzeichnung von Inhalten)? Wie groß ist der Aufwand?
+AGB (Kurzfassung): ` + termsSummary + `
+Prüfe gründlich:
+1. Gibt es das schon (dann wie genau)?
+2. Ist es technisch machbar?
+3. Gibt es Konflikte mit bestehenden Funktionen oder anderen Kunden (z. B. Mandantentrennung, Sicherheit, Leistung)?
+4. Verstößt es gegen die AGB oder müssten die AGB angepasst werden?
+5. Gibt es Datenschutz- (DSGVO) oder sonstige Rechtsfragen (z. B. fremde personenbezogene Daten, Zugangsdaten, Aufzeichnung von Inhalten, Fernzugriff, Haftung)?
+6. Wie groß ist der Aufwand?
+Wäge dann ab, was dafür und was dagegen spricht, und gib eine Empfehlung.
 Antworte NUR mit JSON in genau dieser Form, ohne weiteren Text:
-{"gibtEsSchon":false,"wieGenau":"","machbar":"ja|vermutlich|unklar|nein","konflikte":"","datenschutzRecht":"","aufwand":"klein|mittel|groß","zusammenfassung":"ein Satz für den Entwickler"}`
-	out, err := aiChat(ctx, aiModel(plan), []aiMsg{{Role: "system", Content: sys}, {Role: "user", Content: "Wunsch: " + wish + "\n\nGesprächsauszug:\n" + chat}}, 500)
+{"gibtEsSchon":false,"wieGenau":"","machbar":"ja|vermutlich|unklar|nein","konflikte":"","agb":"","datenschutzRecht":"","aufwand":"klein|mittel|groß","dafuer":"Stichpunkte, mit ; getrennt","dagegen":"Stichpunkte, mit ; getrennt","empfehlung":"bauen|nicht bauen|rückfrage","begruendung":"ein Satz","zusammenfassung":"ein Satz für den Entwickler: was der Kunde möchte"}`
+	out, err := aiChat(ctx, aiModel(plan), []aiMsg{{Role: "system", Content: sys}, {Role: "user", Content: "Wunsch: " + wish + "\n\nGesprächsauszug:\n" + chat}}, 900)
 	if err == nil {
 		if a, ok := parseAssessment(out); ok {
 			if a.Zusammenfassung == "" {
@@ -513,8 +547,16 @@ var requestPushFn = func(m *Monitor, d Device, n notice) error {
 func (m *Monitor) notifyRequest(fr FeatureRequest) {
 	users, mails, adminDevs := m.requestRecipients()
 	a := fr.Assessment
-	title := "💡 Wunsch von " + fr.OrgName
-	body := clip(a.Zusammenfassung, 200) + " – Vorprüfung: machbar " + a.Machbar + ", Aufwand " + a.Aufwand + ". Umsetzen?"
+	who := fr.OrgName
+	if fr.UserName != "" && fr.UserName != "Betreiber" {
+		who += " (" + fr.UserName + ")"
+	}
+	title := "💡 Kunde " + who + " wünscht eine Änderung"
+	body := clip(a.Zusammenfassung, 160) + " – geprüft: machbar " + a.Machbar + ", Aufwand " + a.Aufwand
+	if a.Empfehlung != "" {
+		body += ", Empfehlung: " + a.Empfehlung
+	}
+	body += ". Soll ich es bauen?"
 	if !a.OK {
 		body = clip(fr.Text, 200) + " – Vorprüfung nicht möglich. Bitte ansehen."
 	}
@@ -544,14 +586,15 @@ func (m *Monitor) notifyRequest(fr FeatureRequest) {
 	}
 	link := dashboardURL() + "/#/requests"
 	var t strings.Builder
-	fmt.Fprintf(&t, "%s\n\nWunsch: %s\n\n", title, fr.Text)
+	fmt.Fprintf(&t, "Kunde %s wünscht:\n%s\n\n", who, fr.Text)
 	if a.OK {
-		fmt.Fprintf(&t, "Vorprüfung (KI):\n- Gibt es schon: %v %s\n- Machbar: %s\n- Aufwand: %s\n- Konflikte: %s\n- Datenschutz/Recht: %s\n- Zusammenfassung: %s\n\n",
-			map[bool]string{true: "ja", false: "nein"}[a.GibtEsSchon], a.WieGenau, a.Machbar, a.Aufwand, dash(a.Konflikte), dash(a.DatenschutzRecht), a.Zusammenfassung)
+		fmt.Fprintf(&t, "Ich habe es geprüft (KI-Vorprüfung):\n- Gibt es schon: %v %s\n- Technisch machbar: %s\n- Aufwand: %s\n- Konflikte mit anderen Funktionen: %s\n- AGB: %s\n- Datenschutz/Recht: %s\n\nDafür spricht:\n%s\n\nDagegen spricht:\n%s\n\nEmpfehlung: %s%s\n\nSoll ich es bauen?\n\n",
+			map[bool]string{true: "ja", false: "nein"}[a.GibtEsSchon], a.WieGenau, a.Machbar, a.Aufwand, dash(a.Konflikte), dash(a.AGB), dash(a.DatenschutzRecht),
+			bullets(a.Dafuer), bullets(a.Dagegen), dash(a.Empfehlung), map[bool]string{true: " – " + a.Begruendung, false: ""}[a.Begruendung != ""])
 	} else {
 		t.WriteString("Vorprüfung nicht möglich.\n\n")
 	}
-	fmt.Fprintf(&t, "Umsetzen, ablehnen oder Rückfrage: %s\n", link)
+	fmt.Fprintf(&t, "Freigeben, ablehnen oder Rückfrage an den Kunden: %s\n(Gebaut wird erst nach deiner Freigabe.)\n", link)
 	if err := sendMail(mails, title, t.String(), "", nil); err != nil {
 		log.Printf("Mail Änderungswunsch: %v", err)
 	}
@@ -851,4 +894,18 @@ func looksLikeWish(t string) bool {
 		}
 	}
 	return false
+}
+
+// bullets: „a; b; c“ → Aufzählung für die E-Mail.
+func bullets(s string) string {
+	var out []string
+	for _, x := range strings.Split(s, ";") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, "- "+x)
+		}
+	}
+	if len(out) == 0 {
+		return "- –"
+	}
+	return strings.Join(out, "\n")
 }

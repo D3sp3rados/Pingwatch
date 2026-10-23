@@ -239,6 +239,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/impressum", s.handleLegal)
 	mux.HandleFunc("/datenschutz", s.handleLegal)
 	mux.HandleFunc("/nutzungsbedingungen", s.handleTerms)
+	mux.HandleFunc("/agb", s.handleTerms)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/passkey/login", s.handlePasskeyLogin)
