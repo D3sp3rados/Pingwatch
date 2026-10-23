@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"net/http"
@@ -12,7 +13,18 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	qrcode "github.com/skip2/go-qrcode"
 )
+
+// qrDataURL: QR-Code als PNG-Data-URL (zum Abscannen mit der Authenticator-App).
+func qrDataURL(s string) string {
+	png, err := qrcode.Encode(s, qrcode.Medium, 220)
+	if err != nil {
+		return ""
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+}
 
 // Zwei-Faktor-Code (TOTP, RFC 6238) – Pflicht für Updates und Neustarts über PingWacht.
 // Jede Aktion verlangt einen frischen Code aus der Authenticator-App (Microsoft/Google Authenticator …).
@@ -134,7 +146,7 @@ func (s *Server) handleTOTP(w http.ResponseWriter, r *http.Request) {
 			acct = p.User.Email
 		}
 		uri := "otpauth://totp/" + url.PathEscape("PingWacht:"+acct) + "?secret=" + ns + "&issuer=PingWacht&digits=6&period=30"
-		writeJSON(w, map[string]string{"secret": ns, "uri": uri})
+		writeJSON(w, map[string]string{"secret": ns, "uri": uri, "qr": qrDataURL(uri)})
 	case "enable":
 		if pend == "" {
 			http.Error(w, "Bitte zuerst „Einrichten“ wählen", 400)
