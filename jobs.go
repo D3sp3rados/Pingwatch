@@ -269,6 +269,10 @@ func (s *Server) handleAgentJob(w http.ResponseWriter, r *http.Request) {
 	if actionKinds[st.Kind] != "" {
 		go s.m.actionJobDone(st.ID, st.Kind, req.Error, req.Result)
 	}
+	if st.Kind == "ping" {
+		mapPingResult(st.ID, req.Error, req.Result)
+		st.Result = nil // nicht im Speicher halten
+	}
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
@@ -303,6 +307,8 @@ func (a *Agent) runJob(j agentJob) {
 			nameScanHits(sr, names)
 			res = sr
 		}
+	case "ping": // Erreichbarkeit einer Liste von Adressen (Netzkarte), ohne Namensauflösung
+		res = pingList(strings.Split(j.Params["ips"], ","))
 	case "unifi":
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
 	case "unifiprobe":
@@ -538,6 +544,39 @@ func scanOne(ip net.IP) (scanHit, bool) {
 		}
 	}
 	return scanHit{}, false
+}
+
+// pingList: jede Adresse einmal anpingen (bei fehlender Antwort typische Ports), parallel.
+func pingList(list []string) *scanResult {
+	res := &scanResult{}
+	var mu sync.Mutex
+	sem := make(chan struct{}, 128)
+	var wg sync.WaitGroup
+	for _, a := range list {
+		ip := net.ParseIP(strings.TrimSpace(a)).To4()
+		if ip == nil {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(ip net.IP) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			hit, ok := scanOne(ip)
+			if !ok { // MikroTik: Winbox-Port
+				if r, err := tcpPing(ip, 8291, 400*time.Millisecond); err == nil {
+					hit, ok = scanHit{IP: ip.String(), RTT: r, Via: "tcp/8291"}, true
+				}
+			}
+			if ok {
+				mu.Lock()
+				res.Hits = append(res.Hits, hit)
+				mu.Unlock()
+			}
+		}(ip)
+	}
+	wg.Wait()
+	return res
 }
 
 // arpTable liest die ARP-Tabelle (IP → MAC) des Systems.

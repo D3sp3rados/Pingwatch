@@ -535,10 +535,12 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="map-bar">
     <select id="map-sel" class="orgsw"></select>
     <input id="map-q" placeholder="Gerät suchen – Name oder IP, Enter springt hin" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false">
-    <span class="seg" id="map-filter"><button data-f="all" class="on">Alle</button><button data-f="bad">Nur Störungen</button><button data-f="linked">Nur überwachte</button></span>
+    <select id="map-zone" class="orgsw" title="Ort / Zone"></select>
+    <span class="seg" id="map-filter"><button data-f="all" class="on">Alle</button><button data-f="bad">Störungen</button><button data-f="down">Nicht erreichbar</button><button data-f="linked">Überwacht</button></span>
+    <button class="btn sm" id="map-old" title="Geräte mit „gekündigt“, „abgebaut“, „abgeschaltet“, „weggezogen“ oder „aus)“ im Namen ausblenden">Gekündigte ausblenden</button>
     <button class="btn sm" id="map-fit" title="Ganze Karte anzeigen">⤢ Alles</button>
     <button class="btn sm ed" id="map-edit">✏️ Bearbeiten</button>
-    <span class="ed" style="display:flex;gap:6px"><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
+    <span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
   </div>
   <div class="muted" id="map-info" style="font-size:12.5px;margin:2px 0 8px"></div>
   <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-pane" class="panel"></div></div>
@@ -1375,7 +1377,8 @@ function renderSummary(){
   if(uoff) html+=`<span class="pill" style="color:var(--bad)"><b>${uoff}</b>&nbsp;UniFi offline</span>`;
   if(wdown) html+=`<span class="pill" style="color:var(--bad)"><b>${wdown}</b>&nbsp;WAN getrennt</span>`;
   const mbad=(st.machines||[]).filter(MBAD).length; if(mbad) html+=`<span class="pill" style="color:var(--warn)"><b>${mbad}</b>&nbsp;Rechner auffällig</span>`;
-  $('#summary').innerHTML=html;
+  const anyBad=down||off||uoff||wdown||mbad||warn; const sm=$('#summary'); sm.innerHTML=html; sm.style.cursor=anyBad?'pointer':''; sm.title=anyBad?'Störungen anzeigen':'';
+  sm.onclick=anyBad?()=>{ OVF.bad=true; ovfSave(); if(location.hash!=='#/'&&location.hash!=='') location.hash='#/'; else ovRerender(); setTimeout(()=>{ $('#ov-bad').classList.add('on'); ovRerender(); },50); }:null;
 }
 /* ---------- Kunden-Baum, Filter und Tabelle ---------- */
 const OVF=(()=>{ try{ return JSON.parse(localStorage.getItem('pw_ovf')||'{}')||{}; }catch(e){ return {}; } })();
@@ -3015,7 +3018,12 @@ const MP={list:null,id:null,data:null,idx:{},tx:0,ty:0,sc:1,sel:null,edit:false,
 let MP_HA=null, MP_HAS=null;
 function mpHostOf(n){ if(!S.state) return null; if(MP_HAS!==S.state){ MP_HAS=S.state; MP_HA={id:{},addr:{}}; for(const h of S.state.hosts){ MP_HA.id[h.id]=h; const a=(h.addr||'').toLowerCase(); if(a&&!MP_HA.addr[a]) MP_HA.addr[a]=h; } }
   if(n.host) return MP_HA.id[n.host]||null; return n.addr&&!n.noAuto?MP_HA.addr[n.addr.toLowerCase()]||null:null; }
-function mpColor(n){ const h=mpHostOf(n); if(!h) return null; if(h.paused) return css('--warn'); const st=STATUS[h.status]; return css(st?st[1]:'--off'); }
+const MP_OLD=/gek(ü|ue)ndigt|abgebaut|abgeschaltet|weggezogen|aus\)/i;
+function mpReach(n){ const r=MP.data&&MP.data.reach; if(!r||!r.at||!r.ips||!/^\d+\.\d+\.\d+\.\d+$/.test(n.addr||'')) return null; const v=r.rtt&&r.rtt[n.addr]; return v===undefined?-1:v; }
+function mpColor(n){ const h=mpHostOf(n); if(h){ if(h.paused) return css('--warn'); const st=STATUS[h.status]; return css(st?st[1]:'--off'); }
+  const r=mpReach(n); return r===null?null:css(r>=0?'--ok':'--bad'); }
+function mpDown(n){ const h=mpHostOf(n); if(h) return !h.paused&&h.status==='down'; return mpReach(n)===-1; }
+function mpShown(n){ return (!MP.zone||n.zone===MP.zone)&&!(MP.hideOld&&MP_OLD.test(n.name||'')); }
 function mpBad(n){ const h=mpHostOf(n); return !!(h&&!h.paused&&['down','loss','spike'].includes(h.status)); }
 async function loadMaps(force){ if(MP.loading) return; MP.loading=true;
   try{ MP.list=await api('/api/maps'); }catch(e){ MP.list=[]; }
@@ -3026,7 +3034,7 @@ async function loadMaps(force){ if(MP.loading) return; MP.loading=true;
   MP.loading=false; mpPane(); }
 async function mpOpen(id){ MP.id=id; try{ localStorage.setItem('pw_map',id); }catch(e){} $('#map-sel').value=id;
   try{ const r=await api('/api/maps?id='+encodeURIComponent(id)); MP.data=r; }catch(e){ MP.data=null; uiAlert(e.message); return; }
-  MP.idx={}; MP.data.nodes.forEach((n,i)=>MP.idx[n.id]=i); MP.sel=null; MP.fitted=false; drawMap(); mpPane(); }
+  MP.idx={}; MP.data.nodes.forEach((n,i)=>MP.idx[n.id]=i); MP.sel=null; MP.fitted=false; MP.loadedAt=Date.now(); mpZones(); mpPingSel(); if(MP.zone){ mpFitShown(); } drawMap(); mpPane(); }
 function mpFit(){ const ns=MP.data&&MP.data.nodes; const c=$('#map-cv'); if(!ns||!ns.length) return; const r=c.getBoundingClientRect();
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const n of ns){ x0=Math.min(x0,n.x); y0=Math.min(y0,n.y); x1=Math.max(x1,n.x); y1=Math.max(y1,n.y); }
   const w=Math.max(50,x1-x0), h=Math.max(50,y1-y0); MP.sc=Math.min(4,Math.max(0.02,Math.min((r.width-60)/w,(r.height-60)/h)));
@@ -3037,36 +3045,42 @@ function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty
   if(!has) return; if(!MP.fitted) mpFit();
   const {g,W,H}=setupCanvas(c); g.clearRect(0,0,W,H);
   const ns=MP.data.nodes, q=($('#map-q').value||'').toLowerCase().trim();
-  const dim=n=>(MP.filter==='bad'&&!mpBad(n))||(MP.filter==='linked'&&!mpHostOf(n))||(q&&!((n.name||'').toLowerCase().includes(q)||(n.addr||'').includes(q)));
+  const dim=n=>(MP.filter==='bad'&&!mpBad(n))||(MP.filter==='down'&&!mpDown(n))||(MP.filter==='linked'&&!mpHostOf(n))||(q&&!((n.name||'').toLowerCase().includes(q)||(n.addr||'').includes(q)));
   const vis=(x,y)=>x>-60&&y>-60&&x<W+60&&y<H+60;
   // Verbindungen
   g.lineWidth=Math.max(0.5,Math.min(2,MP.sc*1.2));
-  for(const l of MP.data.links){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; if(!a||!b) continue; const [ax,ay]=mpScr(a),[bx,by]=mpScr(b);
+  for(const l of MP.data.links){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; if(!a||!b||!mpShown(a)||!mpShown(b)) continue; const [ax,ay]=mpScr(a),[bx,by]=mpScr(b);
     if(!vis(ax,ay)&&!vis(bx,by)) continue; const bad=mpBad(a)||mpBad(b);
     g.globalAlpha=dim(a)&&dim(b)?0.12:(bad?0.9:0.55); g.strokeStyle=bad?css('--bad'):css('--mut'); g.beginPath(); g.moveTo(ax,ay); g.lineTo(bx,by); g.stroke(); }
   g.globalAlpha=1;
   // Geräte
   const r=Math.max(2.5,Math.min(9,6*Math.sqrt(MP.sc))); const label=MP.sc>0.45, full=MP.sc>1.1;
   g.font=`${full?12:11}px system-ui,-apple-system,Segoe UI,sans-serif`; g.textBaseline='top'; g.textAlign='center';
-  for(const n of ns){ const [x,y]=mpScr(n); if(!vis(x,y)) continue; const d=dim(n); g.globalAlpha=d?0.2:1; const col=mpColor(n);
+  for(const n of ns){ if(!mpShown(n)) continue; const [x,y]=mpScr(n); if(!vis(x,y)) continue; const d=dim(n); g.globalAlpha=d?0.2:1; const col=mpColor(n);
     g.beginPath(); g.arc(x,y,r,0,7);
     if(col){ g.fillStyle=col; g.fill(); } else { g.fillStyle=css('--panel'); g.fill(); g.strokeStyle=css('--mut'); g.lineWidth=1.2; g.stroke(); }
     if(MP.sel===n.id||MP.linkFrom===n.id){ g.strokeStyle=css('--acc'); g.lineWidth=3; g.beginPath(); g.arc(x,y,r+4,0,7); g.stroke(); }
     if(label&&!d){ g.fillStyle=css('--fg'); const t=(n.name||'').length>38?n.name.slice(0,36)+'…':(n.name||''); g.fillText(t,x,y+r+3);
       if(full&&n.addr&&!(n.name||'').includes(n.addr)){ g.fillStyle=css('--mut'); g.fillText(n.addr,x,y+r+17); } } }
   g.globalAlpha=1;
-  const lk=ns.filter(n=>mpHostOf(n)).length, bad=ns.filter(mpBad).length;
-  $('#map-info').innerHTML=`${ns.length} Geräte · ${MP.data.links.length} Verbindungen · ${lk} überwacht${bad?` · <b style="color:var(--bad)">${bad} Störung${bad>1?'en':''}</b>`:''}`; }
+  const sh=ns.filter(mpShown), lk=sh.filter(n=>mpHostOf(n)).length, bad=sh.filter(mpBad).length, rc=MP.data.reach, up=rc&&rc.at?sh.filter(n=>mpReach(n)>=0).length:0, dn=rc&&rc.at?sh.filter(n=>mpReach(n)===-1).length:0;
+  const ps=MP.list&&MP.list.find(m=>m.id===MP.id), pss=ps&&ps.pingSite&&S.state.sites.find(x=>x.id===ps.pingSite);
+  const html=`${sh.length} Geräte${MP.zone?' in '+esc(MP.zone):''} · ${lk} überwacht${bad?` · <a href="#" data-mpl="bad" style="color:var(--bad);font-weight:600">${bad} Störung${bad>1?'en':''} ›</a>`:''}${rc&&rc.at?` · <span style="color:var(--ok)">${up} erreichbar</span> · <a href="#" data-mpl="down" style="color:var(--bad)">${dn} nicht erreichbar ›</a> <span class="muted">(Stand ${fmtTime(rc.at,false)}${pss?' über '+esc(pss.name):''})</span>`:''}${rc&&rc.wait?' · <span class="muted">Prüfung läuft …</span>':''}${rc&&rc.err?` · <span style="color:var(--warn)">${esc(rc.err)}</span>`:''}`;
+  const inf=$('#map-info'); if(inf.dataset.h!==html){ inf.innerHTML=html; inf.dataset.h=html; inf.querySelectorAll('[data-mpl]').forEach(a=>a.onclick=e=>{ e.preventDefault(); MP.sel=null; MP.listMode=a.dataset.mpl; MP.filter=a.dataset.mpl; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f===MP.filter)); drawMap(); mpPane(); }); } }
 function mpHit(px,py){ const ns=MP.data&&MP.data.nodes; if(!ns) return null; let best=null,bd=Math.max(12,8*Math.sqrt(MP.sc))**2;
   for(const n of ns){ const [x,y]=mpScr(n); const d=(x-px)**2+(y-py)**2; if(d<bd){ bd=d; best=n; } } return best; }
 function mpPane(){ const p=$('#map-pane'); const n=MP.sel&&MP.data&&MP.data.nodes[MP.idx[MP.sel]];
+  if(!n&&MP.listMode&&MP.data){ const l=MP.data.nodes.filter(x=>mpShown(x)&&(MP.listMode==='bad'?mpBad(x):mpDown(x)));
+    p.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><b>${MP.listMode==='bad'?'Störungen':'Nicht erreichbar'} (${l.length})</b><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div><div style="margin-top:8px">${l.slice(0,300).map(x=>{ const h=mpHostOf(x), st=h&&STATUS[h.status]; return `<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:3px 0"><span class="dot" style="background:${mpColor(x)}"></span><a href="#" data-mpgo="${esc(x.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.name)}">${esc(x.name)}</a><span class="muted" style="font-size:11px">${h?esc(st?st[0]:h.status):esc(x.addr||'')}</span></div>`; }).join('')||'<span class="muted">Keine.</span>'}</div>`;
+    $('#mp-x').onclick=()=>{ MP.listMode=null; MP.filter='all'; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f==='all')); drawMap(); mpPane(); };
+    p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); }); return; }
   if(!n){ p.innerHTML=MP.edit?'<div class="muted" style="font-size:13px"><b>Bearbeiten</b><br>Geräte ziehen zum Verschieben · Gerät anklicken für Verbindungen<br><button class="btn sm" id="mp-add" style="margin-top:8px">+ Gerät hinzufügen</button></div>':'<div class="muted" style="font-size:13px">Gerät anklicken für Details · Mausrad/zwei Finger zoomen · Hintergrund ziehen zum Verschieben</div>';
     const a=$('#mp-add'); if(a) a.onclick=mpAddNode; return; }
   const h=mpHostOf(n), st=h?(STATUS[h.paused?'paused':h.status]||STATUS.unknown):null, ns=MP.data.nodes;
   const nb=MP.data.links.filter(l=>l.a===n.id||l.b===n.id).map(l=>{ const o=ns[MP.idx[l.a===n.id?l.b:l.a]]; return o?{o,l}:null; }).filter(Boolean);
-  p.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-start"><span class="dot" style="margin-top:6px;background:${mpColor(n)||'transparent'};border:1px solid var(--mut)"></span><div style="min-width:0"><b style="word-break:break-word">${esc(n.name||'–')}</b><div class="muted num" style="font-size:13px">${esc(n.addr||'keine Adresse')}</div></div><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div>
-    <div style="margin:10px 0;font-size:13px">${h?`Überwacht als <a href="#/host/${h.id}">${esc(h.name)}</a> · <span style="color:var(${st[1]})">${st[0]}</span>${n.auto?' <span class="muted">(über die IP zugeordnet)</span>':''}`:'<span class="muted">Nicht überwacht</span>'}</div>
-    <div class="row ed" style="display:flex;gap:6px;flex-wrap:wrap">${h?`<button class="btn sm" id="mp-unl">Verknüpfung lösen</button>`:`<button class="btn sm pri" id="mp-host"${n.addr?'':' disabled'}>Als Host überwachen</button><button class="btn sm" id="mp-pick">Mit Host verknüpfen</button>`}${MP.edit?`<button class="btn sm" id="mp-link">${MP.linkFrom===n.id?'Ziel anklicken …':'Verbinden mit …'}</button><button class="btn sm" id="mp-ren">Umbenennen</button><button class="btn sm danger" id="mp-del">Entfernen</button>`:''}</div>
+  p.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-start"><span class="dot" style="margin-top:6px;background:${mpColor(n)||'transparent'};border:1px solid var(--mut)"></span><div style="min-width:0"><b style="word-break:break-word">${esc(n.name||'–')}</b><div class="muted num" style="font-size:13px">${esc(n.addr||'keine Adresse')}${n.zone?' · 📍 '+esc(n.zone):''}</div></div><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div>
+    <div style="margin:10px 0;font-size:13px">${h?`Überwacht als <a href="#/host/${h.id}">${esc(h.name)}</a> · <span style="color:var(${st[1]})">${st[0]}</span>${n.auto?' <span class="muted">(über die IP zugeordnet)</span>':''}`:(mpReach(n)===null?'<span class="muted">Nicht überwacht</span>':mpReach(n)>=0?`<span style="color:var(--ok)">Erreichbar</span> <span class="muted">· ${(mpReach(n)/10).toLocaleString('de-DE',{maximumFractionDigits:1})} ms · nicht überwacht</span>`:'<span style="color:var(--bad)">Nicht erreichbar</span> <span class="muted">· nicht überwacht</span>')}</div>
+    <div class="row ed" style="display:flex;gap:6px;flex-wrap:wrap">${h?`<button class="btn sm" id="mp-unl">Verknüpfung lösen</button>`:`<button class="btn sm pri" id="mp-host"${n.addr?'':' disabled'}>Als Host überwachen</button><button class="btn sm" id="mp-pick">Mit Host verknüpfen</button>`}${MP.edit?`<button class="btn sm" id="mp-link">${MP.linkFrom===n.id?'Ziel anklicken …':'Verbinden mit …'}</button><button class="btn sm" id="mp-ren">Umbenennen</button><button class="btn sm" id="mp-zone">Ort</button><button class="btn sm danger" id="mp-del">Entfernen</button>`:''}</div>
     ${nb.length?`<div class="muted" style="font-size:12px;margin:12px 0 4px">Verbunden mit (${nb.length})</div>`+nb.slice(0,30).map(({o,l})=>`<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0"><span class="dot" style="background:${mpColor(o)||'transparent'};border:1px solid var(--mut)"></span><a href="#" data-mpgo="${esc(o.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.name)}</a>${l.type?`<span class="muted" style="font-size:11px">${esc(l.type)}</span>`:''}${MP.edit?`<a href="#" data-mpun="${esc(o.id)}" title="Verbindung entfernen">✕</a>`:''}</div>`).join(''):''}`;
   $('#mp-x').onclick=()=>{ MP.sel=null; MP.linkFrom=null; drawMap(); mpPane(); };
   const b=id=>p.querySelector('#'+id);
@@ -3075,6 +3089,7 @@ function mpPane(){ const p=$('#map-pane'); const n=MP.sel&&MP.data&&MP.data.node
   if(b('mp-pick')) b('mp-pick').onclick=async()=>{ const v=await uiPrompt('Name oder Adresse des Hosts:',''); if(!v) return; const f=v.toLowerCase(); const h2=S.state.hosts.find(x=>x.name.toLowerCase()===f||x.addr.toLowerCase()===f)||S.state.hosts.find(x=>x.name.toLowerCase().includes(f)); if(!h2){ uiAlert('Kein passender Host gefunden.'); return; } mpEdit({set:[{id:n.id,host:h2.id}]}); };
   if(b('mp-link')) b('mp-link').onclick=()=>{ MP.linkFrom=MP.linkFrom===n.id?null:n.id; mpPane(); drawMap(); };
   if(b('mp-ren')) b('mp-ren').onclick=async()=>{ const v=await uiPrompt('Name:',n.name||''); if(v===null) return; const a=await uiPrompt('IP / Adresse:',n.addr||''); if(a===null) return; mpEdit({set:[{id:n.id,name:v.trim(),addr:a.trim()}]}); };
+  if(b('mp-zone')) b('mp-zone').onclick=async()=>{ const v=await uiPrompt('Ort / Zone (leer = keiner):',n.zone||''); if(v===null) return; mpEdit({set:[{id:n.id,zone:v.trim()}]}); };
   if(b('mp-del')) b('mp-del').onclick=async()=>{ if(!await uiConfirm(`„${n.name}“ von der Karte entfernen? (Ein verknüpfter Host bleibt bestehen.)`)) return; MP.sel=null; mpEdit({del:[n.id]}); };
   p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); });
   p.querySelectorAll('[data-mpun]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpEdit({unlink:[{a:n.id,b:a.dataset.mpun}]}); }); }
@@ -3109,6 +3124,28 @@ $('#map-q').oninput=()=>drawMap();
 $('#map-q').onkeydown=e=>{ if(e.key!=='Enter'||!MP.data) return; const f=e.target.value.toLowerCase().trim(); const n=MP.data.nodes.find(n=>(n.name||'').toLowerCase().includes(f)||(n.addr||'')===f||(n.addr||'').includes(f)); if(n) mpFocus(n.id); };
 $$('#map-filter button').forEach(b=>b.onclick=()=>{ MP.filter=b.dataset.f; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x===b)); drawMap(); });
 $('#map-fit').onclick=()=>{ MP.fitted=false; drawMap(); };
+function mpZones(){ const sel=$('#map-zone'); if(!MP.data){ sel.style.display='none'; return; } const c={}; for(const n of MP.data.nodes) if(n.zone) c[n.zone]=(c[n.zone]||0)+1;
+  const z=Object.keys(c).sort((a,b)=>a.localeCompare(b,'de')); sel.style.display=z.length?'':'none';
+  sel.innerHTML=`<option value="">📍 Alle Orte</option>`+z.map(k=>`<option value="${esc(k)}">${esc(k)} (${c[k]})</option>`).join(''); if(MP.zone&&!c[MP.zone]) MP.zone=''; sel.value=MP.zone||''; }
+function mpFitShown(){ const ns=MP.data.nodes.filter(mpShown); if(!ns.length) return; const all=MP.data.nodes; MP.data.nodes=ns; mpFit(); MP.data.nodes=all; }
+$('#map-zone').onchange=e=>{ MP.zone=e.target.value; try{ localStorage.setItem('pw_mapzone',MP.zone); }catch(err){} mpFitShown(); drawMap(); mpPane(); };
+$('#map-old').onclick=()=>{ MP.hideOld=!MP.hideOld; $('#map-old').classList.toggle('pri',MP.hideOld); try{ localStorage.setItem('pw_mapold',MP.hideOld?'1':''); }catch(e){} drawMap(); mpPane(); };
+try{ MP.hideOld=localStorage.getItem('pw_mapold')==='1'; MP.zone=localStorage.getItem('pw_mapzone')||''; }catch(e){}
+$('#map-old').classList.toggle('pri',!!MP.hideOld);
+function mpPingSel(){ const sel=$('#map-ping'), m=MP.list&&MP.list.find(x=>x.id===MP.id); if(!m){ sel.style.display='none'; return; } sel.style.display='';
+  sel.innerHTML='<option value="">Erreichbarkeit: aus</option>'+S.state.sites.filter(x=>x.id!=='cloud'&&x.kind!=='unifi').map(x=>`<option value="${x.id}">Erreichbarkeit über ${esc(x.name)}</option>`).join(''); sel.value=m.pingSite||''; }
+$('#map-ping').onchange=async e=>{ try{ await api('/api/maps',{method:'POST',body:JSON.stringify({id:MP.id,pingSite:e.target.value})}); toast(e.target.value?'Erreichbarkeit wird alle 5 Minuten geprüft – erstes Ergebnis in ca. 1 Minute':'Erreichbarkeitsprüfung aus'); await loadMaps(true); }catch(err){ uiAlert(err.message); } };
+const MP_TOWNS=['Albbruck','Laufenburg','Dogern','Waldshut','Tiengen','Unteralpfen','Oberalpfen','Kadelburg','Eschbach','Birkingen','Görwihl','Hierholz','Hierbach','Egg','Rickenbach','Hütten','Wittenschwand','Engelschwand','Strittberg','Rotzingen','Hogschür','Jungholz','Hartschwand','Bergalingen','Wolpadingen','Leibstadt','Luttingen','Kuchelbach','Oberwihl','Niederwihl','Segeten','Herrischried','Rotzel','Dachsberg','Ibach','Wilfingen','Hochsal','Schachen','Gaiss','Buch','Etzwihl','Hänner','Murg','Wieladingen','Strittmatt','Vogelbach','Oberweschnegg','Heppenschwand','Indlekofen','Hottingen','Kiesenbach','Ettikon','Aichen','Zurzach','Hohentengen','Wehr','Grafenhausen','Löffingen','Donaueschingen'];
+const mpNorm=t=>(t||'').toLowerCase().replace(/ü/g,'ue').replace(/ö/g,'oe').replace(/ä/g,'ae').replace(/ß/g,'ss');
+$('#map-zones').onclick=async()=>{ if(!MP.data) return; const ns=MP.data.nodes, tw=MP_TOWNS.map(t=>[t,new RegExp('(^|[^a-z])'+mpNorm(t)+(t.length<=5?'([^a-z]|$)':''))]);
+  const z={}; let byName=0; for(const n of ns){ if(n.zone){ z[n.id]=n.zone; continue; } const nm=mpNorm(n.name); const t=tw.find(([,re])=>re.test(nm)); if(t){ z[n.id]=t[0]; byName++; } }
+  const adj={}; for(const l of MP.data.links){ (adj[l.a]=adj[l.a]||[]).push(l.b); (adj[l.b]=adj[l.b]||[]).push(l.a); }
+  let byLink=0, q=Object.keys(z); while(q.length){ const nx=[]; for(const id of q) for(const o of adj[id]||[]) if(!z[o]){ z[o]=z[id]; byLink++; nx.push(o); } q=nx; }
+  const set=ns.filter(n=>z[n.id]&&z[n.id]!==n.zone).map(n=>({id:n.id,zone:z[n.id]})), rest=ns.filter(n=>!z[n.id]).length;
+  if(!set.length){ toast('Nichts Neues erkannt'); return; }
+  if(!await uiConfirm(`${byName} Geräte über den Namen und ${byLink} über ihre Verbindungen einem Ort zuordnen? ${rest} bleiben ohne Ort. Vorhandene Zuordnungen bleiben unverändert.`)) return;
+  for(let i=0;i<set.length;i+=800) await api('/api/maps/edit',{method:'POST',body:JSON.stringify({id:MP.id,set:set.slice(i,i+800)})});
+  toast('Orte zugeordnet'); const keep={tx:MP.tx,ty:MP.ty,sc:MP.sc}; await mpOpen(MP.id); Object.assign(MP,keep,{fitted:true}); drawMap(); };
 $('#map-edit').onclick=()=>{ MP.edit=!MP.edit; MP.linkFrom=null; $('#map-edit').classList.toggle('pri',MP.edit); $('#map-edit').textContent=MP.edit?'✓ Fertig':'✏️ Bearbeiten'; mpPane(); };
 const mpNew=async()=>{ const name=await uiPrompt('Name der neuen Karte:','Netzkarte'); if(!name) return; try{ const m=await api('/api/maps',{method:'POST',body:JSON.stringify({name,nodes:[],links:[]})}); MP.id=m.id; await loadMaps(true); }catch(e){ uiAlert(e.message); } };
 $('#map-new').onclick=mpNew; $('#map-new2').onclick=mpNew;
@@ -3203,7 +3240,7 @@ async function refreshState(){
   if(S.view==='machine') renderMachine();
   if(S.view==='udev') renderUDev();
   if(S.view==='settings') renderSettings();
-  if(S.view==='map'){ drawMap(); if(MP.sel) mpPane(); }
+  if(S.view==='map'){ if(MP.id&&Date.now()-(MP.loadedAt||0)>60000){ const keep={tx:MP.tx,ty:MP.ty,sc:MP.sc,sel:MP.sel,fitted:MP.fitted}; mpOpen(MP.id).then(()=>{ Object.assign(MP,keep); drawMap(); mpPane(); }); } else { drawMap(); if(MP.sel||MP.listMode) mpPane(); } }
 }
 async function refreshOverview(){ try{ S.overview=await api('/api/overview?hours=24&n=96'); if(S.view==='overview') drawBars(); }catch(e){} }
 let tick=0;

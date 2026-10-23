@@ -24,6 +24,8 @@ type NetMap struct {
 	Nodes   int    `json:"nodes"`
 	Links   int    `json:"links"`
 	Source  string `json:"source,omitempty"` // z. B. „The Dude“
+	// Erreichbarkeit aller Geräte über den Agenten dieses Standorts prüfen (nur Anzeige)
+	PingSite string `json:"pingSite,omitempty"`
 }
 
 type mapNode struct {
@@ -33,6 +35,7 @@ type mapNode struct {
 	X    float64 `json:"x"`
 	Y    float64 `json:"y"`
 	Host string  `json:"host,omitempty"` // verknüpfter PingWacht-Host (leer = automatisch über die Adresse)
+	Zone string  `json:"zone,omitempty"` // Ort/Zone zum Filtern (z. B. „Laufenburg“)
 }
 
 type mapLink struct {
@@ -101,7 +104,7 @@ func cleanMap(d *mapData) {
 			continue
 		}
 		seen[n.ID] = true
-		n.Name, n.Addr = clipStr(strings.TrimSpace(n.Name), 200), clipStr(strings.TrimSpace(n.Addr), 200)
+		n.Name, n.Addr, n.Zone = clipStr(strings.TrimSpace(n.Name), 200), clipStr(strings.TrimSpace(n.Addr), 200), clipStr(strings.TrimSpace(n.Zone), 60)
 		nodes = append(nodes, n)
 	}
 	d.Nodes = nodes
@@ -195,10 +198,11 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			}
 			nodes = append(nodes, o)
 		}
-		writeJSON(w, map[string]any{"map": mp, "nodes": nodes, "links": d.Links})
+		writeJSON(w, map[string]any{"map": mp, "nodes": nodes, "links": d.Links, "reach": mapReachView(id)})
 	case http.MethodPost:
 		var req struct {
 			ID, Name, Source string
+			PingSite         *string
 			Nodes            *[]mapNode
 			Links            *[]mapLink
 		}
@@ -224,6 +228,21 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			}
 			if name != "" {
 				m.cfg.Maps[i].Name = name
+			}
+			if req.PingSite != nil {
+				ps := *req.PingSite
+				if ps != "" {
+					if sc, ok := m.siteByIDLocked(ps); !ok || sc.Org != p.Org {
+						m.mu.Unlock()
+						http.Error(w, "Standort unbekannt", 400)
+						return
+					}
+				}
+				m.cfg.Maps[i].PingSite = ps
+				mapPing.Lock()
+				delete(mapPing.last, req.ID) // gleich prüfen
+				delete(mapPing.reach, req.ID)
+				mapPing.Unlock()
 			}
 			mp = m.cfg.Maps[i]
 			_ = x
@@ -291,8 +310,8 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 			X, Y float64
 		}
 		Set []struct {
-			ID               string
-			Host, Name, Addr *string
+			ID                     string
+			Host, Name, Addr, Zone *string
 		}
 		Add    []mapNode
 		Del    []string
@@ -344,6 +363,9 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		if st.Addr != nil {
 			d.Nodes[i].Addr = *st.Addr
+		}
+		if st.Zone != nil {
+			d.Nodes[i].Zone = clipStr(strings.TrimSpace(*st.Zone), 60)
 		}
 	}
 	for _, n := range req.Add {

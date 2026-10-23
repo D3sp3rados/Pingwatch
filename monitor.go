@@ -593,6 +593,9 @@ func (m *Monitor) housekeeping() {
 			m.saveSysState()
 		}
 		if now.Second() < 5 {
+			m.mapPingTick()
+		}
+		if now.Second() < 5 {
 			m.checkBackups(now)
 		}
 		// Standorte ohne Meldung → offline
