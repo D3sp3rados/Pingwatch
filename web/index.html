@@ -166,6 +166,10 @@ details.inst-more summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .gt-h .chev,.utile .chev{color:var(--mut);font-size:20px;line-height:1}
 .gt-n{font-size:13px;margin-top:8px;line-height:1.6}.gt-p{font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .utile{cursor:pointer}
+.gd-move{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px;font-size:13px}
+body.pw-dragging .gd-move{display:flex}
+.gd-drop{border:1.5px dashed var(--line2);border-radius:10px;padding:8px 14px;background:var(--panel)}
+.gd-drop.drop-on{border-color:var(--acc);background:var(--acc-a)}
 .gd-crumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px;margin:2px 0 10px}.gd-crumb a{color:var(--acc);text-decoration:none}.gd-crumb a:hover{text-decoration:underline}
 .gd-cats{flex-wrap:wrap}.gd-val{font-size:13px;margin-top:2px}
 #ov.compact .grid{grid-template-columns:1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
@@ -1550,7 +1554,10 @@ function renderOverview(){
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const sec of secs){
-      if(sec.crumb){ const c=document.createElement('div'); c.className='gd-cr'; root.appendChild(c); c.innerHTML=gdCrumb(['Alle Gruppen','📁 '+esc(sec.crumb)]); gdBindCrumb(c,[()=>ovgSet({g:null,u:null})]); }
+      if(sec.crumb){ const c=document.createElement('div'); c.className='gd-cr'; root.appendChild(c); c.innerHTML=gdCrumb(['Alle Gruppen','📁 '+esc(sec.crumb)]); gdBindCrumb(c,[()=>ovgSet({g:null,u:null})]);
+        const mv=document.createElement('div'); mv.className='gd-move'; const others=(st.groups||[]).filter(g=>g.id!==sec.group.id);
+        mv.innerHTML='<span class="muted">Hierher ziehen zum Verschieben:</span>'+others.map(g=>`<span class="gd-drop" data-dropg="${esc(g.id)}">📁 ${esc(g.name)}</span>`).join('')+(sec.group.id?'<span class="gd-drop" data-dropg="">Ohne Gruppe</span>':'');
+        root.appendChild(mv); }
       if(sec.div){ const d=document.createElement('div'); d.className='ov-site'; d.dataset.div=sec.div.id; root.appendChild(d); }
       const h=document.createElement('div'); h.className='site-h'; h.dataset.sec=sec.key; root.appendChild(h);
       const g=document.createElement('div'); g.className='grid'; g.dataset.sec=sec.key; root.appendChild(g);
@@ -2077,9 +2084,13 @@ function enableOvDrag(root,secs){ const me=(S.state&&S.state.me)||{}; if(me.role
       el.ondragover=e=>{ if(e.dataTransfer.types.includes('text/pw-item')){ e.preventDefault(); el.classList.add('drop-on'); } };
       el.ondragleave=()=>el.classList.remove('drop-on');
       el.ondrop=e=>{ e.preventDefault(); el.classList.remove('drop-on'); const k=e.dataTransfer.getData('text/pw-item'); if(k) moveToGroup(k,gid); }; } }
+  root.querySelectorAll('.gd-move [data-dropg]').forEach(el=>{ const gid=el.dataset.dropg;
+    el.ondragover=e=>{ if(e.dataTransfer.types.includes('text/pw-item')){ e.preventDefault(); el.classList.add('drop-on'); } };
+    el.ondragleave=()=>el.classList.remove('drop-on');
+    el.ondrop=e=>{ e.preventDefault(); el.classList.remove('drop-on'); document.body.classList.remove('pw-dragging'); const k=e.dataTransfer.getData('text/pw-item'); if(k) moveToGroup(k,gid); }; });
   for(const [k,c] of Object.entries(cards)){ if(c.dataset.dragset) continue; c.dataset.dragset='1'; c.draggable=true;
-    c.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/pw-item',k); e.dataTransfer.effectAllowed='move'; c.classList.add('dragging'); });
-    c.addEventListener('dragend',()=>c.classList.remove('dragging')); } }
+    c.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/pw-item',k); e.dataTransfer.effectAllowed='move'; c.classList.add('dragging'); setTimeout(()=>document.body.classList.add('pw-dragging'),0); });
+    c.addEventListener('dragend',()=>{ c.classList.remove('dragging'); document.body.classList.remove('pw-dragging'); }); } }
 function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev,fritzFullNums:!!h.fritzFullNums}; }
 /* UniFi-Cloud-Key des Kunden */
 const UC={keySet:false,loaded:false};
