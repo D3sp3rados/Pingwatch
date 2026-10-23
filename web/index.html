@@ -3185,8 +3185,12 @@ function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty
   g.lineWidth=Math.max(0.5,Math.min(2,MP.sc*1.2));
   for(const l of MP.data.links){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; if(!a||!b||!mpShown(a)||!mpShown(b)) continue; const [ax,ay]=mpScr(a),[bx,by]=mpScr(b);
     if(!vis(ax,ay)&&!vis(bx,by)) continue; const bad=mpBad(a)||mpBad(b);
-    g.globalAlpha=dim(a)&&dim(b)?0.12:(bad?0.9:0.55); g.strokeStyle=bad?css('--bad'):css('--mut'); g.beginPath(); g.moveTo(ax,ay); g.lineTo(bx,by); g.stroke(); }
-  g.globalAlpha=1;
+    const lt=(l.type||'').toLowerCase(), lw=Math.max(0.5,Math.min(2,MP.sc*1.2)); g.lineWidth=/gigabit|glas|60/.test(lt)?lw*1.8:lw; g.setLineDash(/wireless|point|60/.test(lt)?[6,4]:/vpn/.test(lt)?[2,3]:[]);
+    g.globalAlpha=dim(a)&&dim(b)?0.12:(bad?0.9:0.55); g.strokeStyle=bad?css('--bad'):l.mode==='snmp'?'#6366f1':css('--mut'); g.beginPath(); g.moveTo(ax,ay); g.lineTo(bx,by); g.stroke(); }
+  g.setLineDash([]); g.globalAlpha=1;
+  const tr=MP.data.traffic||{}; if(MP.sc>0.35){ g.font='11px system-ui,sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+    for(const l of MP.data.links){ const v=tr[l.a+'|'+l.b]; if(!v) continue; const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; if(!a||!b||!mpShown(a)||!mpShown(b)) continue; const [ax,ay]=mpScr(a),[bx,by]=mpScr(b), mx=(ax+bx)/2, my=(ay+by)/2; if(!vis(mx,my)) continue;
+      const t=`↓${fmtBit(v[0])} ↑${fmtBit(v[1])}`, w=g.measureText(t).width+8; g.fillStyle=css('--panel'); g.globalAlpha=.9; g.fillRect(mx-w/2,my-8,w,16); g.globalAlpha=1; g.fillStyle='#6366f1'; g.fillText(t,mx,my); } }
   // Geräte
   const r=Math.max(2.5,Math.min(9,6*Math.sqrt(MP.sc))); const label=MP.sc>0.45, full=MP.sc>1.1;
   g.font=`${full?12:11}px system-ui,-apple-system,Segoe UI,sans-serif`; g.textBaseline='top'; g.textAlign='center';
@@ -3254,6 +3258,15 @@ function mpPane(){ const p=$('#map-pane'); if(MP.multi.size&&MP.data){ mpMultiPa
   p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); });
   p.querySelectorAll('[data-mpun]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpEdit({unlink:[{a:n.id,b:a.dataset.mpun}]}); }); }
 const MP_CHECK=/gek(ü|ue|u)ndigt|glas(?!h(ü|ue|u)tt)|weggezogen|umgezogen|stiegeler|stadtwerke|ssid\s*\+\s*1|abgebaut|abgeschaltet/i;
+const MP_LTYPES=['Gigabit Ethernet','Fast Ethernet','Ethernet','Glasfaser','Wireless','Point to Point','60 GHz','VPN'];
+function mpMenu(x,y,head,items){ const m=$('#mp-ctx'); m.innerHTML=`<div class="h" title="${esc(head)}">${esc(head)}</div>`+items.map((i,k)=>!i?'<hr>':i.h?`<div class="h" style="padding-top:8px">${esc(i.h)}</div>`:`<button type="button" data-k="${k}" class="${i.cls||''}" style="white-space:pre">${esc(i.t)}</button>`).join('');
+  m.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{ mpCtxClose(); items[+bt.dataset.k].f(); });
+  m.style.display=''; const W=m.parentElement.clientWidth, H=m.parentElement.clientHeight; m.style.left=Math.max(4,Math.min(x,W-m.offsetWidth-6))+'px'; m.style.top=Math.max(4,Math.min(y,H-m.offsetHeight-6))+'px'; }
+async function mpPickIf(l,x,y,save){ const ns=MP.data.nodes, a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]], items=[];
+  for(const n of [a,b]){ const ip=(n.addr||'').trim(); if(!ip) continue; let ifs=[]; try{ ifs=await api('/api/maps?id='+encodeURIComponent(MP.id)+'&ifs='+encodeURIComponent(ip)); }catch(e){}
+    items.push({h:n.name||ip}); if(!ifs.length) items.push({t:'   noch keine Schnittstellen bekannt',f:()=>{}}); for(const f of ifs) items.push({t:(l.ifn===n.id&&l.if===f?'✓ ':'   ')+f,f:()=>save({mode:'snmp',ifn:n.id,if:f})}); }
+  items.push(null); items.push({t:'ℹ Schnittstellen erscheinen, sobald SNMP antwortet (📶 Traffic). Gerät ggf. mit „SNMP an“ markieren.',f:()=>{}});
+  mpMenu(x,y,'Traffic messen an …',items); }
 async function mpRename(n){ const v=await uiPrompt('Name:',n.name||''); if(v===null) return; const a=await uiPrompt('IP / Adresse:',n.addr||''); if(a===null) return; mpEdit({set:[{id:n.id,name:v.trim(),addr:a.trim()}]}); }
 function mpLinkHit(px,py){ const ns=MP.data.nodes; let best=null,bd=36;
   for(const l of MP.data.links){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; if(!a||!b||!mpShown(a)||!mpShown(b)) continue; const [ax,ay]=mpScr(a),[bx,by]=mpScr(b);
@@ -3275,13 +3288,17 @@ function mpCtx(x,y){ const m=$('#mp-ctx'), canEd=!document.body.classList.contai
       const nb=MP.data.links.filter(k=>k.a===n.id||k.b===n.id); for(const k of nb.slice(0,12)){ const o=ns[MP.idx[k.a===n.id?k.b:k.a]]; if(o) it('✂ Verbindung zu '+(o.name||o.addr),()=>mpEdit({unlink:[{a:k.a,b:k.b}]})); }
       hr(); it('🗑 Löschen …',()=>{ const d=$('#mp-del'); if(d) d.click(); },'danger'); }
   } else if(l&&canEd){ const a=ns[MP.idx[l.a]], b=ns[MP.idx[l.b]]; head=`${a.name||a.addr} ↔ ${b.name||b.addr}`;
-    it('✂ Verbindung löschen',()=>mpEdit({unlink:[{a:l.a,b:l.b}]}),'danger');
+    const cur=(l.type||'').toLowerCase(), save=v=>mpEdit({linkset:[Object.assign({a:l.a,b:l.b,type:l.type||'',mode:l.mode||'',ifn:l.ifn||'',if:l.if||''},v)]});
+    items.push({h:'Typ'}); for(const t of MP_LTYPES) it((cur===t.toLowerCase()?'✓ ':'   ')+t,()=>save({type:t})); it((cur?'   ':'✓ ')+'ohne Typ',()=>save({type:''}));
+    items.push({h:'Überwachung'}); it((l.mode!=='snmp'?'✓ ':'   ')+'Einfach – Status der Geräte (Ping)',()=>save({mode:'',ifn:'',if:''}));
+    it((l.mode==='snmp'?'✓ Traffic: '+(ns[MP.idx[l.ifn]]||{}).name+' · '+l.if:'   Traffic per SNMP …'),()=>mpPickIf(l,x,y,save));
+    hr(); it('✂ Verbindung löschen …',async()=>{ if(await uiConfirm(`Verbindung „${head}“ löschen?`)) mpEdit({unlink:[{a:l.a,b:l.b}]}); },'danger');
   } else if(canEd){ head='Karte';
     it('+ Gerät hier hinzufügen …',async()=>{ const name=await uiPrompt('Name des Geräts:',''); if(!name) return; const addr=await uiPrompt('IP / Adresse (optional):','')||''; mpEdit({add:[{name:name.trim(),addr:addr.trim(),x:(x-MP.tx)/MP.sc,y:(y-MP.ty)/MP.sc}]}); });
     if(MP.multi.size) it('Auswahl aufheben',()=>{ MP.multi.clear(); drawMap(); mpPane(); });
   }
   if(!items.length){ mpCtxClose(); return; }
-  m.innerHTML=`<div class="h" title="${esc(head)}">${esc(head)}</div>`+items.map((i,k)=>i?`<button type="button" data-k="${k}" class="${i.cls||''}">${esc(i.t)}</button>`:'<hr>').join('');
+  m.innerHTML=`<div class="h" title="${esc(head)}">${esc(head)}</div>`+items.map((i,k)=>!i?'<hr>':i.h?`<div class="h" style="padding-top:8px">${esc(i.h)}</div>`:`<button type="button" data-k="${k}" class="${i.cls||''}" style="white-space:pre">${esc(i.t)}</button>`).join('');
   m.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{ mpCtxClose(); items[+bt.dataset.k].f(); });
   m.style.display=''; const W=m.parentElement.clientWidth, H=m.parentElement.clientHeight; m.style.left=Math.min(x,W-m.offsetWidth-6)+'px'; m.style.top=Math.min(y,H-m.offsetHeight-6)+'px'; }
 addEventListener('pointerdown',e=>{ const m=$('#mp-ctx'); if(m&&m.style.display!=='none'&&!m.contains(e.target)&&e.target.id!=='map-cv') mpCtxClose(); });
@@ -3351,7 +3368,9 @@ async function mpAddNode(){ const name=await uiPrompt('Name des Geräts:',''); i
     if(moved&&d.grp){ try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({id:MP.id,moves:d.grp.map(g=>({id:g.o.id,x:g.o.x,y:g.o.y}))})}); }catch(err){ uiAlert(err.message); } return; }
     if(moved&&d.node){ try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({id:MP.id,moves:[{id:d.node.id,x:d.node.x,y:d.node.y}]})}); }catch(err){ uiAlert(err.message); } return; }
     if(moved) return; const [x,y]=pos(e); const n=mpHit(x,y);
-    if(MP.linkFrom&&n){ const src=[].concat(MP.linkFrom).filter(a=>a!==n.id); MP.linkFrom=null; $('#map-cv').style.cursor=MP.selMode?'crosshair':''; if(src.length) await mpEdit({link:src.map(a=>({a,b:n.id}))}); toast(src.length>1?src.length+' Verbindungen angelegt':'Verbunden'); MP.sel=n.id; mpPane(); return; }
+    if(MP.linkFrom&&n){ const src=[].concat(MP.linkFrom).filter(a=>a!==n.id); MP.linkFrom=null; $('#map-cv').style.cursor=MP.selMode?'crosshair':''; if(!src.length) return;
+      const mk=async t=>{ await mpEdit({link:src.map(a=>({a,b:n.id,type:t}))}); toast(src.length>1?src.length+' Verbindungen angelegt':'Verbunden'); MP.sel=n.id; mpPane(); };
+      mpMenu(x,y,'Verbindung anlegen – Typ',[...MP_LTYPES.map(t=>({t,f:()=>mk(t)})),{t:'ohne Typ',f:()=>mk('')},null,{t:'Abbrechen',f:()=>{}}]); return; }
     if(MP.linkFrom&&!n){ MP.linkFrom=null; $('#map-cv').style.cursor=MP.selMode?'crosshair':''; toast('Verbinden abgebrochen'); }
     if(n&&(e.shiftKey||e.metaKey||e.ctrlKey||MP.selMode)&&!document.body.classList.contains('viewer')){ MP.multi.has(n.id)?MP.multi.delete(n.id):MP.multi.add(n.id); MP.sel=null; drawMap(); mpPane(); return; }
     if(!n&&MP.multi.size){ MP.multi.clear(); }

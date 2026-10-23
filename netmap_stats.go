@@ -36,15 +36,16 @@ type mapDay struct {
 
 var mapStats = struct {
 	sync.Mutex
-	days     map[string]*mapDay           // Karte|Tag
-	dirty    map[string]bool              // Karte|Tag
-	down     map[string]map[string]int64  // Karte → IP → Ausfall seit (ms)
-	prev     map[string]map[string]ifPrev // Karte → IP|Schnittstelle → letzter Zählerstand
-	snmp     map[string]time.Time         // Karte → letzter SNMP-Auftrag
-	sjobs    map[string]string            // SNMP-Auftrag → Karte
-	snmpLast map[string]int64             // Karte → letztes SNMP-Ergebnis
-	snmpOK   map[string]int               // Karte → Geräte mit SNMP-Antwort
-}{days: map[string]*mapDay{}, dirty: map[string]bool{}, down: map[string]map[string]int64{},
+	days     map[string]*mapDay               // Karte|Tag
+	dirty    map[string]bool                  // Karte|Tag
+	down     map[string]map[string]int64      // Karte → IP → Ausfall seit (ms)
+	prev     map[string]map[string]ifPrev     // Karte → IP|Schnittstelle → letzter Zählerstand
+	snmp     map[string]time.Time             // Karte → letzter SNMP-Auftrag
+	sjobs    map[string]string                // SNMP-Auftrag → Karte
+	snmpLast map[string]int64                 // Karte → letztes SNMP-Ergebnis
+	snmpOK   map[string]int                   // Karte → Geräte mit SNMP-Antwort
+	cur      map[string]map[string][3]float64 // Karte → IP|Schnittstelle → [Zeit ms, In, Out] (Bit/s, letzte Messung)
+}{cur: map[string]map[string][3]float64{}, days: map[string]*mapDay{}, dirty: map[string]bool{}, down: map[string]map[string]int64{},
 	prev: map[string]map[string]ifPrev{}, snmp: map[string]time.Time{}, sjobs: map[string]string{},
 	snmpLast: map[string]int64{}, snmpOK: map[string]int{}}
 
@@ -168,6 +169,12 @@ func (m *Monitor) recordMapSNMP(mapID string, res map[string][]ifSample, at time
 			}
 			sec := float64(ms-p.T) / 1000
 			bi, bo := float64(din)*8/sec, float64(dout)*8/sec
+			cm := mapStats.cur[mapID]
+			if cm == nil {
+				cm = map[string][3]float64{}
+				mapStats.cur[mapID] = cm
+			}
+			cm[k] = [3]float64{float64(ms), bi, bo}
 			if x.If == nil {
 				x.If = map[string]*ifHour{}
 			}
@@ -282,14 +289,18 @@ func (m *Monitor) mapSNMPTick() {
 			continue
 		}
 		deg := map[string]int{}
+		want := map[string]bool{}
 		for _, l := range d.Links {
 			deg[l.A]++
 			deg[l.B]++
+			if l.Mode == "snmp" {
+				want[l.IfN] = true
+			}
 		}
 		seen := map[string]bool{}
 		var ips []string
 		for _, n := range d.Nodes {
-			if mp.SnmpScope != "all" && deg[n.ID] < 2 && !n.Snmp {
+			if mp.SnmpScope != "all" && deg[n.ID] < 2 && !n.Snmp && !want[n.ID] {
 				continue // Standard: nur Sektoren/Masten (mehrere Verbindungen) und markierte Geräte
 			}
 			ip := net.ParseIP(strings.TrimSpace(n.Addr)).To4()
@@ -582,4 +593,53 @@ func (m *Monitor) loadMapReach() {
 			mapPing.Unlock()
 		}
 	}
+}
+
+// mapTraffic: aktueller Traffic der per SNMP überwachten Linien ("a|b" → [In, Out] Bit/s aus Sicht des Messgeräts).
+func mapTraffic(mapID string, d *mapData) map[string][2]float64 {
+	out := map[string][2]float64{}
+	idx := map[string]string{}
+	for _, n := range d.Nodes {
+		idx[n.ID] = strings.TrimSpace(n.Addr)
+	}
+	mapStats.Lock()
+	defer mapStats.Unlock()
+	cm := mapStats.cur[mapID]
+	for _, l := range d.Links {
+		if l.Mode != "snmp" || l.If == "" {
+			continue
+		}
+		v, ok := cm[idx[l.IfN]+"|"+l.If]
+		if ok && time.Since(time.UnixMilli(int64(v[0]))) < 20*time.Minute {
+			out[l.A+"|"+l.B] = [2]float64{v[1], v[2]}
+		}
+	}
+	return out
+}
+
+// mapIfNames: bekannte Schnittstellen eines Geräts (letzte SNMP-Abfrage bzw. Statistik von heute/gestern).
+func (m *Monitor) mapIfNames(mapID, ip string) []string {
+	seen := map[string]bool{}
+	mapStats.Lock()
+	for k := range mapStats.cur[mapID] {
+		if strings.HasPrefix(k, ip+"|") {
+			seen[k[len(ip)+1:]] = true
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if d := m.mapDayLocked(mapID, time.Now().AddDate(0, 0, -i).Format("2006-01-02")); d != nil {
+			if x := d.IPs[ip]; x != nil {
+				for name := range x.If {
+					seen[name] = true
+				}
+			}
+		}
+	}
+	mapStats.Unlock()
+	out := []string{}
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

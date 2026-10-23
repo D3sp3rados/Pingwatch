@@ -49,6 +49,10 @@ type mapLink struct {
 	A    string `json:"a"`
 	B    string `json:"b"`
 	Type string `json:"type,omitempty"`
+	// Überwachung der Linie wie im Dude: "" = einfach (Status der Geräte), "snmp" = Traffic einer Schnittstelle
+	Mode string `json:"mode,omitempty"`
+	IfN  string `json:"ifn,omitempty"` // Gerät, dessen Schnittstelle gemessen wird
+	If   string `json:"if,omitempty"`  // Name der Schnittstelle (wie in der Statistik)
 }
 
 type mapData struct {
@@ -129,7 +133,10 @@ func cleanMap(d *mapData) {
 			continue
 		}
 		ls[k] = true
-		l.Type = clipStr(l.Type, 60)
+		l.Type, l.If, l.IfN = clipStr(l.Type, 60), clipStr(l.If, 120), clipStr(l.IfN, 40)
+		if l.Mode != "snmp" {
+			l.Mode, l.If, l.IfN = "", "", ""
+		}
 		links = append(links, l)
 	}
 	d.Links = links
@@ -214,7 +221,11 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 		mapStats.Lock()
 		snmp := map[string]any{"at": mapStats.snmpLast[id], "ok": mapStats.snmpOK[id]}
 		mapStats.Unlock()
-		writeJSON(w, map[string]any{"map": mp, "nodes": nodes, "links": d.Links, "reach": mapReachView(id), "snmp": snmp})
+		if ip := r.URL.Query().Get("ifs"); ip != "" { // Schnittstellen eines Geräts für die Linien-Überwachung
+			writeJSON(w, m.mapIfNames(id, ip))
+			return
+		}
+		writeJSON(w, map[string]any{"map": mp, "nodes": nodes, "links": d.Links, "reach": mapReachView(id), "snmp": snmp, "traffic": mapTraffic(id, d)})
 	case http.MethodPost:
 		var req struct {
 			ID, Name, Source string
@@ -338,10 +349,11 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 			Host, Name, Addr, Zone *string
 			Snmp, Off              *bool
 		}
-		Add    []mapNode
-		Del    []string
-		Link   []mapLink
-		Unlink []mapLink
+		Add     []mapNode
+		Del     []string
+		Link    []mapLink
+		Unlink  []mapLink
+		LinkSet []mapLink // Typ/Überwachung vorhandener Linien ändern
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&req); err != nil {
 		http.Error(w, "ungültige Anfrage", 400)
@@ -417,6 +429,16 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		d.Nodes = keep
+	}
+	for _, ls := range req.LinkSet {
+		for i, l := range d.Links {
+			if (l.A == ls.A && l.B == ls.B) || (l.A == ls.B && l.B == ls.A) {
+				d.Links[i].Type, d.Links[i].Mode, d.Links[i].IfN, d.Links[i].If = ls.Type, ls.Mode, ls.IfN, ls.If
+				if ls.Mode != "snmp" {
+					d.Links[i].Mode, d.Links[i].IfN, d.Links[i].If = "", "", ""
+				}
+			}
+		}
 	}
 	d.Links = append(d.Links, req.Link...)
 	if len(req.Unlink) > 0 {
