@@ -30,6 +30,24 @@ type UniFiCfg struct {
 	WanIgnore []string `json:"wanIgnore,omitempty"`
 	// Pausierte Geräte (nicht melden, nicht als offline zählen): "n:<MAC>" Netzwerk, "p:<Art>:<ID>" Protect
 	Ignore []string `json:"ignore,omitempty"`
+	// UniFi Protect nicht abfragen (keine Kameras/Sensoren an dieser Konsole)
+	NoProtect bool `json:"noProtect,omitempty"`
+}
+
+// dropProtect: Protect-Stand eines Standorts verwerfen (offene Ereignisse still schließen).
+func (m *Monitor) dropProtect(siteID string) {
+	now := time.Now().UnixMilli()
+	protectState.Lock()
+	if ps := protectState.bySite[siteID]; ps != nil {
+		for _, e := range ps.open {
+			m.closeSiteEvent(e, now)
+		}
+		delete(protectState.bySite, siteID)
+	}
+	protectState.Unlock()
+	if bs, ok := m.store.(blobStore); ok {
+		bs.DeleteBlob("protect:" + siteID)
+	}
 }
 
 func (u *UniFiCfg) ignores(key string) bool {
@@ -379,6 +397,10 @@ func (s *Server) handleAgentUniFi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.m.ingestUniFi(site, req.Devices, req.Error)
+	if site.UniFi.NoProtect {
+		writeJSON(w, map[string]bool{"ok": true, "protect": false})
+		return
+	}
 	if req.Protect != nil {
 		if len(req.Protect.Devs) > 2000 {
 			req.Protect.Devs = req.Protect.Devs[:2000]
@@ -409,6 +431,7 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		Console, ConsoleName  string
 		ClearKey              bool   // eigenen Standort-Key entfernen (dann gilt der Key des Kunden)
 		WanIgnore             string // „WAN3, WAN4“ – nicht überwachen
+		NoProtect             bool   // UniFi Protect nicht abfragen
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -460,6 +483,7 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		if sc.UniFi != nil {
 			nc.Ignore = sc.UniFi.Ignore
 		}
+		nc.NoProtect = req.NoProtect
 		if cloud {
 			nc.Mode, nc.URL = unifiModeCloud, ""
 			nc.Console, nc.ConsoleName = strings.TrimSpace(req.Console), strings.TrimSpace(req.ConsoleName)
@@ -474,6 +498,9 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 	m.cfg.Version++
 	m.saveConfigLocked()
 	m.mu.Unlock()
+	if req.NoProtect {
+		m.dropProtect(site.ID)
+	}
 	if cloud && req.On {
 		unifiCloudPoll.Lock()
 		delete(unifiCloudPoll.next, site.ID)
@@ -509,6 +536,7 @@ type unifiSummary struct {
 	WanDown     int          `json:"wanDown"` // getrennte WAN-Leitungen
 	Devices     []unifiView  `json:"devices,omitempty"`
 	Protect     *protectView `json:"protect,omitempty"`
+	NoProtect   bool         `json:"noProtect,omitempty"`
 }
 
 type unifiView struct {
@@ -553,7 +581,11 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	v.On, v.URL, v.Site = site.UniFi.On, site.UniFi.URL, site.UniFi.Site
 	v.Mode, v.Console, v.ConsoleName, v.KeySet = site.UniFi.Mode, site.UniFi.Console, site.UniFi.ConsoleName, site.UniFi.Key != ""
 	v.WanIgnore = site.UniFi.WanIgnore
-	v.Protect = protectSiteView(site.ID, site.UniFi)
+	if site.UniFi.NoProtect {
+		v.NoProtect = true
+	} else {
+		v.Protect = protectSiteView(site.ID, site.UniFi)
+	}
 	unifiLiveState.Lock()
 	defer unifiLiveState.Unlock()
 	st := unifiLiveState.bySite[site.ID]

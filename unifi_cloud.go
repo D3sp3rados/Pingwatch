@@ -216,7 +216,7 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 	}
 	m.ingestUniFi(s, devs, "")
 	unifiCloudPoll.Lock()
-	due := time.Since(unifiCloudPoll.protect[s.ID]) >= protectEvery
+	due := time.Since(unifiCloudPoll.protect[s.ID]) >= protectEvery && !s.UniFi.NoProtect
 	if due {
 		unifiCloudPoll.protect[s.ID] = time.Now()
 	}
