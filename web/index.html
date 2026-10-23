@@ -529,7 +529,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a></div>
+  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">TR-069</a></div>
   <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
@@ -679,6 +679,35 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <h2>Zwei-Faktor-Anmeldung</h2>
   <div class="panel" style="padding:14px" id="tf-box"></div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
+  </div>
+  <div class="setcat" data-cat="acs">
+  <h2>TR-069 (ACS) <span class="tag warn" style="font-size:11px;vertical-align:middle">Prototyp</span></h2>
+  <div class="panel help" id="acs-info" style="font-size:13px;line-height:1.6"></div>
+  <h2>Fritzboxen am ACS <span class="sub muted" id="acs-n" style="font-weight:400;font-size:12.5px"></span></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="acs-tbl"></table></div>
+  <div id="acs-det" style="display:none">
+    <h2 id="acs-dt"></h2>
+    <div class="mcols">
+      <div class="panel" style="padding:12px 14px">
+        <b>Name &amp; Notiz</b>
+        <div class="formrow" style="margin-top:6px"><label class="field">Name (Kunde)<input id="acs-name"></label><label class="field">Notiz<input id="acs-note"></label><button class="btn sm" id="acs-namesave">Speichern</button></div>
+        <b style="display:block;margin-top:12px">Profil (wird beim ersten Kontakt und nach jedem Werksreset gesetzt)</b>
+        <div class="formrow" style="margin-top:6px"><label class="field">PPPoE-Benutzer<input id="acs-ppu" autocomplete="off"></label><label class="field">PPPoE-Passwort<input id="acs-ppp" type="password" autocomplete="new-password"></label><label class="field" style="max-width:150px">Inform-Intervall (s)<input id="acs-iv" type="number" min="60" placeholder="3600"></label></div>
+        <label class="field" style="margin-top:6px">Weitere Werte (je Zeile: Parameter=Wert)<textarea id="acs-extra" rows="3" class="rm-in" style="width:100%" placeholder="InternetGatewayDevice.Time.NTPServer1=ptbtime1.ptb.de"></textarea></label>
+        <div style="margin-top:8px"><button class="btn sm pri" id="acs-profsave">Profil speichern &amp; senden</button></div>
+      </div>
+      <div class="panel" style="padding:12px 14px">
+        <b>Auftrag an die Box</b> <span class="muted" style="font-size:12px">– wird beim nächsten Kontakt ausgeführt</span>
+        <div class="formrow" style="margin-top:6px"><label class="field">Parameter (Pfad)<input id="acs-path" value="InternetGatewayDevice.DeviceInfo."></label><button class="btn sm" id="acs-get">Werte lesen</button><button class="btn sm" id="acs-names">Namen auflisten</button></div>
+        <div class="formrow" style="margin-top:6px"><label class="field">Parameter setzen<input id="acs-sn" placeholder="InternetGatewayDevice.…"></label><label class="field" style="max-width:160px">Wert<input id="acs-sv"></label><label class="field" style="max-width:130px">Typ<select id="acs-st"><option>xsd:string</option><option>xsd:unsignedInt</option><option>xsd:int</option><option>xsd:boolean</option></select></label><button class="btn sm" id="acs-set">Setzen</button></div>
+        <div class="formrow" style="margin-top:6px"><label class="field">Firmware-URL<input id="acs-fw" placeholder="https://…/fritzbox.image"></label><button class="btn sm" id="acs-dl">Firmware laden</button></div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" id="acs-reboot">🔄 Neu starten</button><button class="btn sm danger" id="acs-reset">Werkseinstellungen</button><button class="btn sm danger" id="acs-del" style="margin-left:auto">Gerät entfernen</button></div>
+      </div>
+    </div>
+    <h2>Aufträge</h2><div class="panel" style="overflow-x:auto"><table class="tbl" id="acs-tasks"></table></div>
+    <h2>Parameter <input type="search" id="acs-pq" class="rm-in" placeholder="Parameter suchen …" style="margin-left:8px;font-weight:400"></h2><div class="panel" style="overflow:auto;max-height:50vh"><table class="tbl" id="acs-params"></table></div>
+    <h2>Protokoll</h2><div class="panel" style="padding:8px 12px;font-size:12.5px;line-height:1.6;max-height:300px;overflow:auto" id="acs-log"></div>
+  </div>
   </div>
   <div class="setcat" data-cat="system">
   <h2>Allgemein</h2>
@@ -1942,16 +1971,17 @@ $('#s-days').onchange=loadStats;
 function verNewer(a,b){ if(!a||!b) return false; const pa=a.split('.').map(Number), pb=b.split('.').map(Number); for(let i=0;i<3;i++){ const x=pa[i]||0, y=pb[i]||0; if(x!==y) return x>y; } return false; }
 $('#hosts-q').addEventListener('input',()=>renderSettings());
 /* Einstellungen in Reitern: #/settings/<kategorie>, zuletzt gewählte wird gemerkt */
-const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','system'];
+const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','system','acs'];
 function setCat(c){ if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
   try{ localStorage.setItem('pw_setcat',c); }catch(e){}
-  if(c==='updates') loadUpdates(); if(c==='konto') renderTF();
+  if(c==='updates') loadUpdates(); if(c==='konto') renderTF(); if(c==='acs') loadACS();
   $$('#v-settings .setcat').forEach(d=>d.style.display=d.dataset.cat===c?'':'none');
   $$('#set-tabs a').forEach(a=>a.classList.toggle('on',a.dataset.cat===c));
   const on=$('#set-tabs a.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'}); }
 function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
 function renderSettings(){
   const st=S.state; if(!st) return;
+  $('#set-tab-acs').style.display=st.me&&st.me.super?'':'none';
   const q=($('#hosts-q').value||'').toLowerCase().trim(); const gname=h=>(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'');
   const hs=q?st.hosts.filter(h=>(h.name+' '+h.addr+' '+gname(h)).toLowerCase().includes(q)):st.hosts;
   const np=st.hosts.filter(h=>h.paused).length, nd=st.hosts.filter(h=>!h.paused&&h.status==='down').length;
@@ -2992,6 +3022,42 @@ syf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok
   try{ if(sys.updates&&!(S.state.org&&S.state.org.actionsConsent)&&!await ensureActionsConsent()) return;
     await api('/api/sites',{method:'POST',body:JSON.stringify({id:SY.site,sys})}); sydlg.close(); toast(sys.on?'Rechner-Überwachung gespeichert':'Rechner-Überwachung aus'); refreshState(); }catch(err){ $('#sy-err').textContent=err.message; } });
 
+
+/* ---------- TR-069 / ACS (nur Betreiber, Prototyp) ---------- */
+const ACS={data:null,sel:null};
+async function loadACS(){ try{ ACS.data=await api('/api/acs'); }catch(e){ $('#acs-info').textContent=e.message; return; } renderACS(); }
+async function acsPost(body,msg){ try{ await api('/api/acs',{method:'POST',body:JSON.stringify(body)}); if(msg) toast(msg); await loadACS(); }catch(e){ uiAlert(e.message); } }
+function renderACS(){ const d=ACS.data; if(!d) return;
+  $('#acs-info').innerHTML=(d.enabled?`<b style="color:var(--ok)">ACS aktiv</b> · Adresse für die Boxen: <span class="num">${esc(d.url)}</span>${d.auth?' · Boxen melden sich mit Benutzer/Passwort an':' · <span style="color:var(--warn)">ohne Anmeldung der Boxen (ACS_CPE_USER/ACS_CPE_PASS setzen)</span>'}`:'<b style="color:var(--warn)">ACS ist aus.</b> Einschalten mit der Umgebungsvariable <span class="num">ACS_ENABLE=1</span> in der rstcloud (optional <span class="num">ACS_CPE_USER</span>/<span class="num">ACS_CPE_PASS</span>).')
+    +'<br>So findet eine Box den ACS: per PPP-Anmeldenachricht (<span class="num">TR069URL=https://…/cwmp</span> in der PAP/CHAP-Antwort, nur wenn die Box noch keinen ACS kennt, z. B. nach Werksreset), per DHCP Option 43 oder per Provider-Konfiguration von AVM. Nur HTTPS.';
+  const ds=d.devices||[]; $('#acs-n').textContent=ds.length+' Geräte';
+  $('#acs-tbl').innerHTML=ds.length?'<tr><th>Box</th><th>Modell</th><th class="hide-m">FRITZ!OS</th><th class="hide-m">Externe IP</th><th>Letzter Kontakt</th><th>Offen</th></tr>'+ds.map(x=>{ const open=(x.tasks||[]).filter(t=>t.state==='queued'||t.state==='sent').length, fail=(x.tasks||[]).filter(t=>t.state==='fault').length;
+    return `<tr data-acs="${esc(x.id)}" style="cursor:pointer${ACS.sel===x.id?';background:var(--acc-a)':''}"><td><b>${esc(x.name||x.serial)}</b><div class="muted" style="font-size:12px">${esc(x.serial)}${x.provCode?' · '+esc(x.provCode):''}</div></td><td>${esc(x.model||x.class)}</td><td class="hide-m num">${esc(x.sw||'')}</td><td class="hide-m num">${esc(x.extIP||x.ip||'')}</td><td class="num">${fmtDT(x.last,false)}<div class="muted" style="font-size:12px">${esc((x.events||[]).join(', '))}</div></td><td>${open?open+' offen':'–'}${fail?` · <span style="color:var(--bad)">${fail} Fehler</span>`:''}</td></tr>`; }).join(''):'<tr><td class="empty">Noch keine Box hat sich gemeldet.</td></tr>';
+  $$('#acs-tbl [data-acs]').forEach(tr=>tr.onclick=()=>{ ACS.sel=tr.dataset.acs; ACS.filled=null; renderACS(); });
+  const x=ds.find(y=>y.id===ACS.sel); $('#acs-det').style.display=x?'':'none'; if(!x) return;
+  $('#acs-dt').textContent=(x.name||x.model||'Fritzbox')+' · '+x.serial;
+  if(ACS.filled!==x.id){ ACS.filled=x.id; $('#acs-name').value=x.name||''; $('#acs-note').value=x.note||''; const p=x.profile||{}; $('#acs-ppu').value=p.pppUser||''; $('#acs-ppp').value=''; $('#acs-ppp').placeholder=p.pppPass?'gespeichert – leer = unverändert':''; $('#acs-iv').value=p.interval||''; $('#acs-extra').value=(p.extra||[]).map(e=>e.n+'='+e.v).join('\n'); }
+  const TS={queued:['wartet','--mut'],sent:['gesendet','--warn'],done:['erledigt','--ok'],fault:['Fehler','--bad']};
+  const tl=(x.tasks||[]).slice().reverse();
+  $('#acs-tasks').innerHTML=tl.length?'<tr><th>Zeit</th><th>Auftrag</th><th>Von</th><th>Status</th><th></th></tr>'+tl.map(t=>{ const [l,c]=TS[t.state]||[t.state,'']; const what=t.kind==='set'?(t.values||[]).map(v=>v.n+'='+v.v).join(', '):t.kind==='download'?t.url:(t.names||[]).join(', ');
+    return `<tr><td class="num" style="white-space:nowrap">${fmtDT(t.created,false)}</td><td><b>${esc(t.kind)}</b> <span class="muted" style="font-size:12px;word-break:break-all">${esc(what)}</span></td><td style="font-size:12.5px">${esc(t.by||'')}</td><td><span style="color:var(${c})">${l}</span>${t.result?`<div class="muted" style="font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto">${esc(t.result)}</div>`:''}</td><td>${t.state==='queued'||t.state==='sent'?`<button class="btn sm" data-acancel="${esc(t.id)}">Abbrechen</button>`:''}</td></tr>`; }).join(''):'<tr><td class="empty">Keine Aufträge.</td></tr>';
+  $$('#acs-tasks [data-acancel]').forEach(b=>b.onclick=()=>acsPost({action:'cancel',id:x.id,taskId:b.dataset.acancel}));
+  const q=($('#acs-pq').value||'').toLowerCase(), ps=Object.entries(x.params||{}).filter(([k,v])=>!q||(k+' '+v).toLowerCase().includes(q)).sort((a,b)=>a[0].localeCompare(b[0],'de',{numeric:true}));
+  $('#acs-params').innerHTML=ps.length?ps.slice(0,800).map(([k,v])=>`<tr><td class="num" style="font-size:12px;word-break:break-all">${esc(k)}</td><td class="num" style="font-size:12px;word-break:break-all">${esc(v)}</td></tr>`).join('')+(ps.length>800?`<tr><td class="muted">… ${ps.length-800} weitere – Suche verwenden</td></tr>`:''):'<tr><td class="empty">Noch keine Werte.</td></tr>';
+  $('#acs-log').innerHTML=(x.log||[]).slice().reverse().map(esc).join('<br>')||'<span class="muted">–</span>';
+  const task=t=>acsPost({action:'task',id:x.id,task:t},'Auftrag eingeplant – wird beim nächsten Kontakt der Box ausgeführt');
+  $('#acs-get').onclick=()=>task({kind:'get',names:[$('#acs-path').value.trim()]});
+  $('#acs-names').onclick=()=>task({kind:'names',names:[$('#acs-path').value.trim()]});
+  $('#acs-set').onclick=()=>{ const n=$('#acs-sn').value.trim(); if(!n) return; task({kind:'set',values:[{n,v:$('#acs-sv').value,t:$('#acs-st').value}],secret:/password|passphrase|key/i.test(n)}); };
+  $('#acs-dl').onclick=async()=>{ const u=$('#acs-fw').value.trim(); if(!u||!await uiConfirm('Firmware von dieser Adresse auf die Box laden und installieren?\n\n'+u)) return; task({kind:'download',url:u}); };
+  $('#acs-reboot').onclick=async()=>{ if(await uiConfirm('Box beim nächsten Kontakt neu starten?')) task({kind:'reboot'}); };
+  $('#acs-reset').onclick=async()=>{ if(await uiConfirm('Box auf WERKSEINSTELLUNGEN zurücksetzen? Danach braucht sie den ACS-Bootstrap (PPP/DHCP), um wieder erreichbar zu sein.')) task({kind:'factoryreset'}); };
+  $('#acs-del').onclick=async()=>{ if(await uiConfirm('Gerät aus der Liste entfernen? Meldet es sich wieder, erscheint es neu.')){ ACS.sel=null; acsPost({action:'delete',id:x.id},'Entfernt'); } };
+  $('#acs-namesave').onclick=()=>acsPost({action:'name',id:x.id,name:$('#acs-name').value,note:$('#acs-note').value},'Gespeichert');
+  $('#acs-profsave').onclick=()=>{ const extra=$('#acs-extra').value.split('\n').map(l=>l.trim()).filter(l=>l.includes('=')).map(l=>({n:l.slice(0,l.indexOf('=')).trim(),v:l.slice(l.indexOf('=')+1).trim()}));
+    ACS.filled=null; acsPost({action:'profile',id:x.id,profile:{pppUser:$('#acs-ppu').value.trim(),pppPass:$('#acs-ppp').value,interval:+$('#acs-iv').value||0,extra}},'Profil gespeichert – wird beim nächsten Kontakt gesendet'); };
+}
+$('#acs-pq').addEventListener('input',()=>renderACS());
 /* ---------- Nutzungsbedingungen: neue Fassung einmal bestätigen ---------- */
 let TERMS_ASKED=false;
 async function askTerms(){ const me=(S.state&&S.state.me)||{}; if(!me.termsPending||TERMS_ASKED) return; TERMS_ASKED=true;

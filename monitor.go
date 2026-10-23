@@ -94,6 +94,7 @@ type Config struct {
 	AdminTOTPPending string            `json:"adminTotpPending,omitempty"`
 	Requests         []FeatureRequest  `json:"requests,omitempty"`  // Änderungswünsche aus dem KI-Assistenten
 	Machines         []MachineCfg      `json:"machines,omitempty"`  // überwachte Rechner (Rechner-Überwachung)
+	Acs              []AcsDevice       `json:"acs,omitempty"`       // TR-069: Fritzboxen am ACS (Prototyp)
 	VapidKey         string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
 	UniFiKeys        map[string]string `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
 	// Datenbank-Sicherungen auf Agenten (Standort → Einstellung / letzter Stand)
