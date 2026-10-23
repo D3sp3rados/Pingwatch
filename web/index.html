@@ -3195,7 +3195,8 @@ function mpHit(px,py){ const ns=MP.data&&MP.data.nodes; if(!ns) return null; let
 function mpPane(){ const p=$('#map-pane'); if(MP.multi.size&&MP.data){ mpMultiPane(p); return; } const n=MP.sel&&MP.data&&MP.data.nodes[MP.idx[MP.sel]];
   if(!n&&MP.listMode&&MP.data){ const l=MP.data.nodes.filter(x=>mpShown(x)&&(MP.listMode==='bad'?mpBad(x):mpDown(x)));
     p.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><b>${MP.listMode==='bad'?'Störungen':'Nicht erreichbar'} (${l.length})</b><button class="btn sm" id="mp-x" style="margin-left:auto">✕</button></div><div style="margin-top:8px">${l.slice(0,300).map(x=>{ const h=mpHostOf(x), st=h&&STATUS[h.status]; return `<div style="display:flex;gap:6px;align-items:center;font-size:13px;padding:3px 0"><span class="dot" style="background:${mpColor(x)}"></span><a href="#" data-mpgo="${esc(x.id)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.name)}">${esc(x.name)}</a><span class="muted" style="font-size:11px">${h?esc(st?st[0]:h.status):esc(x.addr||'')}</span></div>`; }).join('')||'<span class="muted">Keine.</span>'}</div>`;
-    $('#mp-x').onclick=()=>{ MP.listMode=null; MP.filter='all'; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f==='all')); drawMap(); mpPane(); };
+    $('#mp-x').onclick=()=>{ MP.listMode=null; MP.filter='all'; $$('#map-filter button').forEach(x=>x.classList.toggle('on',x.dataset.f==='all'));
+      if(MP.zone){ MP.zone=''; $('#map-zone').value=''; try{ localStorage.setItem('pw_mapzone',''); }catch(e){} MP.fitted=false; } drawMap(); mpPane(); };
     p.querySelectorAll('[data-mpgo]').forEach(a=>a.onclick=e=>{ e.preventDefault(); mpFocus(a.dataset.mpgo); }); return; }
   const q=mpQ(); if(!n&&q&&MP.data){ const l=MP.data.nodes.filter(x=>mpShown(x)&&mpMatch(x,q)).sort((a,b)=>(a.name||'').localeCompare(b.name||'','de'));
     const dnN=l.filter(mpDown).length, offN=l.filter(x=>x.off).length;
