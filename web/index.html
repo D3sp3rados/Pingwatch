@@ -34,6 +34,10 @@ html,body{margin:0;background:var(--bg);color:var(--fg)}
 body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
 .num{font-variant-numeric:tabular-nums}
 button,input,select{font:inherit;color:inherit}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark}}
+:root[data-theme="dark"]{color-scheme:dark}:root[data-theme="light"]{color-scheme:light}
+.tbl select{padding:4px 8px;border-radius:7px;border:1px solid var(--line2);background:var(--bg);color:var(--fg)}
+select option{background:var(--panel);color:var(--fg)}
 a{color:var(--acc)}
 /* Kopfzeile */
 .top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:env(safe-area-inset-top) 0 0}
