@@ -326,8 +326,12 @@ func stripTags(s string) string {
 // fritzExtraIngest (unter fh.mu): letzten Stand merken, neue Geräte und Firmware-Update melden.
 func (m *Monitor) fritzExtraIngest(hc HostCfg, fh *fritzHost, x *fritzExtra, recent bool) []notice {
 	var notes []notice
-	first := fh.extra == nil
+	m.fritzLogLoad(hc.ID, fh)
+	var newMACs []string
+	first := fh.extra == nil && len(fh.known) == 0
 	fh.extra = x
+	logChanged := false
+	fh.logHist, logChanged = mergeFritzLog(fh.logHist, x.Log)
 	if x.Devices != nil {
 		if fh.known == nil {
 			fh.known = map[string]bool{}
@@ -338,6 +342,7 @@ func (m *Monitor) fritzExtraIngest(hc HostCfg, fh *fritzHost, x *fritzExtra, rec
 				continue
 			}
 			fh.known[d.MAC] = true
+			newMACs = append(newMACs, d.MAC)
 			if !first && d.Active {
 				n := d.Name
 				if n == "" {
@@ -366,6 +371,9 @@ func (m *Monitor) fritzExtraIngest(hc HostCfg, fh *fritzHost, x *fritzExtra, rec
 		fh.fwNoted = x.UpdVersion
 	} else {
 		fh.fwNoted = ""
+	}
+	if logChanged || len(newMACs) > 0 {
+		m.fritzLogSave(hc.ID, fh)
 	}
 	return notes
 }

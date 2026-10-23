@@ -375,6 +375,8 @@ type fritzHost struct {
 	extra     *fritzExtra
 	known     map[string]bool // bekannte Geräte (MAC) für „neues Gerät“
 	fwNoted   string          // Firmware-Version, zu der schon gemeldet wurde
+	logHist   []string        // gesammeltes Ereignisprotokoll (neueste zuerst)
+	logLoaded bool
 }
 
 var fritzData = struct {
@@ -564,6 +566,11 @@ func (m *Monitor) fritzHostView(hc HostCfg) fritzView {
 	fh := getFritzHost(hc.ID)
 	fh.mu.Lock()
 	v.At, v.Err, v.Status, v.ConnSince, v.Extra = fh.at, fh.err, fh.cur, fh.connSince, fh.extra.view(hc.FritzFullNums)
+	if v.Extra != nil && len(fh.logHist) > 0 {
+		c := *v.Extra
+		c.Log = fh.logHist
+		v.Extra = &c
+	}
 	drops := trimTimes(fh.drops, cut)
 	v.Boots24 = len(trimTimes(fh.boots, cut))
 	var known, up int
