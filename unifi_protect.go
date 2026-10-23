@@ -32,6 +32,53 @@ type protectDev struct {
 	Leak   bool     `json:"leak,omitempty"`
 	Tamper bool     `json:"tamper,omitempty"`
 	FW     string   `json:"fw,omitempty"`
+	// Vals: weitere Messwerte (z. B. Luftqualität: co2, voc, pm25 …), Name → Wert
+	Vals map[string]float64 `json:"vals,omitempty"`
+}
+
+// protectSkip: Zahlenfelder, die keine Messwerte sind (Zeitpunkte, Zähler, Einstellungen).
+func protectSkip(k string) bool {
+	l := strings.ToLower(k)
+	for _, s := range []string{"at", "time", "ms", "id", "sec", "seconds", "uptime", "seen", "since", "version", "index", "channel", "port", "level", "sensitivity", "threshold", "delay", "duration", "interval", "volume", "min", "max", "offset"} {
+		if strings.HasSuffix(l, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// protectVals sammelt Messwerte aus stats (auch {value: n}) und Zahlen in Unterobjekten wie airQuality.
+func protectVals(m map[string]any) map[string]float64 {
+	out := map[string]float64{}
+	add := func(k string, v any) {
+		if len(out) >= 16 || protectSkip(k) {
+			return
+		}
+		switch x := v.(type) {
+		case float64:
+			out[k] = x
+		case map[string]any:
+			if n, ok := x["value"].(float64); ok {
+				out[k] = n
+			}
+		}
+	}
+	for _, key := range []string{"stats", "airQuality", "airQualityStats", "measurements", "values"} {
+		if sub := mMap(m, key); sub != nil {
+			for k, v := range sub {
+				add(k, v)
+			}
+		}
+	}
+	for _, k := range []string{"temperature", "humidity", "light", "co2", "voc", "tvoc", "pm1", "pm25", "pm2_5", "pm10", "aqi", "iaq", "pressure", "noise"} {
+		if v, ok := m[k]; ok {
+			add(k, v)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (d protectDev) online() bool {
@@ -98,7 +145,7 @@ func parseProtectList(kind string, b []byte) ([]protectDev, error) {
 	}
 	var out []protectDev
 	for _, m := range arr {
-		d := protectDev{ID: mStr(m, "id", "mac"), Kind: kind, Name: mStr(m, "name", "displayName"), Model: mStr(m, "modelKey", "type", "marketName"),
+		d := protectDev{ID: mStr(m, "id", "mac"), Kind: kind, Name: mStr(m, "name", "displayName"), Model: mStr(m, "marketName", "type", "model"),
 			State: strings.ToUpper(mStr(m, "state")), Bat: -1, FW: mStr(m, "firmwareVersion", "version")}
 		if d.Name == "" {
 			d.Name = d.Model
@@ -111,6 +158,25 @@ func parseProtectList(kind string, b []byte) ([]protectDev, error) {
 		}
 		if st := mMap(m, "stats"); st != nil {
 			d.Temp, d.Hum, d.Lux = mNum(st, "temperature", "value"), mNum(st, "humidity", "value"), mNum(st, "light", "value")
+		}
+		if kind == "sensor" || kind == "nvr" {
+			d.Vals = protectVals(m)
+			for _, k := range []string{"temperature", "humidity", "light"} {
+				delete(d.Vals, k) // stehen schon in Temp/Hum/Lux
+			}
+			if d.Temp == nil {
+				if v, ok := m["temperature"].(float64); ok {
+					d.Temp = &v
+				}
+			}
+			if d.Hum == nil {
+				if v, ok := m["humidity"].(float64); ok {
+					d.Hum = &v
+				}
+			}
+			if len(d.Vals) == 0 {
+				d.Vals = nil
+			}
 		}
 		if v, ok := m["isOpened"].(bool); ok {
 			d.Open = &v

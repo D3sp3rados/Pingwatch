@@ -77,3 +77,17 @@ func TestProtectFetchAndNotify(t *testing.T) {
 		t.Fatal(n.title)
 	}
 }
+
+func TestProtectAirQuality(t *testing.T) {
+	l, err := parseProtectList("sensor", []byte(`[{"id":"a1","name":"UP Air Quality","marketName":"UP Air Quality","state":"CONNECTED","lastSeenAt":1792700000000,"stats":{"temperature":{"value":21.4},"humidity":{"value":45},"co2":{"value":612},"voc":{"value":88},"lastMotionAt":5},"airQuality":{"pm25":7.5,"updatedAt":1}}]`))
+	if err != nil || len(l) != 1 {
+		t.Fatal(l, err)
+	}
+	d := l[0]
+	if d.Model != "UP Air Quality" || d.Temp == nil || *d.Temp != 21.4 || d.Hum == nil || *d.Hum != 45 {
+		t.Fatalf("%+v", d)
+	}
+	if d.Vals["co2"] != 612 || d.Vals["voc"] != 88 || d.Vals["pm25"] != 7.5 || len(d.Vals) != 3 {
+		t.Fatalf("Werte: %v", d.Vals)
+	}
+}

@@ -1357,7 +1357,9 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   el.addEventListener('input',e=>{ if(e.target.id==='tr-q'){ OVF.q=e.target.value; ovfSave(); renderTree(S.state); } }); })();
 const PKIND={camera:'📷 Kamera',sensor:'🌡 Sensor',light:'💡 Licht',chime:'🔔 Gong',viewer:'🖥 Viewer',nvr:'💾 NVR'};
 const protOn=d=>!d.state||d.state==='CONNECTED', protLow=d=>d.batLow||(d.bat>=0&&d.bat<=15);
-const protVal=d=>[d.temp!=null?d.temp.toLocaleString('de-DE',{maximumFractionDigits:1})+' °C':'',d.hum!=null?Math.round(d.hum)+' %':'',d.open!=null?(d.open?'offen':'zu'):'',d.leak?'💧 Wasser!':'',d.bat>=0?'🔋 '+d.bat+' %':''].filter(Boolean).join(' · ');
+const PVAL={co2:['CO₂','ppm'],voc:['VOC',''],tvoc:['TVOC',''],pm1:['PM1','µg/m³'],pm25:['PM2,5','µg/m³'],pm2_5:['PM2,5','µg/m³'],pm10:['PM10','µg/m³'],aqi:['AQI',''],iaq:['IAQ',''],pressure:['Druck','hPa'],noise:['Lärm','dB']};
+const protVals=d=>Object.entries(d.vals||{}).map(([k,v])=>{ const [n,u]=PVAL[k]||[k,'']; return n+' '+(Math.round(v*10)/10).toLocaleString('de-DE')+(u?' '+u:''); });
+const protVal=d=>[...protVals(d),d.temp!=null?d.temp.toLocaleString('de-DE',{maximumFractionDigits:1})+' °C':'',d.hum!=null?Math.round(d.hum)+' %':'',d.open!=null?(d.open?'offen':'zu'):'',d.leak?'💧 Wasser!':'',d.bat>=0?'🔋 '+d.bat+' %':''].filter(Boolean).join(' · ');
 function protTable(pv,selId){ if(!pv||!(pv.devs||[]).length) return '';
   return '<table class="tbl"><tr><th>Gerät</th><th>Art</th><th>Status</th><th>Werte</th><th class="hide-m">Modell</th></tr>'+pv.devs.map(d=>{ const on=protOn(d), low=protLow(d);
     return `<tr${selId===d.kind+':'+d.id?' style="background:var(--acc-a)"':''}><td><span class="dot" style="display:inline-block;margin-right:6px;background:var(${on?(low?'--warn':'--ok'):'--bad'})"></span><b>${esc(d.name)}</b></td><td>${PKIND[d.kind]||esc(d.kind)}</td><td>${on?'online':'offline'}${low?' · <span style="color:var(--warn)">Akku schwach</span>':''}</td><td class="num">${esc(protVal(d))}</td><td class="hide-m">${esc(d.model||'')}</td></tr>`; }).join('')+'</table>'; }
