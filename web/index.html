@@ -2936,7 +2936,11 @@ function renderGroups(){ const gs=S.state.groups||[]; const cnt=id=>S.state.host
   $$('#grp-tbl [data-gnote]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gnote); const n=await uiPrompt('Notiz (z. B. Ansprechpartner, Telefon):',g.note||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,note:n})}); refreshState(); }catch(e){ uiAlert(e.message); } });
   $$('#grp-tbl [data-gmem]').forEach(b=>b.onclick=()=>openGroup(b.dataset.gmem));
   $$('#grp-tbl [data-grep]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.grep); const n=await uiPrompt(`Monatsbericht nur für „${g.name}“ am 1. jedes Monats per E-Mail an (mehrere mit Komma, leer = aus):`,g.reportTo||''); if(n===null) return; try{ await api('/api/groups',{method:'POST',body:JSON.stringify({...g,reportTo:n})}); toast(n.trim()?'Gruppen-Bericht eingerichtet':'Gruppen-Bericht aus'); refreshState(); }catch(e){ uiAlert(e.message); } });
-  $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); if(!await uiConfirm(`Gruppe „${g.name}“ löschen? Die Hosts bleiben erhalten (ohne Gruppe).`)) return; await api('/api/groups?id='+g.id,{method:'DELETE'}); refreshState(); });
+  $$('#grp-tbl [data-gdel]').forEach(b=>b.onclick=async()=>{ const g=G(b.dataset.gdel); const n=(S.state.hosts||[]).filter(h=>h.group===g.id).length;
+    let withHosts=false;
+    if(n){ const v=await uiPrompt(`Gruppe „${g.name}“ löschen.\n\nNur die Gruppe löschen (die ${n} Hosts bleiben, ohne Gruppe): einfach OK.\n\nGruppe UND alle ${n} Hosts mit Verlauf endgültig löschen: „LÖSCHEN“ eingeben.`,''); if(v===null) return; withHosts=v.trim().toUpperCase()==='LÖSCHEN'; }
+    else if(!await uiConfirm(`Gruppe „${g.name}“ löschen?`)) return;
+    try{ await api('/api/groups?id='+g.id+(withHosts?'&hosts=1':''),{method:'DELETE'}); toast(withHosts?`Gruppe und ${n} Hosts gelöscht`:'Gruppe gelöscht'); }catch(e){ uiAlert(e.message); } refreshState(); });
 }
 const gdlg=$('#dlg-group'), gf=$('#gr-form');
 function openGroup(id){ const st=S.state, g=id&&(st.groups||[]).find(x=>x.id===id);

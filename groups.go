@@ -154,6 +154,19 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, g)
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
+		if r.URL.Query().Get("hosts") == "1" { // Gruppe samt Hosts löschen
+			var del []string
+			m.mu.RLock()
+			for _, hc := range m.cfg.Hosts {
+				if hc.Group == id && hc.Org == p.Org && id != "" {
+					del = append(del, hc.ID)
+				}
+			}
+			m.mu.RUnlock()
+			for _, hid := range del {
+				m.DeleteHost(hid)
+			}
+		}
 		m.mu.Lock()
 		out := m.cfg.Groups[:0]
 		for _, g := range m.cfg.Groups {
