@@ -451,6 +451,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="panel evlist" id="d-events"></div>
 </section>
 
+<section id="v-udev">
+  <div class="det-h"><a class="btn sm" href="#/" id="ud-back">← Übersicht</a><span class="dot" id="ud-dot"></span><h1 id="ud-name"></h1><span class="muted" id="ud-sub"></span></div>
+  <div id="ud-body"></div>
+  <h2>Ereignisse <span class="sub muted" style="font-weight:400;font-size:12.5px">letzte 7 Tage</span></h2>
+  <div class="panel evlist" id="ud-events"></div>
+</section>
+
 <section id="v-machine">
   <div class="det-h">
     <a class="btn sm" href="#/">← Übersicht</a>
@@ -1403,7 +1410,7 @@ function renderOvTable(root,st){ const {rows,hasC}=ovRows(st); root.classList.re
   root.querySelectorAll('th[data-sort]').forEach(t=>t.onclick=()=>{ const k=t.dataset.sort; if(OVT.sort===k) OVT.dir=-OVT.dir; else { OVT.sort=k; OVT.dir=k==='sev'||k==='val'?-1:1; } renderOverview(); });
   root.querySelectorAll('tr[data-k]').forEach(tr=>tr.onclick=()=>{ const k=tr.dataset.k, id=tr.dataset.id;
     if(k==='h') location.hash='#/host/'+id; else if(k==='m') location.hash='#/machine/'+id;
-    else { const s=S.state.sites.find(x=>x.id===tr.dataset.st); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); } }); }
+    else { const s=S.state.sites.find(x=>x.id===tr.dataset.st); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else if(k==='p') showPDev(s,((s.unifi.protect||{}).devs||[]).find(d=>d.kind+':'+d.id===id)); else openULive(s.id); } }); }
 /* ---------- RMM-Ansicht: dichte Liste oben, Details unten ---------- */
 const RM={cat:null,sel:null,tab:'ov',q:'',sort:'sev',dir:-1,d:null,evs:[],acts:[],inv:null,loadAt:0,paneKey:''};
 try{ const x=JSON.parse(localStorage.getItem('pw_rmm')||'{}'); if(x.cat) RM.cat=x.cat; if(x.h) RM.h=x.h; if(x.tab) RM.tab=x.tab; }catch(e){}
@@ -1455,8 +1462,8 @@ function renderOvRMM(root,st){
   // Auswahl gehört nicht mehr zur gefilterten Liste (anderer Kunde/Standort im Baum) → Detailbereich leeren
   if(RM.sel){ const vis=RM.sel.k==='m'?ms.some(r=>r.id===RM.sel.id):net.some(r=>r.k===RM.sel.k&&r.id===RM.sel.id); if(!vis){ RM.sel=null; RM.paneKey=''; } }
   rmPane(false); }
-function rmSelect(k,id,site){ if(k==='p'){ RM.sel={k,id,site}; RM.paneKey=''; $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); }); rmPane(true); return; }
-  if(k==='u'||k==='us'){ const s=S.state.sites.find(x=>x.id===site); if(!s) return; if(k==='u') showUDev(s,(s.unifi.devices||[]).find(d=>(d.mac||d.name)===id)); else openULive(s.id); return; }
+function rmSelect(k,id,site){ if(k==='p'||k==='u'){ RM.sel={k,id,site}; RM.paneKey=''; $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); }); rmPane(true); return; }
+  if(k==='us'){ const s=S.state.sites.find(x=>x.id===site); if(s) openULive(s.id); return; }
   RM.sel={k,id}; RM.d=null; RM.evs=[]; RM.acts=[]; RM.inv=null; RM.loadAt=0; RM.paneKey='';
   $$('#rm-top tr.sel').forEach(x=>x.classList.remove('sel')); $$('#rm-top tr[data-k]').forEach(x=>{ if(x.dataset.k===k&&x.dataset.id===id) x.classList.add('sel'); });
   rmPane(true); }
@@ -1473,7 +1480,11 @@ function rmPane(force){ const pane=$('#rm-pane'); if(!pane) return; const sel=RM
   // Notizen nicht überschreiben, während jemand tippt
   if(!force&&pane.contains(document.activeElement)&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if(sel.k==='h') return rmPaneHost(pane,force);
-  if(sel.k==='p'){ const s=S.state.sites.find(x=>x.id===sel.site), pv=s&&s.unifi&&s.unifi.protect; const html=`<div class="rm-ph"><b style="font-size:15px">📷 UniFi Protect · ${esc(s?s.name:'')}</b><span class="muted" style="font-size:12.5px">${pv?`${pv.total} Geräte · ${pv.offline} offline · Stand ${fmtTime(pv.at,false)}`:''}</span></div><div class="rm-body">${protTable(pv,sel.id)||'<div class="empty">Keine Daten.</div>'}</div>`;
+  if(sel.k==='p'||sel.k==='u'){ const s=S.state.sites.find(x=>x.id===sel.site), u=(s&&s.unifi)||{};
+    const d=sel.k==='u'?(u.devices||[]).find(x=>udKey(x)===sel.id):((u.protect||{}).devs||[]).find(x=>x.kind+':'+x.id===sel.id);
+    if(!d){ pane.innerHTML='<div class="empty">Gerät nicht mehr vorhanden.</div>'; RM.paneKey=''; return; }
+    const on=sel.k==='u'?!UOFF(d):protOn(d), href='#/udev/'+s.id+'/'+encodeURIComponent(sel.k==='u'?udKey(d):'p:'+d.kind+':'+d.id);
+    const html=`<div class="rm-ph"><span class="dot" style="background:var(${on?'--ok':'--bad'})"></span><b style="font-size:15px">${sel.k==='u'?'📶':(PKIND[d.kind]||'📷').split(' ')[0]} ${esc(d.name)}</b><span class="muted" style="font-size:12.5px">${esc([d.model,s.name].filter(Boolean).join(' · '))}</span><a class="btn sm" style="margin-left:auto" href="${href}">Vollansicht ↗</a></div><div class="rm-body">${sel.k==='u'?udevHTML(s,d):pdevHTML(s,d)}</div>`;
     if(!force&&RM.paneKey===html) return; RM.paneKey=html; pane.innerHTML=html; return; }
   const m=machineOf(sel.id); if(!m){ pane.innerHTML=''; return; }
   const tabs=[['ov','Übersicht'],['upd','Updates'+((m.cur||{}).upd>0?' ('+m.cur.upd+')':'')],['sw','Software'],['scr','Scripts'],['hist','Verlauf'],['notes','Notizen'+(m.notes?' 📝':'')],['inv','Inventar'],['log','Protokoll']];
@@ -1729,7 +1740,7 @@ function groupDrill(root,st,gs,ms){ const fs=gdFolders(st,gs,ms); let f=OVG.g&&f
     const ntile=d=>{ const off=UOFF(d); const m=[esc(d.model),d.ip?esc(d.ip):'',d.pingAvg>=0?`${d.pingAvg.toLocaleString('de-DE',{maximumFractionDigits:1})} ms`:'',d.loss>0?`<span style="color:var(--loss)">${Math.round(d.loss)} % Verlust</span>`:'',off?`<span style="color:var(--bad)">offline seit ${fmtTime(d.since,false)}</span>`:''].filter(Boolean).join(' · ');
       return `<div class="ud${off?' off':''}" data-ud="${esc(d.mac||d.name)}"><div class="ud-t"><span class="dot" style="background:var(${off?'--bad':d.state==='ONLINE'?'--ok':'--warn'})"></span><b title="${esc(d.name)}">${esc(d.name)}</b><span class="muted" style="font-size:12px">${UCAT[d.cat]||''}</span></div><div class="ud-m">${m}</div><div class="ubar">${(d.bar||[]).map(l=>`<i class="l${l}"></i>`).join('')}</div></div>`; };
     const ptile=d=>{ const on=protOn(d), low=protLow(d);
-      return `<div class="ud${on?'':' off'}"><div class="ud-t"><span class="dot" style="background:var(${on?(low?'--warn':'--ok'):'--bad'})"></span><b title="${esc(d.name)}">${esc(d.name)}</b><span class="muted" style="font-size:12px">${PKIND[d.kind]||''}</span></div><div class="ud-m">${[esc(d.model||''),on?'online':'<span style="color:var(--bad)">offline</span>',low?'<span style="color:var(--warn)">Akku schwach</span>':''].filter(Boolean).join(' · ')}</div>${protVal(d)?`<div class="gd-val num">${esc(protVal(d))}</div>`:''}</div>`; };
+      return `<div class="ud${on?'':' off'}" data-pd="${esc(d.kind+':'+d.id)}"><div class="ud-t"><span class="dot" style="background:var(${on?(low?'--warn':'--ok'):'--bad'})"></span><b title="${esc(d.name)}">${esc(d.name)}</b><span class="muted" style="font-size:12px">${PKIND[d.kind]||''}</span></div><div class="ud-m">${[esc(d.model||''),on?'online':'<span style="color:var(--bad)">offline</span>',low?'<span style="color:var(--warn)">Akku schwach</span>':''].filter(Boolean).join(' · ')}</div>${protVal(d)?`<div class="gd-val num">${esc(protVal(d))}</div>`:''}</div>`; };
     const body=(u.err?`<div class="panel" style="padding:10px 12px;color:var(--bad)">UniFi-Konsole nicht erreichbar: ${esc(u.err)}</div>`:'')
       +(net.length?`<div class="uf-g">${net.map(ntile).join('')}</div>`:'')+(prot.length?`<div class="uf-g" style="margin-top:${net.length?10:0}px">${prot.map(ptile).join('')}</div>`:'')
       +(!net.length&&!prot.length&&!u.err?'<div class="panel empty">Keine Geräte in dieser Auswahl.</div>':'');
@@ -1739,7 +1750,8 @@ function groupDrill(root,st,gs,ms){ const fs=gdFolders(st,gs,ms); let f=OVG.g&&f
     if(root.dataset.gh!==html||!root.firstElementChild){ root.innerHTML=html; root.dataset.gh=html;
       gdBindCrumb(root,f.uonly?[()=>ovgSet({g:null,u:null})]:[()=>ovgSet({g:null,u:null}),()=>ovgSet({u:null})]);
       root.querySelectorAll('[data-uc]').forEach(b=>b.onclick=()=>ovgSet({c:b.dataset.uc}));
-      root.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud))); }
+      root.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud)));
+      root.querySelectorAll('[data-pd]').forEach(t=>t.onclick=()=>showPDev(s,pd.find(d=>d.kind+':'+d.id===t.dataset.pd))); }
     return null; }
   // Ebene 2: Inhalt der Gruppe (Karten wie gewohnt) + UniFi-Kacheln
   root.dataset.gh='';
@@ -2171,14 +2183,49 @@ function renderUniFi(el,s){ const u=s.unifi||{}; const devs=u.devices||[];
   el.querySelector('.uf-h').onclick=()=>{ UF.open[s.id]=!el.classList.contains('open'); try{ localStorage.setItem('pw_ufopen',JSON.stringify(UF.open)); }catch(e){} el.dataset.sig=''; renderUniFi(el,s); };
   el.querySelectorAll('[data-ud]').forEach(t=>t.onclick=()=>showUDev(s,devs.find(d=>(d.mac||d.name)===t.dataset.ud)));
 }
-function showUDev(s,d){ if(!d) return; const rows=[['Status',d.state==='ONLINE'?'online':d.state.toLowerCase()],['seit',fmtDT(d.since,false)],['Modell',d.model],['IP',d.ip||'–'],['MAC',d.mac||'–'],['Firmware',d.fw||'–'],
-  ['Laufzeit',fmtUp(d.uptime)],['CPU / RAM',d.cpu||d.mem?`${Math.round(d.cpu)} % / ${Math.round(d.mem)} %`:'–'],['Datenverkehr Uplink (aktuell)',d.tx||d.rx?`↑ ${fmtBit(d.tx)} · ↓ ${fmtBit(d.rx)}`:'–'],
-  ['Ping (1 h)',d.pingAvg>=0?`Ø ${d.pingAvg.toFixed(1)} ms · max ${d.pingMax.toFixed(1)} ms · ${d.loss.toFixed(0)} % Verlust`:'–'],['Verfügbar (24 h)',d.avail>=0?d.avail.toFixed(2)+' %':'–'],
-  ['Neustarts (24 h)',d.boots.length?d.boots.map(b=>fmtTime(b,false)).join(', '):'keine']];
-  if((d.lans||[]).length) rows.splice(4,0,['LAN-Netze',d.lans.map(l=>`<div class="num">${esc(l.ip)} <span class="muted">· ${esc(l.name||'Netz')}${l.vlan?' · VLAN '+l.vlan:''}</span></div>`).join('')]);
-  if(d.wanIP&&!(d.wan||[]).length) rows.splice(4,0,['WAN-IP',d.wanIP]);
-  for(const w of d.wan||[]) rows.push([w.name+(w.active?' (aktiv)':''),`${w.up?'verbunden':'<b style="color:var(--bad)">getrennt</b>'}${w.ip?' · '+esc(w.ip):''}${w.latency?' · '+w.latency.toFixed(1)+' ms':''}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}${w.avail?' · '+w.avail.toFixed(2)+' % verfügbar':''}`]);
-  showTrace(d.name+' · '+s.name,''); $('#tr-text').innerHTML='<table class="tbl" style="font-size:13px;font-family:-apple-system,system-ui,Segoe UI,sans-serif;white-space:normal">'+rows.map(([k,v])=>`<tr><td class="muted" style="white-space:nowrap">${k}</td><td>${typeof v==='string'&&!v.includes('<')?esc(v):v}</td></tr>`).join('')+'</table>'; $('#tr-copy').style.display='none'; }
+/* UniFi- und Protect-Gerät als eigene Seite (#/udev/<Standort>/<MAC> bzw. p:<Art>:<ID>) */
+const UD={site:null,key:null,evAt:0,evs:[]};
+const udKey=d=>d.mac||d.name;
+function showUDev(s,d){ if(!d) return; location.hash='#/udev/'+s.id+'/'+encodeURIComponent(udKey(d)); }
+function showPDev(s,d){ if(!d) return; location.hash='#/udev/'+s.id+'/'+encodeURIComponent('p:'+d.kind+':'+d.id); }
+function udFind(){ const s=S.state&&S.state.sites.find(x=>x.id===UD.site); if(!s||!s.unifi) return {s};
+  if(UD.key.startsWith('p:')){ const p=((s.unifi.protect||{}).devs||[]).find(d=>'p:'+d.kind+':'+d.id===UD.key); return {s,p}; }
+  return {s,d:(s.unifi.devices||[]).find(d=>udKey(d)===UD.key)}; }
+// udevHTML: Inhalt der Geräteseite (auch im RMM-Detailbereich)
+function udevHTML(s,d){ const off=UOFF(d), st=(k,v,c)=>`<div class="panel stat"><span>${k}</span><b class="num" ${c?`style="color:var(${c})"`:''}>${v}</b></div>`;
+  const stats=st('Status',off?'offline':d.state==='ONLINE'?'online':esc(d.state.toLowerCase()),off?'--bad':d.state==='ONLINE'?'':'--warn')
+    +st('Verfügbar 24 h',d.avail>=0?d.avail.toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'–',d.avail>=0&&d.avail<99.9?'--warn':'')
+    +st('Ping 1 h',d.pingAvg>=0?`Ø ${d.pingAvg.toLocaleString('de-DE',{maximumFractionDigits:1})} ms<small style="display:block;font-size:12px;font-weight:400;color:var(--mut)">max ${d.pingMax.toLocaleString('de-DE',{maximumFractionDigits:1})} ms</small>`:'–')
+    +st('Verlust 1 h',d.pingAvg>=0?Math.round(d.loss)+' %':'–',d.loss>0?'--loss':'')
+    +(d.cpu||d.mem?st('CPU / RAM',`${Math.round(d.cpu)} % / ${Math.round(d.mem)} %`,d.cpu>90||d.mem>95?'--warn':''):'')
+    +st('Laufzeit',d.uptime?fmtUp(d.uptime):'–')+st('Neustarts 24 h',(d.boots||[]).length,(d.boots||[]).length?'--warn':'')
+    +(d.tx||d.rx?st('Uplink jetzt',`↑ ${fmtBit(d.tx)}<small style="display:block;font-size:12px;font-weight:400;color:var(--mut)">↓ ${fmtBit(d.rx)}</small>`):'');
+  const bar=`<div class="panel" style="padding:12px;margin-top:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">Letzte 24 h</div><div class="ubar" style="height:14px">${(d.bar||[]).map(l=>`<i class="l${l}"></i>`).join('')}</div><div class="bar-ax" style="margin-top:4px"><span>vor 24 h</span><span>grün ok · gelb Verlust/Neustart · rot offline</span><span>jetzt</span></div></div>`;
+  const kv=[['Kategorie',UCAT[d.cat]||''],['Modell',esc(d.model||'')],['IP',d.ip?`<span class="num">${esc(d.ip)}</span>`:''],['MAC',d.mac?`<span class="num">${esc(d.mac)}</span>`:''],['Firmware',esc(d.fw||'')],['Status seit',d.since?fmtDT(d.since,false):''],['WAN-IP',d.wanIP&&!(d.wan||[]).length?`<span class="num">${esc(d.wanIP)}</span>`:''],
+    ['LAN-Netze',(d.lans||[]).map(l=>`<div class="num">${esc(l.ip)} <span class="muted">· ${esc(l.name||'Netz')}${l.vlan?' · VLAN '+l.vlan:''}</span></div>`).join('')],['Neustarts',(d.boots||[]).map(b=>fmtTime(b,false)).join(', ')]].filter(x=>x[1]!=='');
+  const wan=(d.wan||[]).length?'<h2>WAN-Anschlüsse</h2><div class="panel" style="overflow-x:auto"><table class="tbl"><tr><th>Anschluss</th><th>Status</th><th>IP</th><th>Latenz</th><th>Ø 24 h</th><th>Verfügbar</th></tr>'+d.wan.map(w=>`<tr><td><b>${esc(w.name)}</b>${w.active?' <span class="tag">aktiv</span>':''}</td><td><span class="dot" style="display:inline-block;margin-right:6px;background:var(${w.up?'--ok':'--bad'})"></span>${w.up?'verbunden':'getrennt'}</td><td class="num">${esc(w.ip||'–')}</td><td class="num">${w.latency?w.latency.toFixed(1)+' ms':'–'}</td><td class="num">${w.lat24?w.lat24.toFixed(1)+' ms':'–'}</td><td class="num">${w.avail?w.avail.toFixed(2)+' %':'–'}</td></tr>`).join('')+'</table></div>':'';
+  return `<div class="stats">${stats}</div>${bar}<h2>Details</h2><div class="panel" style="overflow-x:auto"><table class="tbl kvt">${kv.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table></div>${wan}`; }
+function pdevHTML(s,d){ const on=protOn(d), low=protLow(d), st=(k,v,c)=>`<div class="panel stat"><span>${k}</span><b class="num" ${c?`style="color:var(${c})"`:''}>${v}</b></div>`;
+  let stats=st('Status',on?'online':'offline',on?'':'--bad');
+  if(d.bat>=0) stats+=st('Akku',d.bat+' %',low?'--warn':'');
+  if(d.temp!=null) stats+=st('Temperatur',d.temp.toLocaleString('de-DE',{maximumFractionDigits:1})+' °C');
+  if(d.hum!=null) stats+=st('Luftfeuchte',Math.round(d.hum)+' %');
+  if(d.lux!=null) stats+=st('Helligkeit',Math.round(d.lux)+' lx');
+  if(d.open!=null) stats+=st('Tür/Fenster',d.open?'offen':'zu',d.open?'--warn':'');
+  for(const [k,v] of Object.entries(d.vals||{})){ const [n,u]=PVAL[k]||[k,'']; stats+=st(esc(n),(Math.round(v*10)/10).toLocaleString('de-DE')+(u?' '+u:'')); }
+  if(d.leak) stats+=st('Wasser','erkannt','--bad');
+  const kv=[['Art',PKIND[d.kind]||esc(d.kind)],['Modell',esc(d.model||'')],['Firmware',esc(d.fw||'')],['Bewegung',d.motion?'erkannt':''],['Manipulation',d.tamper?'<b style="color:var(--bad)">erkannt</b>':'']].filter(x=>x[1]!=='');
+  const pv=s.unifi.protect||{};
+  return `<div class="stats">${stats}</div><h2>Details</h2><div class="panel" style="overflow-x:auto"><table class="tbl kvt">${kv.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}<tr><td>Stand</td><td>${pv.at?fmtDT(pv.at,false):'–'}${pv.version?' · Protect '+esc(pv.version):''}</td></tr></table></div>`; }
+async function renderUDev(){ const {s,d,p}=udFind();
+  $('#ud-back').onclick=e=>{ if(history.length>1){ e.preventDefault(); history.back(); } };
+  if(!s||(!d&&!p)){ $('#ud-name').textContent='Gerät nicht gefunden'; $('#ud-sub').textContent=''; $('#ud-body').innerHTML='<div class="panel empty">Das Gerät ist (nicht mehr) in der UniFi-Konsole oder die Abfrage läuft noch.</div>'; return; }
+  const name=d?d.name:p.name;
+  if(d){ const off=UOFF(d); $('#ud-dot').style.background=`var(${off?'--bad':d.state==='ONLINE'?'--ok':'--warn'})`; $('#ud-name').textContent='📶 '+name; $('#ud-sub').textContent=[d.model,UCAT[d.cat],s.name].filter(Boolean).join(' · ');
+    const h=udevHTML(s,d); if($('#ud-body').dataset.h!==h){ $('#ud-body').innerHTML=h; $('#ud-body').dataset.h=h; } }
+  else { const on=protOn(p); $('#ud-dot').style.background=`var(${on?(protLow(p)?'--warn':'--ok'):'--bad'})`; $('#ud-name').textContent=(PKIND[p.kind]||'📷').split(' ')[0]+' '+name; $('#ud-sub').textContent=[p.model,'UniFi Protect',s.name].filter(Boolean).join(' · ');
+    const h=pdevHTML(s,p); if($('#ud-body').dataset.h!==h){ $('#ud-body').innerHTML=h; $('#ud-body').dataset.h=h; } }
+  if(Date.now()-UD.evAt>30000){ UD.evAt=Date.now(); try{ const evs=await api('/api/events?limit=500&from='+(Date.now()-7*864e5)); const key=d?name:'Protect · '; UD.evs=evs.filter(e=>e.site===s.id&&(e.name||e.hostName||'').includes(name)&&(d?!(e.name||e.hostName||'').startsWith('Protect'):(e.name||e.hostName||'').startsWith(key))); }catch(e){ UD.evs=[]; } renderEvents($('#ud-events'),UD.evs,false,50); } }
 
 /* Fritzbox (TR-064) */
 const FZ={host:null,at:0};
@@ -2904,10 +2951,10 @@ function fillHostSelects(force){ const st=S.state; if(!st) return; const gs=st.g
     if(v2) sh.value=v2; if(!sh.value&&sh.options.length) sh.selectedIndex=0; sh.dataset.sig=skey; } }
 function route(){
   const h=location.hash.replace(/^#\/?/,''); const [path,qs]=h.split('?'); const parts=path.split('/'); const q=new URLSearchParams(qs||'');
-  let v=parts[0]||'overview'; if(!['overview','host','machine','events','stats','settings','install','billing','admin','requests'].includes(v)) v='overview';
+  let v=parts[0]||'overview'; if(!['overview','host','machine','udev','events','stats','settings','install','billing','admin','requests'].includes(v)) v='overview';
   if((v==='admin'||v==='requests')&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
   S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
-  $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||((v==='host'||v==='machine')&&a.dataset.v==='overview')));
+  $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||((v==='host'||v==='machine'||v==='udev')&&a.dataset.v==='overview')));
   { const ta=$('#tabs a.on'); const tb=$('#tabs'); if(ta&&tb&&tb.scrollWidth>tb.clientWidth) tb.scrollLeft=Math.max(0,ta.offsetLeft-tb.clientWidth/2+ta.offsetWidth/2); }
   hideTip();
   if(v==='host'){ S.hostId=parts[1]; const r=q.get('r'); if(q.get('from')){ D.preset=null; D.from=+q.get('from'); D.to=+q.get('to')||Date.now(); } else { D.preset=r&&RANGES[r]?r:(D.preset||'1h'); }
@@ -2915,6 +2962,7 @@ function route(){
     D.data=null; $('#d-events')._all=false; drawChart(); renderDetailHead(); loadDetail(); }
   else S.hostId=null;
   if(v==='machine'){ if(MD.id!==parts[1]){ INV.data=null; INV.id=null; } MD.id=parts[1]; MD.data=null; mTab(q.get('t')==='inv'?'inv':(MD.tab||'ov')); renderMachine(); loadMachine(); } else MD.id=null;
+  if(v==='udev'){ UD.site=parts[1]; UD.key=decodeURIComponent(parts.slice(2).join('/')); UD.evAt=0; renderUDev(); }
   if(v==='events') loadEvents();
   if(v==='stats'){ fillHostSelects(); renderReportBox(); if(parts[1]) $('#s-host').value=parts[1]; loadStats(); }
   if(v==='settings'){ setCat(parts[1]); renderSettings(); }
@@ -2933,6 +2981,7 @@ async function refreshState(){
   if(S.view==='overview') renderOverview();
   if(S.view==='host') renderDetailHead();
   if(S.view==='machine') renderMachine();
+  if(S.view==='udev') renderUDev();
   if(S.view==='settings') renderSettings();
 }
 async function refreshOverview(){ try{ S.overview=await api('/api/overview?hours=24&n=96'); if(S.view==='overview') drawBars(); }catch(e){} }
