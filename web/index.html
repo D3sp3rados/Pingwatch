@@ -297,6 +297,8 @@ body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.s
 .acc-list .acc-r span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acc-list .acc-r select{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
 .acc-list .acc-r.on{background:var(--acc-a)}
+.ov-paused{display:flex!important;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;cursor:pointer;margin:10px 0 6px;padding:10px 14px;border:1px dashed var(--line2);border-radius:10px;background:var(--panel);font-size:14px}
+.ov-paused:hover{border-color:var(--acc)}
 .check{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;color:var(--fg)}
 .check>input[type=checkbox],.check>input[type=radio]{flex-shrink:0;margin:2px 0 0}
 .check+.check{margin-top:12px}
@@ -1604,7 +1606,7 @@ function renderOverview(){
   }
   // Pausierte Hosts je Gruppe/Standort in eine eigene, eingeklappte Unterkategorie
   for(let i=secs.length-1;i>=0;i--){ const x=secs[i], p=x.hosts.filter(h=>h.paused); if(!p.length) continue;
-    x.hosts=x.hosts.filter(h=>!h.paused); secs.splice(i+1,0,{key:x.key+'~p',kind:'paused',group:x.group,hosts:p,machines:[]}); }
+    x.hosts=x.hosts.filter(h=>!h.paused); secs.splice(i+1,0,{key:x.key+'~p',kind:'paused',group:x.group,hosts:p,machines:[],allPaused:!x.hosts.length&&!(x.machines||[]).length&&!(x.utiles||[]).length&&!x.site}); }
   const sig=mode+'|'+secs.map(x=>x.key+':'+x.hosts.map(h=>h.id).join(',')+':'+(x.machines||[]).map(m=>m.id).join(',')+(x.site&&x.site.unifi&&x.site.unifi.on?':u':'')).join('|');
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
@@ -1633,9 +1635,9 @@ function renderOverview(){
   for(const sec of secs){ if(sec.div){ const d=root.querySelector(`.ov-site[data-div="${sec.div.id}"]`), s=sec.div; if(d) d.innerHTML=`<span class="dot" style="background:var(${s.online?'--ok':'--bad'})"></span>📍 ${esc(s.name)} <span class="muted" style="font-size:13px;font-weight:400">${s.id==='cloud'?'pingt aus dem Rechenzentrum':s.online?'verbunden':'nicht verbunden'}</span>`; }
     const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
     const mm=sec.machines||[], mInfo=mm.length?` · 💻 ${mm.filter(x=>x.status==='ok').length}/${mm.length} Rechner OK`:'';
-    if(sec.kind==='paused'){ const op=!!ovOpen()[sec.key]; h.style.cssText='font-size:13.5px;cursor:pointer;margin-top:4px;color:var(--mut)';
-      h.innerHTML=`⏸ Pausiert <span class="muted">${sec.hosts.length} Host${sec.hosts.length>1?'s':''} · werden nicht geprüft</span> <span style="font-size:12px">${op?'▴ einklappen':'▾ anzeigen'}</span>`;
-      h.onclick=()=>{ const o=ovOpen(); if(o[sec.key]) delete o[sec.key]; else o[sec.key]=1; try{ localStorage.setItem('pw_ovopen',JSON.stringify(o)); }catch(e){} renderOverview(); }; continue; }
+    if(sec.kind==='paused'){ const op=pausedOpen(sec); h.className='site-h ov-paused'; h.style.cssText='';
+      h.innerHTML=`<span>⏸ <b>Pausiert</b> · ${sec.hosts.length} Host${sec.hosts.length>1?'s':''} <span class="muted">– werden nicht geprüft</span></span><button class="btn sm" type="button">${op?'▴ Einklappen':'▾ Anzeigen'}</button>`;
+      h.onclick=()=>{ const o=ovOpen(); o[sec.key]=op?0:1; try{ localStorage.setItem('pw_ovopen',JSON.stringify(o)); }catch(e){} renderOverview(); }; continue; }
     if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':s.kind==='unifi'?(on?'über UniFi-Cloud · Konsole erreichbar':s.unifi&&s.unifi.err?'über UniFi-Cloud · Konsole nicht erreichbar':'über UniFi-Cloud · warte auf Abfrage'):on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}${mInfo}</span>`; }
     else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
       const mb=mm.filter(x=>x.status==='bad'||x.status==='off').length, mw=mm.filter(x=>x.status==='warn').length;
@@ -1805,10 +1807,11 @@ function gdUTile(el,s){ const q=gdUniStats(s), u=s.unifi||{}, parts=[];
   if(el.dataset.h!==html){ el.innerHTML=html; el.dataset.h=html; } el.onclick=()=>ovgSet({u:s.id,c:'all'}); }
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
 const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
+function pausedOpen(sec){ const o=ovOpen(); return sec.key in o?!!o[sec.key]:!!sec.allPaused; }
 function ovFold(root,secs,view){ const open=ovOpen();
   for(const sec of secs){ const items=[...(sec.machines||[]).map(m=>({c:cards['m:'+m.id],bad:MBAD(m)})),...sec.hosts.map(h=>({c:cards[h.id],bad:OV_BAD(h)}))]; if(!items.length) continue;
     const g=root.querySelector(`.grid[data-sec="${sec.key}"]`), mb=root.querySelector(`.ov-more[data-sec="${sec.key}"]`); if(!g||!mb) continue;
-    if(sec.kind==='paused'){ const op=!!open[sec.key]; items.forEach(x=>{ if(x.c) x.c.style.display=op?'':'none'; }); mb.style.display='none'; g.style.display=op?'':'none'; continue; }
+    if(sec.kind==='paused'){ const op=pausedOpen(sec); items.forEach(x=>{ if(x.c) x.c.style.display=op?'':'none'; }); mb.style.display='none'; g.style.display=op?'':'none'; continue; }
     const bad=items.filter(x=>x.bad), good=items.filter(x=>!x.bad), order=[...bad,...good];
     const want=order.map(x=>x.c).filter(Boolean);
     if(want.some((c,i)=>g.children[i]!==c)) want.forEach(c=>g.appendChild(c));
