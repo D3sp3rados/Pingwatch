@@ -328,6 +328,7 @@ func (m *Monitor) Start() {
 	m.mu.Unlock()
 	m.loadSysState()
 	m.loadProtectState()
+	m.loadMapReach()
 	go m.housekeeping()
 }
 
@@ -710,6 +711,7 @@ func (m *Monitor) Shutdown() {
 	}
 	m.saveSysState()
 	m.saveMapStats()
+	m.saveMapReach()
 	m.store.Close()
 }
 

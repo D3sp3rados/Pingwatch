@@ -170,6 +170,7 @@ func (m *Monitor) mapPingResult(jobID, errText string, result json.RawMessage) {
 			rtt[k] = v
 		}
 		go m.recordMapReach(mid, list, rtt, time.Now())
+		go m.saveMapReach()
 	}
 }
 

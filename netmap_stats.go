@@ -532,3 +532,54 @@ func (s *Server) handleMapStats(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"days": dl, "worst": devs, "devices": len(ipNode)})
 }
+
+// Letzte Erreichbarkeit je Karte sichern, damit die Karte nach einem Neustart nicht leer ist.
+func (m *Monitor) saveMapReach() {
+	bs, ok := m.store.(blobStore)
+	if !ok {
+		return
+	}
+	mapPing.Lock()
+	out := map[string][]byte{}
+	for id, r := range mapPing.reach {
+		if r != nil && r.At > 0 {
+			if b, err := json.Marshal(mapReach{At: r.At, RTT: r.RTT, IPs: r.IPs}); err == nil {
+				out[id] = b
+			}
+		}
+	}
+	mapPing.Unlock()
+	for id, b := range out {
+		bs.SaveBlob("mapreach:"+id, b)
+	}
+}
+
+func (m *Monitor) loadMapReach() {
+	bs, ok := m.store.(blobStore)
+	if !ok {
+		return
+	}
+	m.mu.RLock()
+	var ids []string
+	for _, x := range m.cfg.Maps {
+		ids = append(ids, x.ID)
+	}
+	m.mu.RUnlock()
+	for _, id := range ids {
+		b, err := bs.LoadBlob("mapreach:" + id)
+		if err != nil || len(b) == 0 {
+			continue
+		}
+		var r mapReach
+		if json.Unmarshal(b, &r) == nil && r.At > 0 {
+			if r.RTT == nil {
+				r.RTT = map[string]int32{}
+			}
+			mapPing.Lock()
+			if mapPing.reach[id] == nil {
+				mapPing.reach[id] = &r
+			}
+			mapPing.Unlock()
+		}
+	}
+}
