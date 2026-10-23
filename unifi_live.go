@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -367,7 +368,10 @@ func (s *Server) handleAgentUniFi(w http.ResponseWriter, r *http.Request) {
 		}
 		s.m.ingestProtect(site, req.Protect)
 	}
-	writeJSON(w, map[string]bool{"ok": true})
+	protectState.Lock()
+	need := protectState.bySite[site.ID] == nil
+	protectState.Unlock()
+	writeJSON(w, map[string]bool{"ok": true, "protect": need})
 }
 
 // GET /api/unifi?site= → Geräteliste · POST /api/unifi {site, on, url, key, usite}
@@ -656,7 +660,14 @@ func (a *Agent) unifiLoop() {
 			}
 			b, _ := json.Marshal(body)
 			if resp, e := a.req("POST", "/api/agent/unifi", bytes.NewReader(b), false); e == nil {
+				var ans struct {
+					Protect bool `json:"protect"` // Server hat keinen Protect-Stand (z. B. nach Neustart)
+				}
+				json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&ans)
 				resp.Body.Close()
+				if ans.Protect && body["protect"] == nil && time.Since(lastProtect) > time.Minute {
+					lastProtect = time.Time{} // beim nächsten Durchlauf sofort abfragen
+				}
 			} else {
 				log.Printf("UniFi-Status senden: %v", e)
 			}
