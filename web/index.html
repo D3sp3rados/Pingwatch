@@ -929,6 +929,14 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   </form>
 </dialog>
 
+<dialog id="dlg-ptest" style="width:min(640px,96vw)">
+  <form method="dialog">
+    <div class="dlg-h" id="pt-title">Test</div>
+    <div class="dlg-b" style="display:block"><div id="pt-body"></div><p class="muted" style="font-size:12px;margin:10px 0 0">Einmaliger Test aus dem Rechenzentrum mit der eingestellten Methode (Ping, Webseite, Port). Die Hosts bleiben pausiert, es entstehen keine Ereignisse oder Meldungen.</p></div>
+    <div class="dlg-f"><button class="btn" value="cancel">Schließen</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-zones" style="width:min(620px,96vw)">
   <form method="dialog">
     <div class="dlg-h">Orte</div>
@@ -1731,7 +1739,8 @@ function renderOverview(){
     const h=root.querySelector(`.site-h[data-sec="${sec.key}"]`); if(!h) continue;
     const mm=sec.machines||[], mInfo=mm.length?` · 💻 ${mm.filter(x=>x.status==='ok').length}/${mm.length} Rechner OK`:'';
     if(sec.kind==='paused'){ const op=pausedOpen(sec); h.className='site-h ov-paused'; h.style.cssText='';
-      h.innerHTML=`<span>⏸ <b>Pausiert</b> · ${sec.hosts.length} Host${sec.hosts.length>1?'s':''} <span class="muted">– werden nicht geprüft</span></span><button class="btn sm" type="button">${op?'▴ Einklappen':'▾ Anzeigen'}</button>`;
+      h.innerHTML=`<span>⏸ <b>Pausiert</b> · ${sec.hosts.length} Host${sec.hosts.length>1?'s':''} <span class="muted">– werden nicht geprüft</span></span><span style="display:flex;gap:6px"><button class="btn sm ed" type="button" data-ptest title="Alle pausierten Hosts einmal prüfen – ohne sie zu aktivieren, ohne Meldungen">🔍 Jetzt testen</button><button class="btn sm" type="button">${op?'▴ Einklappen':'▾ Anzeigen'}</button></span>`;
+      h.querySelector('[data-ptest]').onclick=e=>{ e.stopPropagation(); probeHosts(sec.hosts); };
       h.onclick=()=>{ const o=ovOpen(); o[sec.key]=op?0:1; try{ localStorage.setItem('pw_ovopen',JSON.stringify(o)); }catch(e){} renderOverview(); }; continue; }
     if(sec.kind==='site'){ const s=sec.site, on=s.online; h.innerHTML=`<span class="dot" style="background:var(${on?'--ok':'--bad'})"></span>${esc(s.name)} <span class="muted">${s.id==='cloud'?'pingt aus dem Rechenzentrum':s.kind==='unifi'?(on?'über UniFi-Cloud · Konsole erreichbar':s.unifi&&s.unifi.err?'über UniFi-Cloud · Konsole nicht erreichbar':'über UniFi-Cloud · warte auf Abfrage'):on?'Agent verbunden'+(s.ip?' · '+esc(s.ip):''):s.lastSeen?'Agent offline seit '+fmtDT(s.lastSeen,false):'Agent noch nie verbunden'}${mInfo}</span>`; }
     else { const act=sec.hosts.filter(x=>!x.paused), dn=act.filter(x=>x.status==='down').length, wn=act.filter(x=>x.status==='loss'||x.status==='spike').length, ok=act.filter(x=>x.status==='ok').length;
@@ -1902,6 +1911,13 @@ function gdUTile(el,s){ const q=gdUniStats(s), u=s.unifi||{}, parts=[];
   if(el.dataset.h!==html){ el.innerHTML=html; el.dataset.h=html; } el.onclick=()=>ovgSet({u:s.id,c:'all'}); }
 function ovOpen(){ try{ return JSON.parse(localStorage.getItem('pw_ovopen')||'{}')||{}; }catch(e){ return {}; } }
 const OV_BAD=h=>!h.paused&&['down','loss','spike'].includes(h.status);
+/* Pausierte Hosts einmal testen (ohne Aktivieren) */
+async function probeHosts(hosts){ const d=$('#dlg-ptest'), b=$('#pt-body'); $('#pt-title').textContent=`Test: ${hosts.length} pausierte Hosts`; b.innerHTML='<span class="muted">Prüfe … (3 Versuche je Host, bis ca. 30 Sekunden)</span>'; d.showModal();
+  let r; try{ r=await api('/api/hosts/probe',{method:'POST',body:JSON.stringify({ids:hosts.map(h=>h.id)})}); }catch(e){ b.innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`; return; }
+  const by={}; for(const x of r) by[x.id]=x; const L=hosts.map(h=>({h,x:by[h.id]})).sort((a,c)=>((a.x&&a.x.ok)?1:0)-((c.x&&c.x.ok)?1:0)||(a.h.name||'').localeCompare(c.h.name||'','de'));
+  const bad=L.filter(o=>o.x&&!o.x.ok&&!o.x.skip).length, ok=L.filter(o=>o.x&&o.x.ok).length;
+  b.innerHTML=`<div style="margin-bottom:8px"><b style="color:var(--ok)">${ok} erreichbar</b> · <b style="color:var(--bad)">${bad} nicht erreichbar</b>${L.length-ok-bad?` · <span class="muted">${L.length-ok-bad} nicht testbar</span>`:''}</div>
+    <div style="max-height:60vh;overflow:auto;font-size:13px">${L.map(({h,x})=>`<div style="display:flex;gap:8px;align-items:center;padding:3px 0;border-top:1px solid var(--line)"><span class="dot" style="background:var(${!x||x.skip?'--off':x.ok?(x.got<3?'--warn':'--ok'):'--bad'})"></span><a href="#/host/${h.id}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(h.addr)}">${esc(h.name)}</a><span class="muted num" style="font-size:12px;white-space:nowrap">${!x?'–':x.skip?esc(x.skip):x.ok?(x.rtt.toLocaleString('de-DE',{maximumFractionDigits:1})+' ms'+(x.got<3?` · ${x.got}/3`:'')):esc(x.err||'keine Antwort')}</span></div>`).join('')}</div>`; }
 function pausedOpen(sec){ const o=ovOpen(); return sec.key in o?!!o[sec.key]:!!sec.allPaused; }
 function ovFold(root,secs,view){ const open=ovOpen();
   for(const sec of secs){ const items=[...(sec.machines||[]).map(m=>({c:cards['m:'+m.id],bad:MBAD(m)})),...sec.hosts.map(h=>({c:cards[h.id],bad:OV_BAD(h)}))]; if(!items.length) continue;

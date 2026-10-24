@@ -320,6 +320,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/stats", protect(s.handleStats))
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
+	mux.HandleFunc("/api/hosts/probe", protect(s.handleHostProbe))
 	mux.HandleFunc("/api/import", protect(s.handleImport))
 	mux.HandleFunc("/api/mute", protect(s.handleMute))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
