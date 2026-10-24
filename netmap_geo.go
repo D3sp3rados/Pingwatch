@@ -126,7 +126,7 @@ type geoHit struct {
 
 var geoClient = &http.Client{Timeout: 20 * time.Second}
 
-const geoViewbox = "7.93,47.80,8.40,47.54" // Landkreis Waldshut (Hotzenwald, Hochrhein) – Kunden nur in Deutschland
+const geoViewbox = "7.93,47.92,8.45,47.54" // Landkreis Waldshut bis Löffingen/Bonndorf (Glas) – Kunden nur in Deutschland
 
 func nominatim(q string) (geoHit, error) {
 	u := "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=de&bounded=1&viewbox=" + geoViewbox + "&q=" + url.QueryEscape(q)
