@@ -177,7 +177,7 @@ func (m *Monitor) eventStarted(e *Event, h *Host) {
 	}
 	m.evMu.Lock()
 	e.Cause = cause
-	e.Notified = !maint && cause == ""
+	e.Notified = !maint && cause == "" && !e.Late
 	e.Decided = true
 	cp := *e
 	m.evMu.Unlock()
@@ -190,7 +190,7 @@ func (m *Monitor) eventStarted(e *Event, h *Host) {
 var parentGrace = 20 * time.Second
 
 // quiet: keine Meldung für Ereignisse in der Wartung oder mit übergeordneter Ursache.
-func (e Event) quiet() bool { return e.Maint || e.Cause != "" }
+func (e Event) quiet() bool { return e.Maint || e.Cause != "" || e.Late }
 
 // ---------- API ----------
 

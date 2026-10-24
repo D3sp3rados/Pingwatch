@@ -360,6 +360,7 @@ type Event struct {
 	AckAt    int64  `json:"ackAt,omitempty"`   // quittiert um
 	AckNote  string `json:"ackNote,omitempty"` // Notiz beim Quittieren
 	Notified bool   `json:"-"`                 // Beginn wurde gemeldet
+	Late     bool   `json:"late,omitempty"`    // aus nachgelieferten Messwerten (Agent war weg) – nicht melden
 	Decided  bool   `json:"-"`                 // Wartung/Ursache geprüft
 }
 

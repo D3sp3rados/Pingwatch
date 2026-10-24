@@ -388,11 +388,41 @@ func (m *Monitor) newEvent(h *Host, typ string, start int64) *Event {
 	m.evMu.Lock()
 	m.nextEv++
 	e := &Event{ID: m.nextEv, HostID: h.cfg.ID, HostName: h.cfg.Name, Site: h.cfg.Site, Org: h.cfg.Org, Type: typ, Start: start, Last: start}
+	// Messwerte, die ein Agent nach einer Unterbrechung nachliefert: nicht melden
+	// (für die Zeit gab es schon „Agent nicht erreichbar“). Läuft der Ausfall noch, wird er
+	// mit dem ersten aktuellen Messwert nachgemeldet (lateNotify).
+	if t := max(start, h.stLast); t > 0 && time.Now().UnixMilli()-t > lateAfter {
+		e.Late = true
+	}
 	m.events = append(m.events, e)
 	m.evMu.Unlock()
 	// Achtung: Aufrufer hält h.mu – darum Wartung/Abhängigkeit/Meldung asynchron prüfen.
 	go m.eventStarted(e, h)
 	return e
+}
+
+const lateAfter = 120_000 // ms
+
+// lateNotify: Ausfall aus nachgelieferten Messwerten dauert noch an → jetzt melden.
+func (m *Monitor) lateNotify(e *Event) {
+	for i := 0; i < 400; i++ { // warten, bis Wartung/Abhängigkeit geprüft sind
+		m.evMu.Lock()
+		d := e.Decided
+		m.evMu.Unlock()
+		if d {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	m.evMu.Lock()
+	if !e.Late || e.End != 0 || e.Maint || e.Cause != "" {
+		m.evMu.Unlock()
+		return
+	}
+	e.Late, e.Notified = false, true
+	cp := *e
+	m.evMu.Unlock()
+	m.notifyEventStart(cp)
 }
 
 func (m *Monitor) finishEvent(e *Event, end int64) {
@@ -489,7 +519,11 @@ func (m *Monitor) Ingest(h *Host, t int64, r int32, ip, errStr string) {
 				m.evMu.Lock()
 				h.oOut.Count++
 				h.oOut.Last = t
+				late := h.oOut.Late && time.Now().UnixMilli()-t <= lateAfter
 				m.evMu.Unlock()
+				if late {
+					go m.lateNotify(h.oOut)
+				}
 			}
 		}
 	} else {
