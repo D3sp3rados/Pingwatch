@@ -32,6 +32,35 @@ type UniFiCfg struct {
 	Ignore []string `json:"ignore,omitempty"`
 	// UniFi Protect nicht abfragen (keine Kameras/Sensoren an dieser Konsole)
 	NoProtect bool `json:"noProtect,omitempty"`
+	// Meldungen bei offline: "" = nur Gateway/Konsole (Standard), "all" = alle Geräte, "none" = keine
+	Alert string `json:"alert,omitempty"`
+	// Ausnahmen je Gerät (Schlüssel wie bei Ignore): melden trotz Standard / nicht melden
+	AlertOn  []string `json:"alertOn,omitempty"`
+	AlertOff []string `json:"alertOff,omitempty"`
+}
+
+// alerts: Soll für dieses Gerät bei „offline“ gemeldet werden? cat: gateway, switch, ap, other bzw. Protect-Art.
+func (u *UniFiCfg) alerts(key, cat string) bool {
+	if u == nil {
+		return true
+	}
+	for _, x := range u.AlertOff {
+		if x == key {
+			return false
+		}
+	}
+	for _, x := range u.AlertOn {
+		if x == key {
+			return true
+		}
+	}
+	switch u.Alert {
+	case "all":
+		return true
+	case "none":
+		return false
+	}
+	return cat == "gateway" || cat == "nvr" || cat == "console"
 }
 
 // dropProtect: Protect-Stand eines Standorts verwerfen (offene Ereignisse still schließen).
@@ -158,7 +187,13 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 		if st.ErrN == 3 && st.errEv == nil { // 3 Minuten in Folge keine Antwort
 			e := m.newSiteEvent(site, "device", "UniFi-Konsole", nowMs, inMaint)
 			st.errEv = e
-			starts = append(starts, *e)
+			if site.UniFi.alerts("console", "console") {
+				starts = append(starts, *e)
+			} else {
+				m.evMu.Lock()
+				e.Notified = false
+				m.evMu.Unlock()
+			}
 		}
 		unifiLiveState.Unlock()
 		m.unifiNotify(site, starts, nil, errText)
@@ -218,7 +253,7 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 					cur.boots = append(cur.boots, bootAt)
 					e := m.newDevEvent(site, "reboot", devLabel(d), key, bootAt, inMaint)
 					cp := m.closeSiteEvent(e, bootAt)
-					if !inMaint {
+					if !inMaint && site.UniFi.alerts("n:"+key, unifiCategory(d)) {
 						notes = append(notes, notice{"reboot", "", "🔄 UniFi: " + devLabel(d) + " neu gestartet",
 							fmt.Sprintf("Neustart um %s (%s)", time.UnixMilli(bootAt).Format("15:04"), site.Name) + unifiVia(site), site.Org, site.ID})
 					}
@@ -276,7 +311,13 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 		case off && e == nil && !first:
 			ne := m.newDevEvent(site, "device", devLabel(d), key, nowMs, inMaint)
 			st.open[key] = ne
-			starts = append(starts, *ne)
+			if site.UniFi.alerts("n:"+key, unifiCategory(d)) {
+				starts = append(starts, *ne)
+			} else { // still: sichtbar, aber ohne Meldung
+				m.evMu.Lock()
+				ne.Notified = false
+				m.evMu.Unlock()
+			}
 		case off && e == nil && first:
 			// beim ersten Abruf bereits offline: Ereignis ohne Alarm anlegen
 			st.open[key] = m.newDevEvent(site, "device", devLabel(d), key, nowMs, true)
@@ -432,6 +473,7 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		ClearKey              bool   // eigenen Standort-Key entfernen (dann gilt der Key des Kunden)
 		WanIgnore             string // „WAN3, WAN4“ – nicht überwachen
 		NoProtect             bool   // UniFi Protect nicht abfragen
+		Alert                 *string
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -482,6 +524,10 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		nc := &UniFiCfg{On: req.On, URL: u, Key: key, Site: strings.TrimSpace(req.USite), WanIgnore: parseWANList(req.WanIgnore)}
 		if sc.UniFi != nil {
 			nc.Ignore = sc.UniFi.Ignore
+			nc.Alert, nc.AlertOn, nc.AlertOff = sc.UniFi.Alert, sc.UniFi.AlertOn, sc.UniFi.AlertOff
+		}
+		if req.Alert != nil && (*req.Alert == "" || *req.Alert == "all" || *req.Alert == "none") {
+			nc.Alert = *req.Alert
 		}
 		nc.NoProtect = req.NoProtect
 		if cloud {
@@ -537,6 +583,9 @@ type unifiSummary struct {
 	Devices     []unifiView  `json:"devices,omitempty"`
 	Protect     *protectView `json:"protect,omitempty"`
 	NoProtect   bool         `json:"noProtect,omitempty"`
+	Alert       string       `json:"alert,omitempty"` // Meldungen: "" nur Gateway/Konsole, "all", "none"
+	AlertOn     []string     `json:"alertOn,omitempty"`
+	AlertOff    []string     `json:"alertOff,omitempty"`
 }
 
 type unifiView struct {
@@ -562,8 +611,9 @@ type unifiView struct {
 	WAN     []wanView  `json:"wan,omitempty"`
 	LANs    []unifiLAN `json:"lans,omitempty"`
 	WANIP   string     `json:"wanIP,omitempty"`
-	Key     string     `json:"key"`           // für „pausieren“
-	Ign     bool       `json:"ign,omitempty"` // pausiert
+	Key     string     `json:"key"`             // für „pausieren“
+	Ign     bool       `json:"ign,omitempty"`   // pausiert
+	Quiet   bool       `json:"quiet,omitempty"` // keine Meldung bei offline (zählt nicht als Störung)
 }
 
 type wanView struct {
@@ -581,6 +631,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	v.On, v.URL, v.Site = site.UniFi.On, site.UniFi.URL, site.UniFi.Site
 	v.Mode, v.Console, v.ConsoleName, v.KeySet = site.UniFi.Mode, site.UniFi.Console, site.UniFi.ConsoleName, site.UniFi.Key != ""
 	v.WanIgnore = site.UniFi.WanIgnore
+	v.Alert, v.AlertOn, v.AlertOff = site.UniFi.Alert, site.UniFi.AlertOn, site.UniFi.AlertOff
 	if site.UniFi.NoProtect {
 		v.NoProtect = true
 	} else {
@@ -600,7 +651,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 		dv := unifiView{Name: devLabel(d.unifiDevice), Model: d.Model, MAC: d.MAC, IP: d.IP, State: d.State, Since: d.Since,
 			Cat: unifiCategory(d.unifiDevice), FW: d.Firmware, Uptime: d.Uptime, CPU: d.CPU, Mem: d.Mem, Tx: d.Tx, Rx: d.Rx,
 			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots), LANs: d.LANs, WANIP: d.WANIP,
-			Key: "n:" + key, Ign: site.UniFi.ignores("n:" + key)}
+			Key: "n:" + key, Ign: site.UniFi.ignores("n:" + key), Quiet: !site.UniFi.alerts("n:"+key, unifiCategory(d.unifiDevice))}
 		if d.Uptime > 0 && d.At > 0 {
 			dv.Uptime = d.Uptime + (now-d.At)/1000
 		}
@@ -669,7 +720,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 			dv.WAN = append(dv.WAN, wv)
 		}
 		v.Total++
-		if unifiOffline(d.State) && !dv.Ign {
+		if unifiOffline(d.State) && !dv.Ign && !dv.Quiet {
 			v.Offline++
 		}
 		v.Boots += len(dv.Boots)
@@ -809,6 +860,98 @@ func (s *Server) handleUniFiIgnore(w http.ResponseWriter, r *http.Request) {
 			}
 			protectState.Unlock()
 		}
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+// POST /api/unifi/alert {site, key, mode: "on" | "off" | ""} – Meldung für ein Gerät erzwingen, abschalten oder auf Standard.
+func (s *Server) handleUniFiAlert(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	var req struct{ Site, Key, Mode string }
+	if !readJSON(w, r, &req) {
+		return
+	}
+	site := s.siteFor(r, req.Site)
+	if site == nil {
+		http.Error(w, "Standort unbekannt", 404)
+		return
+	}
+	if p := principal(r); !p.canSite(site.ID, true) {
+		http.Error(w, "Keine Berechtigung", 403)
+		return
+	}
+	k := strings.TrimSpace(req.Key)
+	if len(k) < 3 || len(k) > 200 || (!strings.HasPrefix(k, "n:") && !strings.HasPrefix(k, "p:") && k != "console") {
+		http.Error(w, "Gerät unbekannt", 400)
+		return
+	}
+	without := func(l []string) []string {
+		out := l[:0:0]
+		for _, x := range l {
+			if x != k {
+				out = append(out, x)
+			}
+		}
+		return out
+	}
+	m := s.m
+	m.mu.Lock()
+	for i := range m.cfg.Sites {
+		sc := &m.cfg.Sites[i]
+		if sc.ID != site.ID || sc.UniFi == nil {
+			continue
+		}
+		sc.UniFi.AlertOn, sc.UniFi.AlertOff = without(sc.UniFi.AlertOn), without(sc.UniFi.AlertOff)
+		switch req.Mode {
+		case "on":
+			sc.UniFi.AlertOn = append(sc.UniFi.AlertOn, k)
+		case "off":
+			sc.UniFi.AlertOff = append(sc.UniFi.AlertOff, k)
+		}
+	}
+	m.cfg.Version++
+	m.saveConfigLocked()
+	m.mu.Unlock()
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+// POST /api/unifi/protect {site, on} – UniFi Protect an diesem Standort nachträglich ein-/ausschalten.
+func (s *Server) handleUniFiProtectToggle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST", 405)
+		return
+	}
+	var req struct {
+		Site string
+		On   bool
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	site := s.siteFor(r, req.Site)
+	if site == nil {
+		http.Error(w, "Standort unbekannt", 404)
+		return
+	}
+	if p := principal(r); !p.canSite(site.ID, true) {
+		http.Error(w, "Keine Berechtigung", 403)
+		return
+	}
+	m := s.m
+	m.mu.Lock()
+	for i := range m.cfg.Sites {
+		if sc := &m.cfg.Sites[i]; sc.ID == site.ID && sc.UniFi != nil {
+			sc.UniFi.NoProtect = !req.On
+		}
+	}
+	m.cfg.Version++
+	m.saveConfigLocked()
+	m.mu.Unlock()
+	if !req.On {
+		m.dropProtect(site.ID)
 	}
 	writeJSON(w, map[string]bool{"ok": true})
 }

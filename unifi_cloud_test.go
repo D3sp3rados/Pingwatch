@@ -160,7 +160,7 @@ func TestUniFiCloudSiteFlow(t *testing.T) {
 	if code != 200 || !strings.Contains(body, "Cloud-Proxy") {
 		t.Fatal("Test:", code, body)
 	}
-	if code, body := c.do("POST", "/api/unifi", map[string]any{"site": site.ID, "on": true, "console": "c1", "consoleName": "UDM Zuhause"}); code != 200 {
+	if code, body := c.do("POST", "/api/unifi", map[string]any{"site": site.ID, "on": true, "console": "c1", "consoleName": "UDM Zuhause", "alert": "all"}); code != 200 {
 		t.Fatal(code, body)
 	}
 	time.Sleep(300 * time.Millisecond) // erste Abfrage läuft sofort

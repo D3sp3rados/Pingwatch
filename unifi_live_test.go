@@ -20,7 +20,7 @@ func TestUniFiLive(t *testing.T) {
 	if code, body := c.do("POST", "/api/unifi", map[string]any{"site": site.ID, "on": true, "url": "192.168.1.1"}); code != 400 || !strings.Contains(body, "Schlüssel") {
 		t.Fatal("ohne Schlüssel", code, body)
 	}
-	if code, body := c.do("POST", "/api/unifi", map[string]any{"site": site.ID, "on": true, "url": "192.168.1.1", "key": "geheim"}); code != 200 {
+	if code, body := c.do("POST", "/api/unifi", map[string]any{"site": site.ID, "on": true, "url": "192.168.1.1", "key": "geheim", "alert": "all"}); code != 200 {
 		t.Fatal(code, body)
 	}
 	agent := func(method, path string, v any) string {

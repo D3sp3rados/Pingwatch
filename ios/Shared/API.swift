@@ -239,12 +239,13 @@ struct ProtectDev: Decodable, Hashable, Identifiable {
     var leak: Bool?
     var vals: [String: Double]?
     var ign: Bool?
+    var quiet: Bool?
 
     var online: Bool { (state ?? "").isEmpty || state == "CONNECTED" }
     /// pausiert (keine Meldungen, gelb statt rot)
     var paused: Bool { ign ?? false }
     /// zählt als Störung: offline und nicht pausiert
-    var problem: Bool { !online && !paused }
+    var problem: Bool { !online && !paused && !(quiet ?? false) }
     var pauseKey: String { "p:\(kind):\(id)" }
     var lowBattery: Bool { (batLow ?? false) || ((bat ?? -1) >= 0 && (bat ?? -1) <= 15) }
     var isSensor: Bool { kind == "sensor" }

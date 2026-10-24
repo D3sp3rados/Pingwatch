@@ -230,7 +230,7 @@ var scopedPaths = map[string]bool{
 	"/api/events": true, "/api/events/ack": true, "/api/hosts": true, "/api/mute": true,
 	"/api/fritz": true, "/api/snmp": true, "/api/trace": true,
 	"/api/machine": true, "/api/machine/inventory": true, "/api/actions": true, "/api/scripts": true,
-	"/api/unifi": true, "/api/unifi/ignore": true,
+	"/api/unifi": true, "/api/unifi/ignore": true, "/api/unifi/alert": true,
 	"/api/me": true, "/api/me/notify": true, "/api/me/profile": true, "/api/me/org": true,
 	"/api/totp": true, "/api/passkey": true, "/api/terms/accept": true,
 	"/api/app/device": true, "/api/app/pushtest": true, "/api/webpush": true,
@@ -239,7 +239,7 @@ var scopedPaths = map[string]bool{
 // scopedWrite: Änderungen, die eingeschränkte Benutzer (mit Admin-Recht am Objekt) machen dürfen.
 var scopedWrite = map[string]bool{
 	"/api/hosts": true, "/api/mute": true, "/api/events/ack": true, "/api/trace": true,
-	"/api/machine": true, "/api/actions": true, "/api/unifi/ignore": true, "/api/me/org": true,
+	"/api/machine": true, "/api/actions": true, "/api/unifi/ignore": true, "/api/unifi/alert": true, "/api/unifi/protect": true, "/api/me/org": true,
 }
 
 func scopedAllowed(r *http.Request) bool {

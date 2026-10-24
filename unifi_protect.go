@@ -32,7 +32,8 @@ type protectDev struct {
 	Leak   bool     `json:"leak,omitempty"`
 	Tamper bool     `json:"tamper,omitempty"`
 	FW     string   `json:"fw,omitempty"`
-	Ign    bool     `json:"ign,omitempty"` // pausiert (nur Anzeige)
+	Ign    bool     `json:"ign,omitempty"`   // pausiert (nur Anzeige)
+	Quiet  bool     `json:"quiet,omitempty"` // keine Meldung bei offline
 	// Vals: weitere Messwerte (z. B. Luftqualität: co2, voc, pm25 …), Name → Wert
 	Vals map[string]float64 `json:"vals,omitempty"`
 }
@@ -281,7 +282,11 @@ func (m *Monitor) ingestProtect(site SiteCfg, snap *protectSnap) {
 		if !d.online() {
 			if ps.open[key] == nil {
 				ps.open[key] = m.newSiteEvent(site, "device", "Protect · "+label, nowMs, maint)
-				if !maint && !first {
+				if !site.UniFi.alerts("p:"+key, d.Kind) {
+					m.evMu.Lock()
+					ps.open[key].Notified = false
+					m.evMu.Unlock()
+				} else if !maint && !first {
 					notes = append(notes, notice{"devoff", "", "🔴 UniFi Protect: " + label + " offline",
 						"Gerät meldet sich nicht bei UniFi Protect (" + site.Name + ")" + unifiVia(site), site.Org, site.ID})
 				} else if first {
@@ -300,7 +305,7 @@ func (m *Monitor) ingestProtect(site SiteCfg, snap *protectSnap) {
 			}
 		}
 		low := d.BatLow || (d.Bat >= 0 && d.Bat <= 15)
-		if low && !ps.batLow[key] && !first && !maint {
+		if low && !ps.batLow[key] && !first && !maint && site.UniFi.alerts("p:"+key, d.Kind) {
 			notes = append(notes, notice{"devoff", "", "🔋 UniFi Protect: Akku schwach – " + label,
 				fmt.Sprintf("Akku bei %d %% (%s)", max(d.Bat, 0), site.Name) + unifiVia(site), site.Org, site.ID})
 		}
@@ -345,6 +350,7 @@ func protectSiteView(siteID string, uc *UniFiCfg) *protectView {
 	order := map[string]int{"nvr": 0, "camera": 1, "sensor": 2, "light": 3, "chime": 4, "viewer": 5}
 	for i := range v.Devs {
 		v.Devs[i].Ign = uc.ignores("p:" + v.Devs[i].Kind + ":" + v.Devs[i].ID)
+		v.Devs[i].Quiet = !uc.alerts("p:"+v.Devs[i].Kind+":"+v.Devs[i].ID, v.Devs[i].Kind)
 	}
 	sort.Slice(v.Devs, func(i, j int) bool {
 		a, b := v.Devs[i], v.Devs[j]
@@ -364,7 +370,7 @@ func protectSiteView(siteID string, uc *UniFiCfg) *protectView {
 		if d.Ign {
 			continue
 		}
-		if !d.online() {
+		if !d.online() && !d.Quiet {
 			v.Offline++
 		}
 		if d.BatLow || (d.Bat >= 0 && d.Bat <= 15) {

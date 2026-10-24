@@ -343,6 +343,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
 	mux.HandleFunc("/api/unifi", protect(s.handleUniFi))
+	mux.HandleFunc("/api/unifi/alert", protect(s.handleUniFiAlert))
+	mux.HandleFunc("/api/unifi/protect", protect(s.handleUniFiProtectToggle))
 	mux.HandleFunc("/api/unifi/ignore", protect(s.handleUniFiIgnore))
 	mux.HandleFunc("/api/unifi/cloud", protect(s.handleUniFiCloudKey))
 	mux.HandleFunc("/api/unifi/sites", protect(s.handleUniFiCloudSites))
