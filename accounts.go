@@ -40,6 +40,7 @@ func (s *Server) registerTenantRoutes(mux *http.ServeMux, protect, super func(ht
 	mux.HandleFunc("/api/users", protect(s.handleUsers))
 	mux.HandleFunc("/api/users/mail", protect(s.handleUserMail))
 	mux.HandleFunc("/api/me/notify", protect(s.handleMyNotify))
+	mux.HandleFunc("/api/team/notify", protect(s.handleTeamNotify))
 	mux.HandleFunc("/api/me/profile", protect(s.handleMyProfile))
 	mux.HandleFunc("/api/assistant", protect(s.handleAssistant))
 	mux.HandleFunc("/api/requests", protect(s.handleRequests))

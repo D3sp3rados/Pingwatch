@@ -648,7 +648,9 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 
   </div>
   <div class="setcat" data-cat="alerts">
-  <h2>Alarme <button class="btn sm pri ed" id="add-alert">+ Alarmweg</button></h2>
+  <h2>Personen <span class="sub muted" style="font-weight:400;font-size:12.5px">Push und E-Mail je Teammitglied</span></h2>
+  <div class="panel" style="overflow-x:auto"><table class="tbl" id="tn-tbl"></table></div>
+  <h2>Alarme <span class="sub muted" style="font-weight:400;font-size:12.5px">Teams, Telegram, Webhook, Adressen ohne Login</span> <button class="btn sm pri ed" id="add-alert">+ Alarmweg</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="al-tbl"></table></div>
   <p class="muted" style="font-size:12.5px" id="al-info">Zusätzlich zu den Push-Meldungen aufs iPhone: E-Mail, Microsoft Teams, Telegram oder eigener Webhook.</p>
 
@@ -2840,7 +2842,7 @@ $('#mf-del').onclick=async()=>{ if(!await uiConfirm('Wartungsfenster löschen?')
 /* Alarme */
 const ATYPE={email:'E-Mail',teams:'Teams',telegram:'Telegram',webhook:'Webhook'};
 let AL=null, alAt=0;
-async function loadAlerts(force){ if(!force&&AL&&Date.now()-alAt<15000) return renderAlerts(); alAt=Date.now(); try{ AL=await api('/api/alerts'); }catch(e){ return; } renderAlerts(); }
+async function loadAlerts(force){ loadTeamNotify(); if(!force&&AL&&Date.now()-alAt<15000) return renderAlerts(); alAt=Date.now(); try{ AL=await api('/api/alerts'); }catch(e){ return; } renderAlerts(); }
 function renderAlerts(){ if(!AL) return; const cs=AL.channels||[];
   const ev=c=>c.escalate?`<span class="tag warn">Eskalation nach ${c.escalate} min</span>`:[c.outage&&'Ausfall',c.offline&&'Standort',c.loss&&'Verlust',c.spike&&'Spitzen',c.report&&'Bericht'].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join(' ');
   const stat=c=>c.disabled?'<span class="tag">pausiert</span>':c.lastErr&&c.errAt>(c.lastOK||0)?`<span class="tag bad" title="${esc(c.lastErr)}">Fehler</span> <span class="muted" style="font-size:12px">${esc(c.lastErr.slice(0,60))}</span>`:c.lastOK?`<span class="tag ok">zuletzt ${fmtDT(c.lastOK,false)}</span>`:'<span class="muted">–</span>';
@@ -2973,9 +2975,19 @@ unf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok
   const ps=sel(UPK,'p_'), ms=sel(UMK,'m_');
   if(UPK.all()&&ps.outage&&ps.offline&&ps.loss&&ps.spike) body.pushAll=true; else body.pushSel=ps;
   if(UMK.all()&&ms.outage&&ms.offline&&!ms.loss&&!ms.spike) body.mailAllSel=true; else body.mailSel=ms;
-  try{ await api('/api/me/notify'+(UN.uid?'?user='+encodeURIComponent(UN.uid):''),{method:'POST',body:JSON.stringify(body)}); $('#dlg-unotify').close(); toast('Benachrichtigungen gespeichert'); if(!UN.uid) mnLoad(); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(err){ $('#un-err').textContent=err.message; } });
+  try{ await api('/api/me/notify'+(UN.uid?'?user='+encodeURIComponent(UN.uid):''),{method:'POST',body:JSON.stringify(body)}); $('#dlg-unotify').close(); toast('Benachrichtigungen gespeichert'); if(!UN.uid) mnLoad(); $('#tn-tbl').dataset.sig=''; loadTeamNotify(); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(err){ $('#un-err').textContent=err.message; } });
 $('#mn-fine').onclick=()=>openUNotify('');
 function selText(x,def){ if(!x) return def; const n=(x.hosts||[]).length+(x.groups||[]).length+(x.customers||[]).length+(x.machines||[]).length; const k=[x.outage&&'Ausfall',x.offline&&'Standort',x.loss&&'Verlust',x.spike&&'Spitzen'].filter(Boolean).join('/'); return (n?n+' Auswahl':'alle Geräte')+(k?' · '+k:''); }
+/* Personen: persönliche Benachrichtigungen aller Teammitglieder */
+async function loadTeamNotify(){ let rs; try{ rs=await api('/api/team/notify'); }catch(e){ return; } const T=$('#tn-tbl'); const sig=JSON.stringify(rs); if(T.dataset.sig===sig) return; T.dataset.sig=sig;
+  const sw=(u,k,on)=>`<label class="check" style="margin:0"><input type="checkbox" data-tnk="${k}" data-tnu="${esc(u.id)}"${on?' checked':''}> ${k==='push'?'📱 Push':'✉️ E-Mail'}</label>`;
+  T.innerHTML=rs.length?'<tr><th>Person</th><th>Push</th><th>E-Mail</th><th></th></tr>'+rs.map(u=>`<tr><td><b>${esc(u.name||u.email)}</b>${u.me?' <span class="tag">Sie</span>':''}${u.paused?' <span class="tag warn">🏖️ Urlaub</span>':''}<br><span class="muted" style="font-size:12px">${esc(u.mailTo||u.email)}</span></td>
+    <td>${sw(u,'push',!u.noPush)}<br><span class="muted" style="font-size:12px">${u.noPush?'aus':selText(u.pushSel,'alles (laut App)')}${u.devices?'':' · noch kein Gerät'}</span></td>
+    <td>${sw(u,'mail',u.mail)}<br><span class="muted" style="font-size:12px">${u.mail?selText(u.mailSel,'Ausfälle aller Geräte'):'aus'+(u.mailSel?' · vorbereitet: '+selText(u.mailSel,''):'')}</span></td>
+    <td class="act"><button class="btn sm ed" data-tned="${esc(u.id)}" data-tnn="${esc(u.name||u.email)}" data-tnme="${u.me?1:0}">Bearbeiten</button></td></tr>`).join(''):'<tr><td class="empty">Keine Teammitglieder.</td></tr>';
+  T.querySelectorAll('[data-tnk]').forEach(cb=>cb.onchange=async()=>{ const me=rs.find(x=>x.id===cb.dataset.tnu).me; const body=cb.dataset.tnk==='push'?{noPush:!cb.checked}:{mail:cb.checked};
+    try{ await api('/api/me/notify'+(me?'':'?user='+encodeURIComponent(cb.dataset.tnu)),{method:'POST',body:JSON.stringify(body)}); toast('Gespeichert'); }catch(e){ uiAlert(e.message); cb.checked=!cb.checked; } T.dataset.sig=''; loadTeamNotify(); });
+  T.querySelectorAll('[data-tned]').forEach(b=>b.onclick=()=>openUNotify(b.dataset.tnme==='1'?'':b.dataset.tned,b.dataset.tnn)); }
 /* Teams (Auswahlhilfe für Alarmwege) */
 async function loadTeams(){ let ts=[],us=[]; try{ [ts,us]=await Promise.all([api('/api/teams'),api('/api/users')]); }catch(e){ return; }
   const un=id=>{ const u=us.find(x=>x.id===id); return u?(u.name||u.email):'?'; };

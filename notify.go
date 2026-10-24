@@ -331,3 +331,46 @@ func (p *NotifyPrefs) String() string {
 }
 
 var _ = html.EscapeString
+
+// GET /api/team/notify – persönliche Benachrichtigungen aller Teammitglieder (für die Übersicht bei Alarme & Wartung).
+func (s *Server) handleTeamNotify(w http.ResponseWriter, r *http.Request) {
+	p := principal(r)
+	type row struct {
+		ID      string     `json:"id"`
+		Name    string     `json:"name"`
+		Email   string     `json:"email"`
+		NoPush  bool       `json:"noPush"`
+		Mail    bool       `json:"mail"`
+		MailTo  string     `json:"mailTo,omitempty"`
+		PushSel *NotifySel `json:"pushSel,omitempty"`
+		MailSel *NotifySel `json:"mailSel,omitempty"`
+		Paused  bool       `json:"paused,omitempty"`
+		Devices int        `json:"devices"`
+		Me      bool       `json:"me,omitempty"`
+	}
+	m := s.m
+	now := time.Now().UnixMilli()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := []row{}
+	for _, u := range m.cfg.Users {
+		if _, _, ok := u.membership(p.Org); !ok {
+			continue
+		}
+		me := p.User != nil && p.User.ID == u.ID
+		if !p.canEdit() && !me {
+			continue
+		}
+		x := row{ID: u.ID, Name: u.Name, Email: u.Email, Me: me}
+		if n := u.Notify; n != nil {
+			x.NoPush, x.Mail, x.MailTo, x.PushSel, x.MailSel, x.Paused = n.NoPush, n.Mail, n.MailTo, n.PushSel, n.MailSel, n.PauseUntil > now
+		}
+		for _, d := range m.cfg.Devices {
+			if d.User == u.ID {
+				x.Devices++
+			}
+		}
+		out = append(out, x)
+	}
+	writeJSON(w, out)
+}
