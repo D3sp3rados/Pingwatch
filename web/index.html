@@ -317,6 +317,12 @@ body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.s
 #mp-ctx button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;padding:6px 10px;border-radius:6px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #mp-ctx button:hover{background:var(--acc-a)}#mp-ctx button.danger{color:var(--bad)}#mp-ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 #map-geo-el{position:absolute;inset:0;display:none;z-index:1}
+#geo-hist{position:absolute;left:10px;bottom:22px;z-index:1100;width:330px;max-width:calc(100% - 20px);padding:8px 10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+#geo-hist .geo-undo{display:flex;gap:8px;align-items:center;justify-content:space-between;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+#geo-hist .geo-hh{cursor:pointer;font-weight:600;font-size:12.5px}
+#geo-hist .geo-hr{display:flex;gap:6px;align-items:center;padding:3px 0}
+#geo-hist .geo-hr span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:700px){#geo-hist{bottom:auto;top:10px}}
 #map-pane,#mp-ctx{z-index:1100}
 .geo-item{display:flex;gap:6px;align-items:center;font-size:13px;padding:3px 4px;border-radius:6px;cursor:grab}
 .geo-item:hover{background:var(--bg2,rgba(127,127,127,.12))}
@@ -2619,18 +2625,32 @@ function loadLeaflet(){ if(window.L&&L.map) return Promise.resolve(); return new
 async function geoToggle(on){ GEO.on=on; try{ localStorage.setItem('pw_mapgeo',on?'1':'0'); }catch(e){} $('#map-geo').classList.toggle('pri',on); $('#map-geo').textContent=on?'🗺 Plan':'🛰 Satellit';
   $('#map-geo-el').style.display=on?'block':'none'; $('#map-cv').style.visibility=on?'hidden':'';
   if(on){ try{ await loadLeaflet(); }catch(e){ uiAlert(e.message); return geoToggle(false); } geoInit(); geoJobPoll(); }
-  MP.sel=null; MP.listMode=null; drawMap(); mpPane(); }
+  MP.sel=null; MP.listMode=null; drawMap(); mpPane(); geoHistRender(); }
 $('#map-geo').onclick=()=>geoToggle(!GEO.on);
 function geoInit(){ if(GEO.map){ GEO.map.invalidateSize(); return; }
   const m=L.map('map-geo-el',{preferCanvas:true,zoomControl:true,attributionControl:true}).setView([47.62,8.08],12);
   const sat=L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'Luftbild © Esri, Maxar, Earthstar Geographics'}),
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19})]);
   const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap-Mitwirkende'});
-  sat.addTo(m); L.control.layers({'Satellit':sat,'Straßenkarte':osm},null,{position:'topleft'}).addTo(m);
+  // Straßen mit Namen über dem Luftbild (wie „Satellit mit Beschriftung“)
+  const roads=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,opacity:.9});
+  sat.addTo(m); let roadsOn=true; try{ roadsOn=localStorage.getItem('pw_geo_roads')!=='0'; }catch(e){} if(roadsOn) roads.addTo(m);
+  L.control.layers({'Satellit':sat,'Straßenkarte':osm},{'Straßen und Namen':roads},{position:'topleft'}).addTo(m);
+  m.on('overlayadd overlayremove',e=>{ if(e.layer===roads) try{ localStorage.setItem('pw_geo_roads',e.type==='overlayadd'?'1':'0'); }catch(x){} });
   GEO.map=m; GEO.lines=L.layerGroup().addTo(m); GEO.dots=L.layerGroup().addTo(m);
-  m.on('click',e=>{ if(GEO.place){ const id=GEO.place; GEO.place=null; m.getContainer().style.cursor=''; geoSet(id,e.latlng); } else if(MP.sel){ MP.sel=null; geoRender(); mpPane(); } });
+  m.on('click',e=>{ if(GEO.place){ const id=GEO.place; GEO.place=null; m.getContainer().style.cursor=''; geoSet(id,e.latlng); return; } geoAddrPopup(e.latlng); });
   const el=m.getContainer(); el.addEventListener('dragover',e=>{ if(MP.edit) e.preventDefault(); }); el.addEventListener('drop',e=>{ e.preventDefault(); const id=e.dataTransfer.getData('text/plain'); if(!id||!MP.idx[id]&&MP.idx[id]!==0) return; const r=el.getBoundingClientRect(); geoSet(id,m.containerPointToLatLng([e.clientX-r.left,e.clientY-r.top])); });
   geoRender(); geoFit(); }
+/* Klick auf ein Haus: Adresse anzeigen (OpenStreetMap), im Bearbeiten-Modus ausgewähltes Gerät hierhin setzen */
+async function geoAddrPopup(ll){ const m=GEO.map; const sel=MP.edit&&MP.sel&&MP.data.nodes[MP.idx[MP.sel]];
+  const pop=L.popup({maxWidth:280}).setLatLng(ll).setContent('<span class="muted">Adresse wird gesucht …</span>').openOn(m);
+  let txt='Keine Adresse gefunden';
+  try{ const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=de&lat=${ll.lat}&lon=${ll.lng}`).then(r=>r.json()); const a=r.address||{};
+    const str=[a.road||a.pedestrian||a.footway||a.hamlet||'',a.house_number||''].join(' ').trim(), ort=[a.postcode||'',a.village||a.town||a.city||a.municipality||''].join(' ').trim(), teil=a.suburb||a.hamlet||a.neighbourhood||'';
+    txt=`<b>${esc(str||'(ohne Hausnummer)')}</b><br>${esc(ort)}${teil&&!ort.includes(teil)?' – '+esc(teil):''}`; }catch(e){ txt='Adresssuche gerade nicht erreichbar'; }
+  if(!m.hasLayer(pop)) return;
+  pop.setContent(txt+(sel?`<div style="margin-top:6px"><button class="btn sm pri" id="geo-here">„${esc((sel.name||'').slice(0,40))}“ hierhin setzen</button></div>`:''));
+  const b=document.getElementById('geo-here'); if(b) b.onclick=()=>{ m.closePopup(); geoSet(sel.id,ll); }; }
 function geoFit(){ if(!GEO.map||!MP.data) return; const pts=MP.data.nodes.filter(n=>n.lat&&mpShown(n)).map(n=>[n.lat,n.lon]); if(pts.length) GEO.map.fitBounds(pts,{padding:[30,30],maxZoom:17}); }
 function geoQueue(){ if(GEO.q) return; GEO.q=requestAnimationFrame(()=>{ GEO.q=0; geoRender(); }); }
 function geoDeg(){ if(GEO.degFor===MP.data) return GEO.deg; const d={}; for(const l of MP.data.links){ d[l.a]=(d[l.a]||0)+1; d[l.b]=(d[l.b]||0)+1; } GEO.deg=d; GEO.degFor=MP.data; return d; }
@@ -2650,9 +2670,28 @@ function geoRender(){ if(!GEO.on||!GEO.map||!MP.data) return; const ns=MP.data.n
 function geoDrag(e,mk){ if(!MP.edit) return; L.DomEvent.stop(e); const m=GEO.map; m.dragging.disable(); let moved=false;
   const mv=ev=>{ moved=true; mk.setLatLng(ev.latlng); }; const up=()=>{ m.off('mousemove',mv); m.off('mouseup',up); m.dragging.enable(); if(moved) geoSet(mk._id,mk.getLatLng()); };
   m.on('mousemove',mv); m.on('mouseup',up); }
-async function geoSet(id,ll){ const n=MP.data.nodes[MP.idx[id]]; if(!n) return; const lat=ll?+ll.lat.toFixed(7):0, lon=ll?+ll.lng.toFixed(7):0;
-  try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({ID:MP.id,Set:[{ID:id,Lat:lat,Lon:lon}]})}); n.lat=lat; n.lon=lon; n.geo=ll?'hand':''; toast(ll?'Position gespeichert':'Position entfernt'); }catch(e){ uiAlert(e.message); }
-  geoRender(); mpPane(); }
+async function geoSet(id,ll,opt={}){ const n=MP.data.nodes[MP.idx[id]]; if(!n) return; const lat=ll?+(+ll.lat).toFixed(7):0, lon=ll?+(+(ll.lng??ll.lon)).toFixed(7):0;
+  const prev={id,name:n.name||n.addr||id,lat:n.lat||0,lon:n.lon||0,geo:n.geo||'',at:Date.now()};
+  const geo=ll?(opt.geo||'hand'):'';
+  try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({ID:MP.id,Set:[{ID:id,Lat:lat,Lon:lon,Geo:geo}]})}); n.lat=lat; n.lon=lon; n.geo=geo;
+    if(!opt.noHist){ geoHist().unshift(prev); geoHistSave(); GEO.undo={...prev,until:Date.now()+20000}; toast(ll?'Position gespeichert':'Position entfernt'); }
+  }catch(e){ uiAlert(e.message); }
+  geoRender(); mpPane(); geoHistRender(); }
+/* Verlauf der verschobenen Geräte (je Karte, in diesem Browser) – Rückgängig und „letzte 5“ */
+function geoHist(){ if(GEO.histFor!==MP.id){ GEO.histFor=MP.id; try{ GEO.hist=JSON.parse(localStorage.getItem('pw_geohist_'+MP.id)||'[]'); }catch(e){ GEO.hist=[]; } } return GEO.hist; }
+function geoHistSave(){ GEO.hist=GEO.hist.slice(0,30); try{ localStorage.setItem('pw_geohist_'+MP.id,JSON.stringify(GEO.hist)); }catch(e){} }
+async function geoRestore(i){ const h=geoHist()[i]; if(!h) return; GEO.hist.splice(i,1); geoHistSave(); if(GEO.undo&&GEO.undo.id===h.id&&GEO.undo.at===h.at) GEO.undo=null;
+  await geoSet(h.id,h.lat?{lat:h.lat,lng:h.lon}:null,{geo:h.geo||'hand',noHist:true}); toast('„'+h.name+'“ zurückgesetzt'); const n=MP.data.nodes[MP.idx[h.id]]; if(n&&n.lat&&GEO.map&&!GEO.map.getBounds().contains([n.lat,n.lon])) GEO.map.panTo([n.lat,n.lon]); }
+function geoHistRender(){ let b=$('#geo-hist'); if(!b){ b=document.createElement('div'); b.id='geo-hist'; b.className='panel'; $('.map-wrap').appendChild(b); }
+  if(!GEO.on||!MP.data){ b.style.display='none'; return; } const H=geoHist(), seen=new Set(), last=[]; H.forEach((h,i)=>{ if(!seen.has(h.id)&&last.length<5){ seen.add(h.id); last.push([h,i]); } });
+  const u=GEO.undo&&GEO.undo.until>Date.now()?GEO.undo:null; const ui=u?H.findIndex(h=>h.id===u.id&&h.at===u.at):-1;
+  if(!last.length){ b.style.display='none'; return; } b.style.display='';
+  const t=h=>{ const m=Math.round((Date.now()-h.at)/60000); return m<1?'gerade':m<60?'vor '+m+' min':new Date(h.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+  b.innerHTML=(ui>=0?`<div class="geo-undo"><span>„${esc(u.name)}“ ${u.lat?'verschoben':'gesetzt'}</span><button class="btn sm pri" data-gh="${ui}">↩ Rückgängig</button></div>`:'')
+    +`<div class="geo-hh" data-ghx>${GEO.histOpen===false?'▸':'▾'} Zuletzt verschoben</div>`+(GEO.histOpen===false?'':last.map(([h,i])=>`<div class="geo-hr"><span title="${esc(h.name)}">${esc(h.name)}</span><span class="muted">${t(h)}</span><button class="btn sm" data-gh="${i}" title="${h.lat?'Zurück an die alte Position':'War vorher ohne Position – wieder entfernen'}">↩ Zurück</button></div>`).join(''));
+  b.querySelectorAll('[data-gh]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); geoRestore(+x.dataset.gh); });
+  const hx=b.querySelector('[data-ghx]'); if(hx) hx.onclick=()=>{ GEO.histOpen=GEO.histOpen===false; geoHistRender(); };
+  clearTimeout(GEO.undoT); if(u) GEO.undoT=setTimeout(geoHistRender,u.until-Date.now()+50); }
 function geoPick(id){ if(!MP.edit){ toast('Zum Platzieren erst „✏️ Bearbeiten“ einschalten'); return; } GEO.place=id; GEO.map.getContainer().style.cursor='crosshair'; const n=MP.data.nodes[MP.idx[id]]; toast('Jetzt auf die Karte klicken: '+(n?n.name:'')); }
 async function geoJobPoll(){ if(!MP.id) return; let j; try{ j=await api('/api/maps/geocode?id='+encodeURIComponent(MP.id)); }catch(e){ return; } const was=GEO.job&&GEO.job.running; GEO.job=j;
   if(was&&!j.running){ const keep={sel:MP.sel,c:GEO.map&&GEO.map.getCenter(),z:GEO.map&&GEO.map.getZoom()}; await mpOpen(MP.id); if(keep.c) GEO.map.setView(keep.c,keep.z); toast(j.found+' Geräte per Adresse platziert'); }
