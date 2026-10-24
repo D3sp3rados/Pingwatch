@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,7 +20,35 @@ type NotifyPrefs struct {
 	MailAll    bool             `json:"mailAll,omitempty"`    // Betreiber: Mails für alle Kunden
 	PauseUntil int64            `json:"pauseUntil,omitempty"` // ms; > jetzt = keine Meldungen
 	Mute       map[string]int64 `json:"mute,omitempty"`       // Gruppen-ID → bis (ms), -1 = dauerhaft
+	// Feineinstellung je Kanal: nil = wie bisher (Push: alles laut App, E-Mail: Ausfälle aller Geräte)
+	PushSel *NotifySel `json:"pushSel,omitempty"`
+	MailSel *NotifySel `json:"mailSel,omitempty"`
 }
+
+// NotifySel: Meldungsarten und Geräte (leer = alle) für Push bzw. E-Mail eines Benutzers.
+type NotifySel struct {
+	Outage    bool     `json:"outage"`
+	Offline   bool     `json:"offline"`
+	Loss      bool     `json:"loss"`
+	Spike     bool     `json:"spike"`
+	Hosts     []string `json:"hosts,omitempty"`
+	Groups    []string `json:"groups,omitempty"`
+	Customers []string `json:"customers,omitempty"`
+	Machines  []string `json:"machines,omitempty"`
+}
+
+func (s *NotifySel) wants(n notice, group, cust string) bool {
+	if s == nil {
+		return true
+	}
+	return Channel{Outage: s.Outage, Offline: s.Offline, Loss: s.Loss, Spike: s.Spike,
+		Hosts: s.Hosts, Groups: s.Groups, Customers: s.Customers, Machines: s.Machines}.wantsIn(n, group, cust)
+}
+
+var mailThrottle = struct {
+	sync.Mutex
+	m map[string]time.Time
+}{m: map[string]time.Time{}}
 
 // suppressed: Meldung für diesen Benutzer unterdrücken (Pause oder Kunde stumm)?
 func (p *NotifyPrefs) suppressed(group string, now int64) bool {
@@ -67,12 +96,13 @@ func (m *Monitor) personalMails(n notice) {
 	if !smtpConfigured() {
 		return
 	}
-	if !mailKind(n.kind) {
+	if n.kind == "test" {
 		return
 	}
 	now := time.Now()
 	m.mu.RLock()
 	group := m.hostGroupLocked(n.hostID)
+	cust := m.noticeCustomerLocked(n)
 	type rcpt struct {
 		to, org string
 		u       User
@@ -90,6 +120,26 @@ func (m *Monitor) personalMails(n notice) {
 			continue
 		}
 		if p.suppressed(group, now.UnixMilli()) {
+			continue
+		}
+		if p.MailSel != nil {
+			if !p.MailSel.wants(n, group, cust) {
+				continue
+			}
+			if n.kind == "loss" || n.kind == "spike" { // höchstens alle 10 Minuten je Host und Benutzer
+				k := u.ID + "|" + n.hostID + "|" + n.kind
+				mailThrottle.Lock()
+				last := mailThrottle.m[k]
+				ok := time.Since(last) >= 10*time.Minute
+				if ok {
+					mailThrottle.m[k] = now
+				}
+				mailThrottle.Unlock()
+				if !ok {
+					continue
+				}
+			}
+		} else if !mailKind(n.kind) {
 			continue
 		}
 		addr := strings.TrimSpace(p.MailTo)
@@ -131,6 +181,7 @@ func (m *Monitor) personalMails(n notice) {
 type notifyView struct {
 	NotifyPrefs
 	Email   string `json:"email"`
+	Name    string `json:"name"`
 	Super   bool   `json:"super"`
 	SMTP    bool   `json:"smtp"`
 	Paused  bool   `json:"paused"`
@@ -139,22 +190,47 @@ type notifyView struct {
 
 func (s *Server) handleMyNotify(w http.ResponseWriter, r *http.Request) {
 	p := principal(r)
-	if p == nil || p.User == nil {
+	m := s.m
+	uid := ""
+	if p != nil && p.User != nil {
+		uid = p.User.ID
+	}
+	// Admin: Einstellungen eines Teammitglieds (?user=)
+	if t := r.URL.Query().Get("user"); t != "" && t != uid {
+		if !p.canEdit() {
+			http.Error(w, "Keine Berechtigung", 403)
+			return
+		}
+		tu := m.userByID(t)
+		if tu == nil {
+			http.Error(w, "Benutzer unbekannt", 404)
+			return
+		}
+		if _, _, ok := tu.membership(p.Org); !ok {
+			http.Error(w, "Benutzer gehört nicht zu diesem Konto", 403)
+			return
+		}
+		uid = t
+	}
+	if uid == "" {
 		http.Error(w, "Nur mit persönlichem Benutzer möglich (nicht mit dem Betreiber-Passwort)", 400)
 		return
 	}
-	m := s.m
 	switch r.Method {
 	case http.MethodGet:
 	case http.MethodPost:
 		var req struct {
-			NoPush     *bool   `json:"noPush"`
-			Mail       *bool   `json:"mail"`
-			MailTo     *string `json:"mailTo"`
-			MailAll    *bool   `json:"mailAll"`
-			PauseUntil *int64  `json:"pauseUntil"`
-			MuteGroup  string  `json:"muteGroup"`
-			MuteUntil  *int64  `json:"muteUntil"` // mit muteGroup: 0 = Stummschaltung aufheben, -1 = dauerhaft
+			NoPush     *bool      `json:"noPush"`
+			Mail       *bool      `json:"mail"`
+			MailTo     *string    `json:"mailTo"`
+			MailAll    *bool      `json:"mailAll"`
+			PauseUntil *int64     `json:"pauseUntil"`
+			MuteGroup  string     `json:"muteGroup"`
+			MuteUntil  *int64     `json:"muteUntil"` // mit muteGroup: 0 = Stummschaltung aufheben, -1 = dauerhaft
+			PushSel    *NotifySel `json:"pushSel"`
+			MailSel    *NotifySel `json:"mailSel"`
+			PushAll    bool       `json:"pushAll"` // Feineinstellung Push entfernen (= alles)
+			MailAllSel bool       `json:"mailAllSel"`
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -168,7 +244,7 @@ func (s *Server) handleMyNotify(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
 		for i := range m.cfg.Users {
 			u := &m.cfg.Users[i]
-			if u.ID != p.User.ID {
+			if u.ID != uid {
 				continue
 			}
 			if u.Notify == nil {
@@ -189,6 +265,18 @@ func (s *Server) handleMyNotify(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.PauseUntil != nil {
 				n.PauseUntil = *req.PauseUntil
+			}
+			if req.PushSel != nil {
+				n.PushSel = req.PushSel
+			}
+			if req.PushAll {
+				n.PushSel = nil
+			}
+			if req.MailSel != nil {
+				n.MailSel = req.MailSel
+			}
+			if req.MailAllSel {
+				n.MailSel = nil
 			}
 			if req.MuteGroup != "" && req.MuteUntil != nil {
 				if n.Mute == nil {
@@ -214,12 +302,12 @@ func (s *Server) handleMyNotify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Methode nicht erlaubt", 405)
 		return
 	}
-	u := m.userByID(p.User.ID)
+	u := m.userByID(uid)
 	if u == nil {
 		http.Error(w, "Benutzer unbekannt", 404)
 		return
 	}
-	v := notifyView{Email: u.Email, Super: u.Super, SMTP: smtpConfigured()}
+	v := notifyView{Email: u.Email, Name: u.Name, Super: u.Super, SMTP: smtpConfigured()}
 	if u.Notify != nil {
 		v.NotifyPrefs = *u.Notify
 	}

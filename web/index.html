@@ -161,6 +161,7 @@ details.inst-more summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .uf-cat{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
 .uf-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
 .uf-big{grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}.uf-big .ud{padding:14px 16px;border-radius:12px}.uf-big .ud-t b{font-size:16px}.uf-big .ud-t .dot{width:10px;height:10px}.uf-big .ud-m{font-size:13.5px;margin:5px 0 9px}.uf-big .ubar{height:12px}.uf-big .gd-val{font-size:14px}
+.un-sec{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}.un-body{margin-top:8px}.un-body.off{opacity:.45;pointer-events:none}.un-kinds{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;margin-bottom:6px}.un-kinds .check{margin:0}
 .pk{border:1px solid var(--line2);border-radius:10px;margin-top:6px;background:var(--bg)}.pk-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line)}
 .pk-top .pk-q{flex:1;min-width:180px;font:inherit;font-size:13.5px;padding:6px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--fg)}
 .pk-list{max-height:300px;overflow:auto;padding:4px 0}.pk-list.dis{opacity:.45;pointer-events:none}.pk-h{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);padding:8px 12px 2px}
@@ -731,6 +732,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <button class="btn sm" id="mn-poff" style="display:none">Pause beenden</button>
     </div>
     <div id="mn-groups"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px"><button class="btn sm" id="mn-fine">⚙️ Push &amp; E-Mail je Gerät einstellen</button><span class="muted" style="font-size:12.5px" id="mn-finestate"></span></div>
     <p class="muted" style="font-size:12.5px;margin:8px 0 0">Gilt nur für dich. Stumm geschaltete Kunden und der Urlaubsmodus gelten für Push und E-Mail. Die Alarmkanäle der Firma (Teams, Sammel-Mail …) laufen weiter.</p>
   </div>
   <div class="panel" id="wp-box" style="padding:14px">
@@ -1293,6 +1295,31 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
     <div class="dlg-h" id="tr-title">Traceroute</div>
     <div class="dlg-b" style="display:block"><pre id="tr-text" style="font-size:12px;white-space:pre-wrap;margin:0;max-height:60vh;overflow:auto"></pre></div>
     <div class="dlg-f"><button class="btn" id="tr-copy" type="button">Kopieren</button><button class="btn pri" value="ok">Schließen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-unotify" style="width:min(760px,96vw)">
+  <form method="dialog" id="un-form">
+    <div class="dlg-h" id="un-title">Benachrichtigungen</div>
+    <div class="dlg-b" style="display:block">
+      <div class="un-sec">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label class="check" style="margin:0"><input type="checkbox" name="push"> <b>📱 Push</b> <span class="muted">(iPhone-App, Browser)</span></label></div>
+        <div class="un-body" data-k="push">
+          <div class="un-kinds"><label class="check"><input type="checkbox" name="p_outage"> Ausfall &amp; wieder da</label><label class="check"><input type="checkbox" name="p_offline"> Standort offline</label><label class="check"><input type="checkbox" name="p_loss"> Paketverlust</label><label class="check"><input type="checkbox" name="p_spike"> Latenzspitzen</label></div>
+          <div class="pk" id="un-push-pick"></div>
+        </div>
+      </div>
+      <div class="un-sec">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label class="check" style="margin:0"><input type="checkbox" name="mail"> <b>✉️ E-Mail</b></label><input name="mailto" placeholder="Adresse (leer = Login-Adresse)" style="max-width:280px;flex:1"></div>
+        <div class="un-body" data-k="mail">
+          <div class="un-kinds"><label class="check"><input type="checkbox" name="m_outage"> Ausfall &amp; wieder da</label><label class="check"><input type="checkbox" name="m_offline"> Standort offline</label><label class="check"><input type="checkbox" name="m_loss"> Paketverlust</label><label class="check"><input type="checkbox" name="m_spike"> Latenzspitzen</label></div>
+          <div class="pk" id="un-mail-pick"></div>
+        </div>
+      </div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Paketverlust und Spitzen höchstens alle 10 Minuten je Host. Urlaubsmodus und stumm geschaltete Kunden gelten zusätzlich. Bei Push gelten außerdem die Einstellungen in der App.</p>
+    </div>
+    <div class="dlg-err" id="un-err"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn pri" value="ok">Speichern</button></div>
   </form>
 </dialog>
 
@@ -2736,7 +2763,7 @@ function mnRender(){ const box=$('#my-notify'); if(!box) return; const v=MN.v;
   $('#mn-mailto').style.display=v.mail?'':'none'; $('#mn-allf').style.display=v.super&&v.mail?'':'none'; $('#mn-all').checked=!!v.mailAll;
   const now=Date.now(); const paused=v.pauseUntil>now;
   $('#mn-state').innerHTML=paused?'<b style="color:var(--warn)">🏖️ Pausiert '+esc(mnUntilTxt(v.pauseUntil))+'</b>':(v.noPush&&!v.mail?'<b style="color:var(--warn)">alles aus</b>':'aktiv'+(v.mail&&!v.smtp?' – <span style="color:var(--warn)">Mailserver fehlt</span>':''));
-  $('#mn-poff').style.display=paused?'':'none';
+  $('#mn-poff').style.display=paused?'':'none'; $('#mn-finestate').textContent=`Push: ${v.noPush?'aus':selText(v.pushSel,'alles (laut App)')} · E-Mail: ${v.mail?selText(v.mailSel,'Ausfälle aller Geräte'):'aus'}`;
   const gs=(S.state&&S.state.groups)||[]; const mute=v.mute||{};
   $('#mn-groups').innerHTML=gs.length?'<div style="font-size:13px;margin-bottom:6px">🔕 Kunden stummschalten (z. B. bei Wartung):</div><table class="tbl">'+gs.map(g=>{ const u=mute[g.id]; const on=u!==undefined&&(u<0||u>now);
     return `<tr><td><b>${esc(g.name)}</b> ${on?'<span class="tag" style="color:var(--warn)">stumm '+esc(mnUntilTxt(u))+'</span>':''}</td><td class="act">${on?`<button class="btn sm" data-mute="${g.id}" data-until="0">Wieder melden</button>`:`<button class="btn sm" data-mute="${g.id}" data-until="today">Heute</button> <button class="btn sm" data-mute="${g.id}" data-until="7">1 Woche</button> <button class="btn sm" data-mute="${g.id}" data-until="-1">Dauerhaft</button>`}</td></tr>`;}).join('')+'</table>':'<p class="muted" style="font-size:12.5px">Lege Gruppen (Kunden) an, dann kannst du sie hier einzeln stummschalten.</p>';
@@ -2927,6 +2954,28 @@ function renderReportBox(){ const o=S.state&&S.state.org; if(!o) return; const o
 $('#rp-month').onchange=renderReportBox; $('#rp-group').onchange=renderReportBox;
 $('#rp-send').onclick=async()=>{ try{ const r=await api('/api/report/send',{method:'POST',body:JSON.stringify({month:$('#rp-month').value,group:$('#rp-group').value})}); toast(`Bericht an ${r.sent} Empfänger gesendet`); }catch(e){ uiAlert(e.message); } };
 
+/* Benachrichtigungen je Person: Push und E-Mail getrennt nach Meldungsart und Gerät */
+const UPK=mkPick('#un-push-pick',{machines:true,allText:'(alle Geräte)',allFoot:'Push für alle Geräte des Kontos.'});
+const UMK=mkPick('#un-mail-pick',{machines:true,allText:'(alle Geräte)',allFoot:'E-Mail für alle Geräte des Kontos.'});
+const unf=$('#un-form'); let UN={};
+async function openUNotify(uid,label){ let v; try{ v=await api('/api/me/notify'+(uid?'?user='+encodeURIComponent(uid):'')); }catch(e){ uiAlert(e.message); return; }
+  UN={uid,v}; $('#un-title').textContent='Benachrichtigungen · '+(label||v.name||v.email); $('#un-err').textContent='';
+  const ps=v.pushSel, ms=v.mailSel;
+  unf.push.checked=!v.noPush; unf.mail.checked=!!v.mail; unf.mailto.value=v.mailTo||''; unf.mailto.placeholder='Adresse (leer = '+v.email+')';
+  for(const k of ['outage','offline','loss','spike']){ unf['p_'+k].checked=ps?!!ps[k]:true; unf['m_'+k].checked=ms?!!ms[k]:(k==='outage'||k==='offline'); }
+  UPK.init(ps||{}); UMK.init(ms||{}); unSync(); $('#dlg-unotify').showModal(); }
+function unSync(){ $('.un-body[data-k=push]').classList.toggle('off',!unf.push.checked); $('.un-body[data-k=mail]').classList.toggle('off',!unf.mail.checked); }
+unf.push.onchange=unSync; unf.mail.onchange=unSync;
+unf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
+  const sel=(P,pre)=>{ const o={}; for(const k of ['outage','offline','loss','spike']) o[k]=unf[pre+k].checked; if(!P.all()){ o.hosts=[...P.h]; o.groups=[...P.g]; o.customers=[...P.c]; o.machines=[...P.m]; } return o; };
+  const body={noPush:!unf.push.checked,mail:unf.mail.checked,mailTo:unf.mailto.value.trim()};
+  if(unf.push.checked&&!UPK.all()&&!UPK.count()||unf.mail.checked&&!UMK.all()&&!UMK.count()){ $('#un-err').textContent='Bitte Geräte auswählen oder „Alles“ anhaken.'; return; }
+  const ps=sel(UPK,'p_'), ms=sel(UMK,'m_');
+  if(UPK.all()&&ps.outage&&ps.offline&&ps.loss&&ps.spike) body.pushAll=true; else body.pushSel=ps;
+  if(UMK.all()&&ms.outage&&ms.offline&&!ms.loss&&!ms.spike) body.mailAllSel=true; else body.mailSel=ms;
+  try{ await api('/api/me/notify'+(UN.uid?'?user='+encodeURIComponent(UN.uid):''),{method:'POST',body:JSON.stringify(body)}); $('#dlg-unotify').close(); toast('Benachrichtigungen gespeichert'); if(!UN.uid) mnLoad(); $('#users-tbl').dataset.sig=''; loadUsers(true); }catch(err){ $('#un-err').textContent=err.message; } });
+$('#mn-fine').onclick=()=>openUNotify('');
+function selText(x,def){ if(!x) return def; const n=(x.hosts||[]).length+(x.groups||[]).length+(x.customers||[]).length+(x.machines||[]).length; const k=[x.outage&&'Ausfall',x.offline&&'Standort',x.loss&&'Verlust',x.spike&&'Spitzen'].filter(Boolean).join('/'); return (n?n+' Auswahl':'alle Geräte')+(k?' · '+k:''); }
 /* Teams (Auswahlhilfe für Alarmwege) */
 async function loadTeams(){ let ts=[],us=[]; try{ [ts,us]=await Promise.all([api('/api/teams'),api('/api/users')]); }catch(e){ return; }
   const un=id=>{ const u=us.find(x=>x.id===id); return u?(u.name||u.email):'?'; };
@@ -2948,7 +2997,8 @@ async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-
     <td>${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`<select data-role="${u.id}">${Object.entries(ROLES).filter(([k])=>k!=='owner'||own).map(([k,v])=>`<option value="${k}"${k===u.role?' selected':''}>${v}</option>`).join('')}</select>`:ROLES[u.role]||u.role}</td>
     <td>${u.role==='owner'?'<span class="muted">ganzes Konto</span>':(u.access||[]).length?`<b>${u.access.length} Freigabe${u.access.length>1?'n':''}</b>`:'<span class="muted">ganzes Konto</span>'}${canEd&&u.id!==me.id&&u.role!=='owner'?` <button class="btn sm" data-uacc="${u.id}">Ändern</button>`:''}${u.guest?' <span class="tag">aus anderem Konto</span>':''}</td>
     <td class="hide-m">${u.lastLogin?fmtDT(u.lastLogin,false):'noch nie'}</td>
-    <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`${me.super&&st.org&&st.org.id==='default'?`<button class="btn sm" data-sup="${u.id}">${u.super?'Betreiber entziehen':'Zum Betreiber'}</button> `:''}<button class="btn sm" data-uexp="${u.id}">Gültig bis</button> <button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
+    <td class="act">${canEd&&u.id!==me.id&&(u.role!=='owner'||own)?`${me.super&&st.org&&st.org.id==='default'?`<button class="btn sm" data-sup="${u.id}">${u.super?'Betreiber entziehen':'Zum Betreiber'}</button> `:''}<button class="btn sm" data-unot="${u.id}" data-unn="${esc(u.name||u.email)}">🔔 Benachrichtigungen</button> <button class="btn sm" data-uexp="${u.id}">Gültig bis</button> <button class="btn sm" data-rpw="${u.id}">Neues Passwort</button> <button class="btn sm danger" data-udel="${u.id}">Entfernen</button>`:''}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Benutzer. Laden Sie Kollegen oder Kunden mit eigener E-Mail ein.</td></tr>';
+  $$('#users-tbl [data-unot]').forEach(b=>b.onclick=()=>openUNotify(b.dataset.unot,b.dataset.unn));
   $$('#users-tbl [data-role]').forEach(sel=>sel.onchange=async()=>{ try{ await api('/api/users',{method:'POST',body:JSON.stringify({id:sel.dataset.role,role:sel.value})}); toast('Rolle geändert'); }catch(e){ uiAlert(e.message); } $('#users-tbl').dataset.sig=''; loadUsers(true); });
   $$('#users-tbl [data-uacc]').forEach(b=>b.onclick=()=>openAccess(us.find(x=>x.id===b.dataset.uacc)));
   $$('#users-tbl [data-sup]').forEach(b=>b.onclick=async()=>{ const u=us.find(x=>x.id===b.dataset.sup);
@@ -4006,8 +4056,9 @@ $('#ai-form').onsubmit=async e=>{ e.preventDefault(); const q=aiIn.value.trim();
   catch(err){ AI.err=err.message==='401'?'':(err.message||'Fehler'); AI.msgs.pop(); aiIn.value=q; }
   AI.busy=false; aiSave(); aiRender(); };
 async function loadMyRequests(){ const box=$('#ai-reqs'); box.innerHTML='<div class="muted">Lade …</div>';
-  try{ const rs=await api('/api/requests'); const mine=S.state&&S.state.me&&S.state.me.super?rs.filter(r=>r.org===(S.state.org&&S.state.org.id)):rs;
-    box.innerHTML=mine.length?mine.map(r=>`<div class="panel rq"><div class="rq-h"><span class="rq-s ${esc(r.status)}">${esc(r.statusLabel)}</span><span>${new Date(r.created).toLocaleDateString('de-DE')}</span></div><div class="rq-t">${esc(r.text)}</div>${r.reply?`<div class="rq-a"><b>Antwort:</b> ${esc(r.reply)}</div>`:''}</div>`).join(''):'<div class="muted" style="font-size:13.5px">Noch keine Anfragen. Beschreiben Sie im Chat, was Ihnen fehlt.</div>';
+  try{ const mine=await api('/api/requests?mine=1');
+    box.innerHTML=mine.length?mine.map(r=>`<div class="panel rq" data-id="${esc(r.id)}"><div class="rq-h"><span class="rq-s ${esc(r.status)}">${esc(r.statusLabel)}</span><span>${new Date(r.created).toLocaleDateString('de-DE')}</span><a href="#" data-rqhide style="margin-left:auto;text-decoration:none" title="Aus der Liste entfernen">🗑</a></div><div class="rq-t">${esc(r.text)}</div>${r.reply?`<div class="rq-a"><b>Antwort:</b> ${esc(r.reply)}</div>`:''}</div>`).join(''):'<div class="muted" style="font-size:13.5px">Noch keine Anfragen. Beschreiben Sie im Chat, was Ihnen fehlt.</div>';
+    box.querySelectorAll('[data-rqhide]').forEach(a=>a.onclick=async e=>{ e.preventDefault(); if(!await uiConfirm('Diese Anfrage aus „Meine Anfragen“ löschen?')) return; try{ await api('/api/requests?hide=1&id='+encodeURIComponent(a.closest('.rq').dataset.id),{method:'DELETE'}); loadMyRequests(); }catch(err){ uiAlert(err.message); } });
   }catch(e){ box.innerHTML=`<div class="ai-m err">${esc(e.message)}</div>`; } }
 
 /* Anfragen (Betreiber) */
@@ -4022,7 +4073,7 @@ function renderRequests(){ const L=RQ.list.filter(r=>RQ.f==='alle'||RQ_OPEN.incl
       ${a.konflikte?`<div><span class="muted">Konflikte:</span> ${esc(a.konflikte)}</div>`:''}${a.agb?`<div><span class="muted">AGB:</span> ${esc(a.agb)}</div>`:''}${a.datenschutzRecht?`<div><span class="muted">Datenschutz/Recht:</span> ${esc(a.datenschutzRecht)}</div>`:''}
       ${a.dafuer?`<div style="margin-top:4px"><span style="color:var(--ok)">Dafür:</span> ${esc(a.dafuer)}</div>`:''}${a.dagegen?`<div><span style="color:var(--bad)">Dagegen:</span> ${esc(a.dagegen)}</div>`:''}
       ${a.empfehlung?`<div style="margin-top:4px"><b>Empfehlung: ${esc(a.empfehlung)}</b>${a.begruendung?' – '+esc(a.begruendung):''}</div>`:''}</div>`:'<div class="rq-a muted">Vorprüfung nicht möglich.</div>';
-    return `<div class="panel rq" data-id="${esc(r.id)}"><div class="rq-h"><b style="color:var(--fg)">${esc(r.orgName)}</b><span>${esc(r.userName||'')}${r.userEmail?' · '+esc(r.userEmail):''}</span><span>${new Date(r.created).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}</span><span class="rq-s ${esc(r.status)}" style="margin-left:auto">${esc(r.statusLabel)}</span></div>
+    return `<div class="panel rq" data-id="${esc(r.id)}"><div class="rq-h"><b style="color:var(--fg)">${esc(r.orgName)}</b><span>${esc(r.userName||'')}${r.userEmail?' · '+esc(r.userEmail):''}</span><span>${new Date(r.created).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}</span>${r.hidden?'<span class="tag" title="Kunde hat die Anfrage aus seiner Liste entfernt">beim Kunden gelöscht</span>':''}<span class="rq-s ${esc(r.status)}" style="margin-left:auto">${esc(r.statusLabel)}</span></div>
       <div class="rq-t">${esc(r.text)}</div>${pre}
       ${r.chat?`<details style="font-size:13px"><summary class="muted" style="cursor:pointer">Gesprächsauszug</summary><div style="white-space:pre-wrap;margin-top:6px">${esc(r.chat)}</div></details>`:''}
       <label class="field" style="margin-top:8px">Antwort an den Kunden (optional, geht per E-Mail mit)<textarea rows="2" data-reply style="font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);color:var(--fg)">${esc(r.reply||'')}</textarea></label>

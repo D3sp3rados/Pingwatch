@@ -382,6 +382,7 @@ type FeatureRequest struct {
 	Reply      string        `json:"reply,omitempty"`
 	Created    int64         `json:"created"`
 	Updated    int64         `json:"updated"`
+	Hidden     bool          `json:"hidden,omitempty"` // vom Kunden aus „Meine Anfragen“ entfernt (Betreiber sieht sie weiter)
 }
 
 var reqStatusLabel = map[string]string{"neu": "Neu", "umsetzen": "Wird umgesetzt", "abgelehnt": "Abgelehnt",
@@ -759,6 +760,9 @@ func (s *Server) handleRequests(w http.ResponseWriter, r *http.Request) {
 			if !p.Super && fr.Org != p.Org {
 				continue
 			}
+			if r.URL.Query().Get("mine") == "1" && (fr.Org != p.Org || fr.Hidden) {
+				continue
+			}
 			v := requestView{FeatureRequest: fr, StatusLabel: reqStatusLabel[fr.Status]}
 			if p.Super {
 				if u := m.userByIDLocked(fr.User); u != nil {
@@ -838,11 +842,23 @@ func (s *Server) handleRequests(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "mailed": mailed})
 	case http.MethodDelete:
+		id := r.URL.Query().Get("id")
+		if r.URL.Query().Get("hide") == "1" { // Kunde entfernt die Anfrage aus seiner Liste
+			m.mu.Lock()
+			for i := range m.cfg.Requests {
+				if x := &m.cfg.Requests[i]; x.ID == id && (x.Org == p.Org || p.Super) {
+					x.Hidden = true
+				}
+			}
+			m.saveConfigLocked()
+			m.mu.Unlock()
+			writeJSON(w, map[string]bool{"ok": true})
+			return
+		}
 		if !p.Super {
 			http.Error(w, "Nur für den Betreiber", http.StatusForbidden)
 			return
 		}
-		id := r.URL.Query().Get("id")
 		m.mu.Lock()
 		out := m.cfg.Requests[:0]
 		for _, x := range m.cfg.Requests {

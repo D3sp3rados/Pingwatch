@@ -287,6 +287,7 @@ func (m *Monitor) pushLoop() {
 		m.mu.RLock()
 		devs := append([]Device(nil), m.cfg.Devices...)
 		group := m.hostGroupLocked(n.hostID)
+		cust := m.noticeCustomerLocked(n)
 		prefs := map[string]*NotifyPrefs{}
 		users := map[string]User{}
 		for _, u := range m.cfg.Users {
@@ -316,7 +317,7 @@ func (m *Monitor) pushLoop() {
 			if !d.AllOrgs && d.Org != n.org {
 				continue
 			}
-			if p := prefs[d.User]; p != nil && (p.NoPush || p.suppressed(group, now)) {
+			if p := prefs[d.User]; p != nil && (p.NoPush || p.suppressed(group, now) || (p.PushSel != nil && !p.PushSel.wants(n, group, cust))) {
 				continue
 			}
 			if !d.AllOrgs && !visible(d.User) {
