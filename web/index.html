@@ -1207,6 +1207,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       </div>
       <div id="ul-cloud" style="display:none">
         <div id="ul-ckey" class="muted" style="font-size:13px;margin:8px 0"></div>
+        <label class="field">Konsole suchen<input id="ul-cq" placeholder="Name eintippen, z. B. tatz – Enter wählt den ersten Treffer" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false"></label>
         <label class="field">Konsole<select name="console" id="ul-console"><option value="">– bitte „Konsolen laden“ –</option></select></label>
         <div class="row" style="margin:4px 0 8px"><button class="btn sm" type="button" id="ul-load">Konsolen laden</button><button class="btn sm" type="button" id="ul-sites">Sites laden</button><button class="btn sm" type="button" id="ul-test">Verbindung testen</button></div>
         <details style="font-size:13px"><summary style="cursor:pointer;color:var(--acc)">Anderer Key nur für diesen Standort</summary>
@@ -2565,8 +2566,9 @@ $('#im-add').onclick=async()=>{ const sel=$$('#im-res [data-i]:checked').map(c=>
 const uldlg=$('#dlg-ulive'), ulf=$('#ul-form');
 function ulSetMode(m){ ulf.dataset.mode=m; $$('#ul-mode a').forEach(a=>a.classList.toggle('on',a.dataset.m===m)); $('#ul-local').style.display=m==='cloud'?'none':''; $('#ul-cloud').style.display=m==='cloud'?'':'none'; }
 $$('#ul-mode a').forEach(a=>a.onclick=e=>{ e.preventDefault(); if(ulf.dataset.lock==='1') return; ulSetMode(a.dataset.m); });
-function ulConsoles(list,sel,selName){ const o=$('#ul-console');
-  o.innerHTML='<option value="">– Konsole wählen –</option>'+list.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.model?' · '+esc(c.model):''}${c.fw?' · '+esc(c.fw):''}${c.online?'':' · offline'}</option>`).join('');
+let UL_CONS=[];
+function ulConsoles(list,sel,selName,q){ const o=$('#ul-console'); if(q===undefined){ UL_CONS=[...list].sort((a,b)=>(a.name||'').localeCompare(b.name||'','de')); list=UL_CONS; const f=$('#ul-cq'); if(f) f.value=''; }
+  o.innerHTML=(q?`<option value="">– ${list.length} Treffer –</option>`:'<option value="">– Konsole wählen –</option>')+list.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.model?' · '+esc(c.model):''}${c.fw?' · '+esc(c.fw):''}${c.online?'':' · offline'}</option>`).join('');
   if(sel&&!list.some(c=>c.id===sel)) o.insertAdjacentHTML('beforeend',`<option value="${esc(sel)}">${esc(selName||sel)}</option>`);
   o.value=sel||''; }
 $('#ul-load').onclick=async()=>{ const b=$('#ul-load'); b.disabled=true; $('#ul-err').textContent='';
@@ -2578,6 +2580,9 @@ async function ulLoadSites(quiet){ if(!$('#ul-console').value){ if(!quiet) $('#u
   try{ const l=await api('/api/unifi/sites',{method:'POST',body:JSON.stringify({key:ulf.ckey.value.trim(),site:ulf.dataset.site,console:$('#ul-console').value})}); ulSiteList(l); if(!quiet) toast(l.length+' Site(s) gefunden'); }
   catch(e){ if(!quiet) $('#ul-err').textContent=e.message; } }
 $('#ul-sites').onclick=async()=>{ const b=$('#ul-sites'); b.disabled=true; $('#ul-err').textContent=''; await ulLoadSites(false); b.disabled=false; };
+$('#ul-cq').addEventListener('input',e=>{ const q=e.target.value.toLowerCase().trim(), cur=$('#ul-console').value; const l=q?UL_CONS.filter(c=>[c.name,c.model,c.id].join(' ').toLowerCase().includes(q)):UL_CONS;
+  ulConsoles(l,l.some(c=>c.id===cur)?cur:(l.length===1?l[0].id:''),'',q); if(l.length===1&&cur!==l[0].id) $('#ul-console').dispatchEvent(new Event('change')); });
+$('#ul-cq').addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); const o=$('#ul-console'); if(o.options.length>1&&!o.value){ o.value=o.options[1].value; o.dispatchEvent(new Event('change')); } });
 $('#ul-console').addEventListener('change',()=>{ ulSiteList([]); ulLoadSites(true); });
 $('#ul-test').onclick=async()=>{ const b=$('#ul-test'); b.disabled=true; $('#ul-steps').innerHTML='<span class="muted">Teste …</span>';
   try{ const r=await api('/api/unifi/test',{method:'POST',body:JSON.stringify({key:ulf.ckey.value.trim(),site:ulf.dataset.site,console:$('#ul-console').value,usite:ulf.usite.value.trim()})});
