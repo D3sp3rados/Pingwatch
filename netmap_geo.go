@@ -126,10 +126,10 @@ type geoHit struct {
 
 var geoClient = &http.Client{Timeout: 20 * time.Second}
 
-const geoViewbox = "7.70,47.90,8.60,47.40" // Hochrhein / Südschwarzwald / Aargau
+const geoViewbox = "7.93,47.80,8.40,47.54" // Landkreis Waldshut (Hotzenwald, Hochrhein) – Kunden nur in Deutschland
 
 func nominatim(q string) (geoHit, error) {
-	u := "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=de,ch&bounded=1&viewbox=" + geoViewbox + "&q=" + url.QueryEscape(q)
+	u := "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=de&bounded=1&viewbox=" + geoViewbox + "&q=" + url.QueryEscape(q)
 	req, _ := http.NewRequest("GET", u, nil)
 	req.Header.Set("User-Agent", "PingWacht/"+version+" (Netzkarte; https://app.pingwacht.de)")
 	req.Header.Set("Accept-Language", "de")

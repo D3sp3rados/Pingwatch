@@ -2665,7 +2665,7 @@ async function geoBrowserRun(){ if(GEO.local) return; let plan; try{ plan=await 
   const cache={}; let batch=[]; let last=0; const mapId=MP.id;
   const flush=async()=>{ if(!batch.length) return; const b=batch; batch=[]; try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({ID:mapId,Set:b})}); for(const x of b){ const n=MP.id===mapId&&MP.data.nodes[MP.idx[x.ID]]; if(n){ n.lat=x.Lat; n.lon=x.Lon; n.geo='auto'; } } geoRender(); }catch(e){ j.err=e.message; } };
   const look=async q=>{ if(q in cache) return cache[q]; const wait=last+1100-Date.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait)); last=Date.now();
-    const u='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=de,ch&bounded=1&viewbox='+plan.viewbox+'&accept-language=de&q='+encodeURIComponent(q);
+    const u='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=de&bounded=1&viewbox='+plan.viewbox+'&accept-language=de&q='+encodeURIComponent(q);
     const r=await fetch(u); if(!r.ok) throw new Error('Adresssuche: HTTP '+r.status); const a=await r.json(); const h=a[0]&&a[0].address&&a[0].address.house_number?{lat:+a[0].lat,lon:+a[0].lon}:null; cache[q]=h; return h; };
   try{ for(const it of items){ if(!GEO.local) break; let h=null; for(const q of it.qs){ h=await look(q); if(h) break; } j.done++; if(h){ j.found++; batch.push({ID:it.id,Lat:+h.lat.toFixed(7),Lon:+h.lon.toFixed(7),Geo:'auto'}); } else j.notFound++; if(batch.length>=10) await flush(); if(j.done%5===0) geoPaneExtra(); } }
   catch(e){ j.err=e.message; }
