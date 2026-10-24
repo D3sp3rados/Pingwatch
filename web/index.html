@@ -161,6 +161,12 @@ details.inst-more summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .uf-cat{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
 .uf-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
 .uf-big{grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}.uf-big .ud{padding:14px 16px;border-radius:12px}.uf-big .ud-t b{font-size:16px}.uf-big .ud-t .dot{width:10px;height:10px}.uf-big .ud-m{font-size:13.5px;margin:5px 0 9px}.uf-big .ubar{height:12px}.uf-big .gd-val{font-size:14px}
+.pk{border:1px solid var(--line2);border-radius:10px;margin-top:6px;background:var(--bg)}.pk-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line)}
+.pk-top .pk-q{flex:1;min-width:180px;font:inherit;font-size:13.5px;padding:6px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--fg)}
+.pk-list{max-height:300px;overflow:auto;padding:4px 0}.pk-list.dis{opacity:.45;pointer-events:none}.pk-h{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);padding:8px 12px 2px}
+.pk-r{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:13.5px;cursor:pointer}.pk-r:hover{background:var(--acc-a)}.pk-r.sub{padding-left:36px}.pk-r .tw{width:18px;text-align:center;color:var(--mut);cursor:pointer;user-select:none}.pk-r .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pk-r .c{font-size:12px;color:var(--mut)}
+.pk-foot{font-size:12px;padding:6px 12px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.pchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:999px;padding:4px 10px;font-size:13px;cursor:pointer;background:var(--panel);user-select:none}.pchip.on{border-color:var(--acc);background:var(--acc-a)}.pchip .m{color:var(--mut);font-size:11.5px}
 .ud-act{display:flex;gap:4px;margin-left:4px}.ud-act button{border:1px solid var(--line2);background:var(--panel);color:var(--fg);border-radius:8px;font-size:13px;line-height:1;padding:5px 7px;cursor:pointer}.ud-act button:hover{border-color:var(--acc)}.ud-act button.on{border-color:var(--warn);color:var(--warn)}
 .ud{border:1px solid var(--line);border-radius:10px;padding:9px 11px;cursor:pointer;background:var(--bg)}.ud:hover{border-color:var(--line2)}
 .ud.off{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
@@ -666,6 +672,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="setcat" data-cat="team">
   <h2>Team <span class="sub muted" id="team-sub" style="font-weight:400;font-size:12.5px"></span> <button class="btn sm" id="org-ren" style="display:none">Firmennamen ändern</button> <button class="btn sm pri ed" id="add-user">+ Benutzer einladen</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="users-tbl"></table></div>
+  <h2 style="margin-top:18px">Teams <span class="sub muted" style="font-weight:400;font-size:12.5px">z. B. „Technik-Team“ – zum schnellen Auswählen bei Alarmwegen</span> <button class="btn sm ed" id="add-team">+ Team</button></h2>
+  <div class="panel" id="teams-box" style="padding:10px 12px"></div>
   <p class="muted" style="font-size:12.5px">Rollen: <b>Inhaber</b> = alles inkl. Abo · <b>Admin</b> = Hosts, Standorte, Benutzer · <b>Nur lesen</b> = sieht alles, ändert nichts.</p>
 
   </div>
@@ -1268,10 +1276,8 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
       <div class="full mf-weekly" id="mf-days" style="display:flex;flex-wrap:wrap;gap:4px 14px"></div>
       <label class="field mf-weekly">Von<input type="time" name="from" value="22:00"></label>
       <label class="field mf-weekly">Bis<input type="time" name="to" value="02:00"><small>Bis vor Von = über Mitternacht</small></label>
-      <div class="full" id="mf-custw"><b style="font-size:13px">Kunden</b> <span class="muted" style="font-size:12px">(ganzer Kunde: alle Hosts, Rechner und UniFi seiner Standorte)</span>
-        <div id="mf-custs" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:110px;overflow:auto"></div></div>
-      <div class="full"><b style="font-size:13px">Hosts</b> <span class="muted" style="font-size:12px">(keiner ausgewählt = alle inkl. Standorte)</span>
-        <div id="mf-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:140px;overflow:auto"></div></div>
+      <div class="full"><b style="font-size:13px">Für welche Geräte</b>
+        <div class="pk" id="mf-pick"></div></div>
     </div>
     <div class="dlg-err" id="mf-err"></div>
     <div class="dlg-f">
@@ -1290,12 +1296,23 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
   </form>
 </dialog>
 
+<dialog id="dlg-team">
+  <form method="dialog">
+    <div class="dlg-h" id="tm-title">Team</div>
+    <div class="dlg-b" style="display:block"><div class="muted" style="font-size:13px;margin-bottom:8px">Mitglieder antippen:</div><div id="tm-list" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+    <div class="dlg-f"><button class="btn" value="cancel">Abbrechen</button><button class="btn pri" id="tm-ok" type="button">Speichern</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg-alert">
   <form method="dialog" id="al-form">
     <div class="dlg-h" id="af-title">Alarmweg hinzufügen</div>
     <div class="dlg-b">
       <label class="field">Art<select name="type"><option value="email">E-Mail</option><option value="teams">Microsoft Teams</option><option value="telegram">Telegram</option><option value="webhook">Webhook (JSON)</option></select></label>
       <label class="field">Bezeichnung<input name="name" maxlength="60" placeholder="z. B. Technik-Team"></label>
+      <div class="full" id="af-peoplef"><b style="font-size:13px">Empfänger aus dem Team</b> <span class="muted" style="font-size:12px" id="af-peoplehint"></span>
+        <div id="af-teams" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px"></div>
+        <div id="af-people" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
       <label class="field full"><span id="af-tl">E-Mail-Adressen</span><input name="target" id="af-target"><small id="af-th"></small></label>
       <label class="field full" id="af-secf"><span id="af-sl">Bot-Token</span><input name="secret" autocomplete="off"><small id="af-sh"></small></label>
       <div class="full" id="af-tgf"><button class="btn sm" type="button" id="af-tgfind">Chat-ID suchen</button> <span class="muted" style="font-size:12.5px" id="af-tgres"></span></div>
@@ -1308,15 +1325,8 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
           <label class="check"><input type="checkbox" name="spike"> Latenzspitzen</label>
           <label class="check" id="af-repf"><input type="checkbox" name="report"> Monatsbericht (PDF, am 1.)</label>
         </div><small class="muted">Paketverlust und Spitzen höchstens alle 10 Minuten je Host.</small></div>
-      <div class="full muted" style="font-size:12.5px">Auswahl unten: nichts angehakt = alle Meldungen. Sonst nur Meldungen der angehakten Kunden, Gruppen, Rechner und Hosts.</div>
-      <div class="full" id="af-custf"><b style="font-size:13px">Kunden</b> <span class="muted" style="font-size:12px">(alles an ihren Standorten: Hosts, Rechner, UniFi, Agent offline)</span>
-        <div id="af-custs" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
-      <div class="full" id="af-groupsf"><b style="font-size:13px">Gruppen</b>
-        <div id="af-groups" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
-      <div class="full" id="af-machf"><b style="font-size:13px">Rechner</b>
-        <div id="af-machs" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:120px;overflow:auto"></div></div>
-      <div class="full"><b style="font-size:13px">Hosts</b>
-        <div id="af-hosts" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;max-height:140px;overflow:auto"></div></div>
+      <div class="full"><b style="font-size:13px">Für welche Geräte</b>
+        <div class="pk" id="af-pick"></div></div>
       <label class="field full">Wann senden<select name="escalate"><option value="0">Sofort</option><option value="5">Eskalation: nach 5 Minuten</option><option value="10">Eskalation: nach 10 Minuten</option><option value="15">Eskalation: nach 15 Minuten</option><option value="30">Eskalation: nach 30 Minuten</option><option value="60">Eskalation: nach 60 Minuten</option></select><small>Eskalation: nur Ausfälle, die dann noch bestehen und von niemandem quittiert wurden (z. B. an Chef oder Bereitschaft).</small></label>
       <label class="check full"><input type="checkbox" name="disabled"> Pausiert</label>
     </div>
@@ -2785,16 +2795,15 @@ function openMaint(id){ const w=id&&MT.find(x=>x.id===id); $('#mf-title').textCo
   const n=Date.now(); mf.start.value=dtl(w&&!wk?w.start:Math.ceil(n/36e5)*36e5); mf.end.value=dtl(w&&!wk?w.end:Math.ceil(n/36e5)*36e5+36e5);
   mf.from.value=wk?w.from:'22:00'; mf.to.value=wk?w.to:'02:00';
   $('#mf-days').innerHTML=[1,2,3,4,5,6,0].map(d=>`<label class="check"><input type="checkbox" value="${d}"${wk&&w.weekdays.includes(d)?' checked':''}> ${WD[d]}</label>`).join('');
-  const sel=new Set(w&&w.hosts||[]); $('#mf-hosts').innerHTML=S.state.hosts.map(h=>`<label class="check"><input type="checkbox" value="${h.id}"${sel.has(h.id)?' checked':''}> ${esc(h.name)}</label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
-  const cs=S.state.customers||[], cSites=c=>S.state.sites.filter(x=>x.customer===c.id).map(x=>x.id);
-  $('#mf-custw').style.display=cs.length?'':'none';
-  $('#mf-custs').innerHTML=cs.map(c=>{ const ss=cSites(c); return `<label class="check"><input type="checkbox" value="${c.id}"${ss.length&&ss.every(x=>sel.has('s:'+x))?' checked':''}> ${esc(c.name)}</label>`; }).join('');
-  $$('#mf-custs input').forEach(i=>i.onchange=()=>{ const c=cs.find(x=>x.id===i.value); const ss=new Set(cSites(c)); $$('#mf-hosts input').forEach(h=>{ const ho=S.state.hosts.find(x=>x.id===h.value); if(ho&&ss.has(ho.site)) h.checked=i.checked; }); });
+  { const hs=w&&w.hosts||[], cs=S.state.customers||[], sites=new Set(hs.filter(x=>x.startsWith('s:')).map(x=>x.slice(2))), cust=cs.filter(c=>{ const ss=S.state.sites.filter(x=>x.customer===c.id).map(x=>x.id); return ss.length&&ss.every(x=>sites.has(x)); }).map(c=>c.id);
+    MPK.init({hosts:hs.filter(x=>!x.startsWith('s:')&&!x.startsWith('m:')),customers:cust}); }
   $('#mf-del').style.display=w?'':'none'; syncMaint(); mdlg.showModal(); }
 mf.kind.onchange=syncMaint; $('#add-maint').onclick=()=>openMaint();
 mf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
-  const wk=mf.kind.value==='weekly'; const body={id:mf.dataset.id,name:mf.name.value.trim(),hosts:$$('#mf-hosts input:checked').map(i=>i.value)};
-  for(const ci of $$('#mf-custs input:checked')){ for(const so of S.state.sites.filter(x=>x.customer===ci.value)){ body.hosts.push('s:'+so.id); for(const mc of S.state.machines||[]) if(mc.site===so.id) body.hosts.push('m:'+mc.id); } }
+  const wk=mf.kind.value==='weekly'; const body={id:mf.dataset.id,name:mf.name.value.trim(),hosts:[]};
+  if(!MPK.all()){ if(!MPK.count()){ $('#mf-err').textContent='Bitte Geräte auswählen oder „Alles“ anhaken.'; return; }
+    body.hosts=[...MPK.h]; for(const g of MPK.g) for(const h of S.state.hosts) if(h.group===g) body.hosts.push(h.id);
+    for(const cid of MPK.c){ for(const so of S.state.sites.filter(x=>x.customer===cid)){ body.hosts.push('s:'+so.id); for(const h of S.state.hosts) if(h.site===so.id) body.hosts.push(h.id); for(const mc of S.state.machines||[]) if(mc.site===so.id) body.hosts.push('m:'+mc.id); } } }
   body.hosts=[...new Set(body.hosts)];
   if(wk){ body.weekdays=$$('#mf-days input:checked').map(i=>+i.value); body.from=mf.from.value; body.to=mf.to.value; if(!body.weekdays.length){ $('#mf-err').textContent='Bitte mindestens einen Wochentag wählen.'; return; } }
   else { body.start=new Date(mf.start.value).getTime(); body.end=new Date(mf.end.value).getTime(); }
@@ -2825,7 +2834,7 @@ const AHELP={
   telegram:'1. In Telegram <b>@BotFather</b> öffnen → <code>/newbot</code> → Token kopieren (entfällt, wenn der Anbieter-Bot genutzt wird).<br>2. Dem Bot eine Nachricht schreiben oder ihn in die Gruppe aufnehmen.<br>3. „Chat-ID suchen“ klicken.',
   webhook:'PingWacht sendet bei jeder Meldung ein JSON per POST (<code>event, title, message, host, time</code>). Mit Schlüssel wird signiert: Header <code>X-PingWacht-Signature: sha256=HMAC</code>.'};
 function syncAlertForm(){ const t=af.type.value, c=AL&&AL.channels.find(x=>x.id===af.dataset.id);
-  $('#af-tl').textContent={email:'E-Mail-Adressen',teams:'Workflow-URL aus Teams',telegram:'Chat-ID',webhook:'Webhook-URL'}[t];
+  $('#af-tl').textContent={email:af.dataset.id?'E-Mail-Adressen':'Weitere E-Mail-Adressen (optional)',teams:'Workflow-URL aus Teams',telegram:'Chat-ID',webhook:'Webhook-URL'}[t];
   af.target.placeholder={email:'technik@firma.de, chef@firma.de',teams:'https://….logic.azure.com/workflows/…',telegram:'z. B. 123456789 oder -100…',webhook:'https://…'}[t];
   $('#af-th').textContent=t==='email'&&!AL.smtp?'⚠ E-Mail-Versand ist auf dem Server noch nicht eingerichtet.':'';
   $('#af-secf').style.display=t==='telegram'||t==='webhook'?'':'none';
@@ -2834,21 +2843,56 @@ function syncAlertForm(){ const t=af.type.value, c=AL&&AL.channels.find(x=>x.id=
   $('#af-sh').textContent=t==='telegram'&&AL.telegramBot?'Leer = Bot des Anbieters'+(AL.telegramName?' (@'+AL.telegramName+')':'')+' verwenden.':'';
   $('#af-tgf').style.display=t==='telegram'?'':'none'; $('#af-help').innerHTML=AHELP[t];
   $('#af-repf').style.display=t==='email'&&AL.report?'':'none'; }
+/* Geräteauswahl (Liste mit Suche) – für Alarmwege und Wartung */
+function mkPick(rootSel,opt){ const P={h:new Set(),g:new Set(),c:new Set(),m:new Set(),open:new Set(),q:''}; let root=null;
+  const byGroup=()=>{ const b={}; for(const x of S.state.hosts||[]) (b[x.group||'']=b[x.group||'']||[]).push(x); return b; };
+  P.init=v=>{ root=$(rootSel); P.h=new Set(v.hosts||[]); P.g=new Set(v.groups||[]); P.c=new Set(v.customers||[]); P.m=new Set(v.machines||[]); P.open=new Set(); P.q='';
+    root.innerHTML=`<div class="pk-top"><label class="check" style="margin:0"><input type="checkbox" class="pk-all"> <b>Alles</b> <span class="muted">${opt.allText}</span></label><input class="pk-q" placeholder="Suchen: Kunde, Gruppe, Host${opt.machines?', Rechner':''} …" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false"></div><div class="pk-list"></div><div class="pk-foot muted"></div>`;
+    root.querySelector('.pk-all').checked=!P.h.size&&!P.g.size&&!P.c.size&&!P.m.size;
+    root.querySelector('.pk-all').onchange=P.render;
+    const q=root.querySelector('.pk-q'); q.oninput=()=>{ P.q=q.value.toLowerCase().trim(); P.render(); }; q.onkeydown=e=>{ if(e.key==='Enter') e.preventDefault(); };
+    P.render(); };
+  P.all=()=>root.querySelector('.pk-all').checked;
+  P.count=()=>P.h.size+P.g.size+P.c.size+P.m.size;
+  P.render=()=>{ const st=S.state, q=P.q, all=P.all(), hs=st.hosts||[], gs=st.groups||[], cs=st.customers||[], ms=opt.machines?(st.machines||[]):[];
+    const mt=t=>!q||(t||'').toLowerCase().includes(q); const row=(cls,key,id,name,meta,on,dis,tw)=>`<div class="pk-r${cls}" data-pk="${key}" data-id="${esc(id)}">${tw||''}<input type="checkbox"${on?' checked':''}${dis?' disabled':''}><span class="n" title="${esc(name)}">${esc(name)}</span>${meta?`<span class="c">${meta}</span>`:''}</div>`;
+    let h=''; const byG=byGroup();
+    const cl=cs.filter(x=>mt(x.name)); if(cl.length) h+='<div class="pk-h">Kunden</div>'+cl.map(x=>row('','c',x.id,'🏢 '+x.name,'alles an ihren Standorten',P.c.has(x.id))).join('');
+    const gl=gs.map(g=>({g,hosts:byG[g.id]||[]})).filter(o=>mt(o.g.name)||o.hosts.some(x=>mt(x.name)||mt(x.addr)));
+    if(gl.length){ h+='<div class="pk-h">Gruppen und Hosts</div>'; for(const {g,hosts} of gl){ const gon=P.g.has(g.id), open=P.open.has(g.id)||!!q, sh=q&&!mt(g.name)?hosts.filter(x=>mt(x.name)||mt(x.addr)):hosts, nsel=hosts.filter(x=>P.h.has(x.id)).length;
+      h+=row('','g',g.id,'📁 '+g.name,`${hosts.length} Hosts${!gon&&nsel?` · ${nsel} gewählt`:''}`,gon,false,`<span class="tw" data-tw="${esc(g.id)}">${open?'▾':'▸'}</span>`);
+      if(open) h+=sh.map(x=>row(' sub','h',x.id,x.name,esc(x.addr||''),gon||P.h.has(x.id),gon)).join(''); } }
+    const ng=(byG['']||[]).filter(x=>mt(x.name)||mt(x.addr)); if(ng.length) h+='<div class="pk-h">Hosts ohne Gruppe</div>'+ng.map(x=>row('','h',x.id,x.name,esc(x.addr||''),P.h.has(x.id))).join('');
+    const ml=ms.filter(x=>mt(x.name)); if(ml.length) h+='<div class="pk-h">Rechner</div>'+ml.map(x=>row('','m',x.id,'💻 '+x.name,esc(siteName(x.site)),P.m.has(x.id))).join('');
+    const L=root.querySelector('.pk-list'); L.innerHTML=h||'<div class="muted" style="padding:10px 12px">Nichts gefunden.</div>'; L.classList.toggle('dis',all);
+    const n=P.count(), F=root.querySelector('.pk-foot');
+    F.innerHTML=all?opt.allFoot:`<span>${n?[P.c.size&&P.c.size+' Kunde'+(P.c.size>1?'n':''),P.g.size&&P.g.size+' Gruppe'+(P.g.size>1?'n':''),P.h.size&&P.h.size+' Host'+(P.h.size>1?'s':''),P.m.size&&P.m.size+' Rechner'].filter(Boolean).join(' · '):'<span style="color:var(--warn)">Nichts ausgewählt – bitte auswählen oder „Alles“ anhaken</span>'}</span>${n?'<a href="#" class="pk-clr" style="margin-left:auto">Auswahl leeren</a>':''}`;
+    const clr=F.querySelector('.pk-clr'); if(clr) clr.onclick=e=>{ e.preventDefault(); P.h.clear(); P.g.clear(); P.c.clear(); P.m.clear(); P.render(); };
+    L.querySelectorAll('[data-tw]').forEach(t=>t.onclick=e=>{ e.stopPropagation(); const id=t.dataset.tw; P.open.has(id)?P.open.delete(id):P.open.add(id); P.render(); });
+    L.querySelectorAll('.pk-r').forEach(r=>r.onclick=e=>{ const cb=r.querySelector('input'); if(cb.disabled) return; if(e.target!==cb) cb.checked=!cb.checked; const set=P[r.dataset.pk]; cb.checked?set.add(r.dataset.id):set.delete(r.dataset.id);
+      if(r.dataset.pk==='g'&&cb.checked) for(const x of (byG[r.dataset.id]||[])) P.h.delete(x.id); P.render(); }); };
+  return P; }
+const APK=mkPick('#af-pick',{machines:true,allText:'(auch künftige Hosts)',allFoot:'Alle Meldungen des Kontos – auch für Hosts, die später dazukommen.'});
+const MPK=mkPick('#mf-pick',{machines:false,allText:'(alle Hosts und Standorte)',allFoot:'Wartung gilt für alle Hosts und Standorte des Kontos.'});
+
+/* Alarmweg: Empfänger aus dem Team */
+const AP={users:[],teams:[],sel:new Set()};
+async function apLoad(c){ AP.sel=new Set(); try{ [AP.users,AP.teams]=await Promise.all([api('/api/users'),api('/api/teams').catch(()=>[])]); }catch(e){ AP.users=[]; AP.teams=[]; }
+  if(c&&c.type==='email'){ const t=(c.target||'').toLowerCase().split(/[,;\s]+/); for(const u of AP.users) if(t.includes((u.email||'').toLowerCase())) AP.sel.add(u.id); } apRender(); }
+function apRender(){ const isNew=!af.dataset.id, mail=af.type.value==='email'; $('#af-peoplef').style.display=mail&&AP.users.length?'':'none'; if(!mail) return;
+  $('#af-peoplehint').textContent=isNew?'– je Person wird ein eigener Alarmweg angelegt, den Sie danach einzeln anpassen können':'– Auswahl ersetzt die Adressen unten';
+  $('#af-teams').innerHTML=AP.teams.map(t=>{ const on=t.users.length&&t.users.every(id=>AP.sel.has(id)); return `<span class="pchip${on?' on':''}" data-apt="${esc(t.id)}">👥 ${esc(t.name)} <span class="m">${t.users.length}</span></span>`; }).join('');
+  $('#af-people').innerHTML=AP.users.map(u=>`<span class="pchip${AP.sel.has(u.id)?' on':''}" data-apu="${esc(u.id)}" title="${esc(u.email)}">${AP.sel.has(u.id)?'✓ ':''}${esc(u.name||u.email)}</span>`).join('');
+  $$('#af-teams [data-apt]').forEach(b=>b.onclick=()=>{ const t=AP.teams.find(x=>x.id===b.dataset.apt); const on=t.users.every(id=>AP.sel.has(id)); for(const id of t.users) on?AP.sel.delete(id):AP.sel.add(id); apSync(); });
+  $$('#af-people [data-apu]').forEach(b=>b.onclick=()=>{ const id=b.dataset.apu; if(!isNew){ AP.sel.has(id)?AP.sel.delete(id):AP.sel.add(id); } else { AP.sel.has(id)?AP.sel.delete(id):AP.sel.add(id); } apSync(); }); }
+function apSync(){ const isNew=!af.dataset.id; if(!isNew){ af.target.value=AP.users.filter(u=>AP.sel.has(u.id)).map(u=>u.email).join(', '); } apRender(); }
 function openAlert(id){ const c=id&&AL.channels.find(x=>x.id===id);
   $('#af-title').textContent=c?'Alarmweg bearbeiten':'Alarmweg hinzufügen'; $('#af-err').textContent=''; $('#af-tgres').textContent='';
   af.dataset.id=c?c.id:''; af.escalate.value=String(c&&c.escalate||0); af.type.value=c?c.type:'email'; af.type.disabled=!!c; af.name.value=c?c.name:''; af.target.value=c?c.target:''; af.secret.value='';
   for(const k of ['outage','offline','loss','spike','report','disabled']) af[k].checked=c?!!c[k]:(k==='outage'||k==='offline');
-  const sel=new Set(c&&c.hosts||[]);
-  $('#af-hosts').innerHTML=S.state.hosts.map(h=>`<label class="check"><input type="checkbox" value="${h.id}"${sel.has(h.id)?' checked':''}> ${esc(h.name)}</label>`).join('')||'<span class="muted">Noch keine Hosts</span>';
-  const gsel=new Set(c&&c.groups||[]), gs=S.state.groups||[];
-  $('#af-groupsf').style.display=gs.length?'':'none';
-  $('#af-groups').innerHTML=gs.map(g=>`<label class="check"><input type="checkbox" value="${g.id}"${gsel.has(g.id)?' checked':''}> ${esc(g.name)}</label>`).join('');
-  const csel=new Set(c&&c.customers||[]), cs=S.state.customers||[]; $('#af-custf').style.display=cs.length?'':'none';
-  $('#af-custs').innerHTML=cs.map(x=>`<label class="check"><input type="checkbox" value="${x.id}"${csel.has(x.id)?' checked':''}> ${esc(x.name)}</label>`).join('');
-  const msel=new Set(c&&c.machines||[]), ms=S.state.machines||[]; $('#af-machf').style.display=ms.length?'':'none';
-  $('#af-machs').innerHTML=ms.map(x=>`<label class="check"><input type="checkbox" value="${esc(x.id)}"${msel.has(x.id)?' checked':''}> ${esc(x.name)} <span class="muted">${esc(siteName(x.site))}</span></label>`).join('');
+  APK.init(c||{}); apLoad(c);
   $('#af-del').style.display=c?'':'none'; syncAlertForm(); adlg.showModal(); }
-af.type.onchange=syncAlertForm;
+af.type.onchange=()=>{ syncAlertForm(); apRender(); };
 $('#add-alert').onclick=()=>openAlert();
 $('#af-tgfind').onclick=async()=>{ $('#af-tgres').textContent='suche …';
   try{ const r=await api('/api/alerts/telegram',{method:'POST',body:JSON.stringify({token:af.secret.value.trim(),id:af.dataset.id})});
@@ -2860,7 +2904,14 @@ $('#af-tgfind').onclick=async()=>{ $('#af-tgres').textContent='suche …';
 af.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:af.dataset.id,type:af.type.value,name:af.name.value.trim(),target:af.target.value.trim(),secret:af.secret.value.trim(),
     outage:af.outage.checked,offline:af.offline.checked,loss:af.loss.checked,spike:af.spike.checked,report:af.report.checked&&af.type.value==='email',disabled:af.disabled.checked,escalate:+af.escalate.value,
-    hosts:$$('#af-hosts input:checked').map(i=>i.value), groups:$$('#af-groups input:checked').map(i=>i.value), customers:$$('#af-custs input:checked').map(i=>i.value), machines:$$('#af-machs input:checked').map(i=>i.value)};
+    hosts:[],groups:[],customers:[],machines:[]};
+  if(!APK.all()){ body.hosts=[...APK.h]; body.groups=[...APK.g]; body.customers=[...APK.c]; body.machines=[...APK.m];
+    if(!body.hosts.length&&!body.groups.length&&!body.customers.length&&!body.machines.length){ $('#af-err').textContent='Bitte Geräte auswählen oder „Alles“ anhaken.'; return; } }
+  const people=!body.id&&body.type==='email'?AP.users.filter(u=>AP.sel.has(u.id)):[];
+  if(people.length){ try{ for(const u of people) await api('/api/alerts',{method:'POST',body:JSON.stringify(Object.assign({},body,{target:u.email,name:(body.name?body.name+' · ':'')+(u.name||u.email)}))});
+      if(body.target) await api('/api/alerts',{method:'POST',body:JSON.stringify(body)});
+      adlg.close(); await loadAlerts(true); toast(`${people.length+(body.target?1:0)} Alarmwege angelegt – jetzt einzeln anpassbar`); }catch(err){ $('#af-err').textContent=err.message; } return; }
+  if(!body.target){ $('#af-err').textContent=body.type==='email'?'Bitte Personen auswählen oder E-Mail-Adressen eintragen.':'Ziel fehlt.'; return; }
   try{ const r=await api('/api/alerts',{method:'POST',body:JSON.stringify(body)}); adlg.close(); await loadAlerts(true);
     if(!body.id&&await uiConfirm('Gespeichert. Jetzt eine Testnachricht senden?')){ try{ await api('/api/alerts/test',{method:'POST',body:JSON.stringify({id:r.id})}); toast('Testnachricht gesendet'); }catch(err){ uiAlert('Test fehlgeschlagen: '+err.message); } loadAlerts(true); }
   }catch(err){ $('#af-err').textContent=err.message; } });
@@ -2876,10 +2927,21 @@ function renderReportBox(){ const o=S.state&&S.state.org; if(!o) return; const o
 $('#rp-month').onchange=renderReportBox; $('#rp-group').onchange=renderReportBox;
 $('#rp-send').onclick=async()=>{ try{ const r=await api('/api/report/send',{method:'POST',body:JSON.stringify({month:$('#rp-month').value,group:$('#rp-group').value})}); toast(`Bericht an ${r.sent} Empfänger gesendet`); }catch(e){ uiAlert(e.message); } };
 
+/* Teams (Auswahlhilfe für Alarmwege) */
+async function loadTeams(){ let ts=[],us=[]; try{ [ts,us]=await Promise.all([api('/api/teams'),api('/api/users')]); }catch(e){ return; }
+  const un=id=>{ const u=us.find(x=>x.id===id); return u?(u.name||u.email):'?'; };
+  $('#teams-box').innerHTML=ts.length?ts.map(t=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)"><b>👥 ${esc(t.name)}</b><span class="muted" style="flex:1;font-size:13px">${t.users.map(un).map(esc).join(', ')||'keine Mitglieder'}</span><button class="btn sm ed" data-ted="${esc(t.id)}">Bearbeiten</button><button class="btn sm danger ed" data-tdel="${esc(t.id)}">✕</button></div>`).join(''):'<span class="muted" style="font-size:13px">Noch keine Teams. Mit „+ Team“ z. B. ein Technik-Team anlegen – bei Alarmwegen wählen Sie dann das Team statt jeder Person einzeln.</span>';
+  $$('#teams-box [data-ted]').forEach(b=>b.onclick=()=>editTeam(ts.find(t=>t.id===b.dataset.ted),us));
+  $$('#teams-box [data-tdel]').forEach(b=>b.onclick=async()=>{ if(!await uiConfirm('Team löschen? Die Personen und ihre Alarmwege bleiben bestehen.')) return; await api('/api/teams?id='+b.dataset.tdel,{method:'DELETE'}); loadTeams(); }); }
+async function editTeam(t,us){ if(!us) us=await api('/api/users'); const name=await uiPrompt('Name des Teams:',t?t.name:'Technik-Team'); if(!name) return;
+  const d=$('#dlg-team'); $('#tm-title').textContent='Team „'+name+'“ – Mitglieder'; const sel=new Set(t?t.users:[]);
+  const draw=()=>{ $('#tm-list').innerHTML=us.map(u=>`<span class="pchip${sel.has(u.id)?' on':''}" data-tmu="${esc(u.id)}" title="${esc(u.email)}">${sel.has(u.id)?'✓ ':''}${esc(u.name||u.email)}</span>`).join(''); $$('#tm-list [data-tmu]').forEach(b=>b.onclick=()=>{ sel.has(b.dataset.tmu)?sel.delete(b.dataset.tmu):sel.add(b.dataset.tmu); draw(); }); };
+  draw(); d.showModal(); $('#tm-ok').onclick=async e=>{ e.preventDefault(); try{ await api('/api/teams',{method:'POST',body:JSON.stringify({id:t?t.id:'',name,users:[...sel]})}); d.close(); toast('Team gespeichert'); loadTeams(); }catch(err){ uiAlert(err.message); } }; }
+$('#add-team').onclick=()=>editTeam(null);
 /* Team */
 const ROLES={owner:'Inhaber',admin:'Admin',viewer:'Nur lesen'};
 let usersAt=0;
-async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-tbl').dataset.sig) return; usersAt=Date.now(); let us; try{ us=await api('/api/users'); }catch(e){ return; }
+async function loadUsers(force){ if(!force&&Date.now()-usersAt<15000&&$('#users-tbl').dataset.sig) return; usersAt=Date.now(); loadTeams(); let us; try{ us=await api('/api/users'); }catch(e){ return; }
   const st=S.state, me=st.me||{}, canEd=me.role!=='viewer', own=me.role==='owner'||me.super;
   const sig=JSON.stringify(us)+me.role; if($('#users-tbl').dataset.sig===sig) return; $('#users-tbl').dataset.sig=sig;
   $('#users-tbl').innerHTML=us.length?'<tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Zugriff</th><th class="hide-m">Zuletzt angemeldet</th><th></th></tr>'+us.map(u=>`<tr><td><b>${esc(u.name||'–')}</b>${u.id===me.id?' <span class="tag">Sie</span>':''}${u.super?' <span class="tag ok">Betreiber</span>':''}${u.expires?` <span class="tag ${u.expires<Date.now()?'bad':'warn'}">bis ${fmtDate(u.expires)}</span>`:''}</td><td>${esc(u.email)}</td>

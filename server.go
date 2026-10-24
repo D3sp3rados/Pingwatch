@@ -326,6 +326,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
 	mux.HandleFunc("/api/maps", protect(s.handleMaps))
+	mux.HandleFunc("/api/teams", protect(s.handleTeams))
 	mux.HandleFunc("/api/maps/edit", protect(s.handleMapEdit))
 	mux.HandleFunc("/api/maps/rules", protect(s.handleMapRules))
 	mux.HandleFunc("/api/maps/tree", protect(s.handleMapTree))
