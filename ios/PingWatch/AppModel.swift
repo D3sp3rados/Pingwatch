@@ -177,7 +177,8 @@ final class AppModel {
         #endif
         let prefs = DevicePrefs(token: token, name: UIDevice.current.name, sandbox: sandbox,
                                 outage: notifyOutage, loss: notifyLoss, spike: notifySpike,
-                                offline: notifyOffline, hosts: notifyHosts)
+                                offline: notifyOffline, hosts: notifyHosts,
+                                deviceId: UIDevice.current.identifierForVendor?.uuidString)
         do {
             try await api.registerDevice(prefs)
             pushStatus = nil

@@ -1639,6 +1639,16 @@ func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
 			d.User = p.User.ID
 		}
 		m.mu.Lock()
+		if d.DeviceID != "" { // dasselbe Gerät mit neuem Token (Neuinstallation, TestFlight ↔ Xcode): alten Eintrag ersetzen
+			keep := m.cfg.Devices[:0]
+			for _, x := range m.cfg.Devices {
+				if x.DeviceID == d.DeviceID && x.User == d.User && x.Token != d.Token {
+					continue
+				}
+				keep = append(keep, x)
+			}
+			m.cfg.Devices = keep
+		}
 		found := false
 		for i := range m.cfg.Devices {
 			if m.cfg.Devices[i].Token == d.Token {
@@ -1688,11 +1698,16 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST", 405)
 		return
 	}
-	org := principal(r).Org
+	pr := principal(r)
+	org := pr.Org
+	uid := ""
+	if pr.User != nil {
+		uid = pr.User.ID
+	}
 	s.m.mu.RLock()
 	var devs []Device
 	for _, d := range s.m.cfg.Devices {
-		if d.Org == org {
+		if d.Org == org || (uid != "" && d.User == uid) {
 			devs = append(devs, d)
 		}
 	}

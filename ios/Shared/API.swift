@@ -349,6 +349,7 @@ struct DevicePrefs: Codable {
     var spike: Bool
     var offline: Bool
     var hosts: [String]
+    var deviceId: String? = nil
 }
 
 // MARK: - API-Client

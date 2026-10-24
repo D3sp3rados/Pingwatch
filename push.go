@@ -28,11 +28,12 @@ type Device struct {
 	AllOrgs  bool     `json:"allOrgs,omitempty"` // Betreiber: Meldungen aller Kunden
 	Name     string   `json:"name"`
 	Sandbox  bool     `json:"sandbox"`
-	Outage   bool     `json:"outage"`  // Ausfall + wieder erreichbar
-	Loss     bool     `json:"loss"`    // Paketverlust
-	Spike    bool     `json:"spike"`   // Latenzspitzen
-	Offline  bool     `json:"offline"` // Standort offline / wieder online
-	Hosts    []string `json:"hosts"`   // leer = alle
+	Outage   bool     `json:"outage"`             // Ausfall + wieder erreichbar
+	Loss     bool     `json:"loss"`               // Paketverlust
+	Spike    bool     `json:"spike"`              // Latenzspitzen
+	Offline  bool     `json:"offline"`            // Standort offline / wieder online
+	Hosts    []string `json:"hosts"`              // leer = alle
+	DeviceID string   `json:"deviceId,omitempty"` // fester Geräte-Schlüssel der App (gegen doppelte Registrierungen)
 	Added    int64    `json:"added"`
 	LastSent int64    `json:"lastSent"`
 	// Web-Push (Browser/Android): Kind = "web"
@@ -270,6 +271,20 @@ var pushThrottle = struct {
 	m map[string]time.Time
 }{m: map[string]time.Time{}}
 
+// deviceForOrg: Gerät bekommt Meldungen dieses Kontos – eigenes Konto, Betreiber „alle Kunden“
+// oder der Benutzer des Geräts ist dort Mitglied.
+func deviceForOrg(d Device, users map[string]User, org string) bool {
+	if d.AllOrgs || d.Org == org {
+		return true
+	}
+	u, ok := users[d.User]
+	if d.User == "" || !ok {
+		return false
+	}
+	_, _, member := u.membership(org)
+	return member
+}
+
 func (m *Monitor) notify(n notice) {
 	if m.notices == nil || m.batchIn(n) {
 		return
@@ -325,7 +340,8 @@ func (m *Monitor) pushLoop() {
 		now := time.Now().UnixMilli()
 		var bad []string
 		for _, d := range devs {
-			if !d.AllOrgs && d.Org != n.org {
+			// Meldungen gehen an die Person: alle Konten, in denen der Benutzer des Geräts Mitglied ist
+			if !deviceForOrg(d, users, n.org) {
 				continue
 			}
 			if d.Kind != "web" && m.pusher == nil {
