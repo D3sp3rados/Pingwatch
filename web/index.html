@@ -1088,6 +1088,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <form method="dialog" id="ua-form">
     <div class="dlg-h">UniFi-Cloud-Standort hinzufügen</div>
     <div class="dlg-b" style="display:block">
+      <label class="field">Konsole suchen<input id="ua-q" placeholder="Name eintippen, z. B. tatz – Enter wählt den ersten Treffer" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false"></label>
       <label class="field">UniFi-Konsole<select name="console"><option value="">lädt …</option></select></label>
       <label class="field" id="ua-sitew" style="display:none">UniFi-Site<select name="usite"></select></label>
       <label class="field">Name in PingWacht<input name="name" maxlength="80" placeholder="z. B. Kundenname"></label>
@@ -2285,9 +2286,9 @@ const uaf=$('#ua-form'); let UA={named:false};
 $('#uc-addsite').onclick=async()=>{ if(!UC.keySet){ uiAlert('Bitte zuerst oben den UniFi-Cloud-Key eintragen.'); return; }
   UA={named:false}; uaf.name.value=''; $('#ua-err').textContent=''; $('#ua-sitew').style.display='none'; $('#ua-ok').disabled=true; $('#ua-hint').textContent='';
   const cs=S.state.customers||[]; $('#ua-custw').style.display=cs.length?'':'none'; uaf.cust.innerHTML='<option value="">– ohne Kunde –</option>'+cs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  uaf.console.innerHTML='<option value="">lädt …</option>'; $('#dlg-ucadd').showModal();
+  uaf.console.innerHTML='<option value="">lädt …</option>'; $('#ua-q').value=''; $('#dlg-ucadd').showModal(); setTimeout(()=>$('#ua-q').focus(),50);
   try{ const l=await api('/api/unifi/consoles',{method:'POST',body:'{}'}); const used=new Set(S.state.sites.filter(x=>x.unifi&&x.unifi.console).map(x=>x.unifi.console+'|'+(x.unifi.site||'')));
-    uaf.console.innerHTML='<option value="">– Konsole wählen –</option>'+l.map(c=>`<option value="${esc(c.id)}"${c.online?'':' disabled'}>${esc(c.name)}${c.model?' · '+esc(c.model):''}${c.online?'':' (offline)'}</option>`).join('');
+    UA.list=[...l].sort((a,b)=>(a.name||'').localeCompare(b.name||'','de')); uaList(UA.list,'');
     UA.used=used; if(l.filter(c=>c.online).length===1){ uaf.console.value=l.find(c=>c.online).id; uaConsole(); } }catch(e){ $('#ua-err').textContent=e.message; } };
 async function uaConsole(){ const id=uaf.console.value; $('#ua-sitew').style.display='none'; uaf.usite.innerHTML=''; $('#ua-ok').disabled=!id; if(!id) return;
   const cname=(uaf.console.options[uaf.console.selectedIndex].textContent||'').split(' · ')[0]; if(!UA.named) uaf.name.value=cname;
@@ -2295,6 +2296,10 @@ async function uaConsole(){ const id=uaf.console.value; $('#ua-sitew').style.dis
   try{ const l=await api('/api/unifi/sites',{method:'POST',body:JSON.stringify({console:id})}); $('#ua-hint').textContent='';
     if(l.length>1){ $('#ua-sitew').style.display=''; uaf.usite.innerHTML='<option value="">– Site wählen –</option>'+l.map(n=>`<option value="${esc(n)}"${UA.used&&UA.used.has(id+'|'+n)?' disabled':''}>${esc(n)}${UA.used&&UA.used.has(id+'|'+n)?' (schon angelegt)':''}</option>`).join(''); $('#ua-ok').disabled=true; }
     else uaf.usite.innerHTML=l.length?`<option value="${esc(l[0])}" selected>${esc(l[0])}</option>`:''; }catch(e){ $('#ua-hint').textContent=''; $('#ua-err').textContent=e.message; } }
+function uaList(l,q){ const cur=uaf.console.value; uaf.console.innerHTML=(q?`<option value="">– ${l.length} Treffer –</option>`:'<option value="">– Konsole wählen –</option>')+l.map(c=>`<option value="${esc(c.id)}"${c.online?'':' disabled'}>${esc(c.name)}${c.model?' · '+esc(c.model):''}${c.online?'':' (offline)'}</option>`).join(''); if(l.some(c=>c.id===cur)) uaf.console.value=cur; }
+$('#ua-q').addEventListener('input',e=>{ const q=e.target.value.toLowerCase().trim(); const l=q?(UA.list||[]).filter(c=>[c.name,c.model,c.id].join(' ').toLowerCase().includes(q)):(UA.list||[]); uaList(l,q);
+  const on=l.filter(c=>c.online); if(on.length===1&&uaf.console.value!==on[0].id){ uaf.console.value=on[0].id; uaConsole(); } });
+$('#ua-q').addEventListener('keydown',e=>{ if(e.key!=='Enter') return; e.preventDefault(); const o=[...uaf.console.options].find(x=>x.value&&!x.disabled); if(o&&!uaf.console.value){ uaf.console.value=o.value; uaConsole(); } });
 uaf.console.onchange=uaConsole;
 uaf.usite.onchange=()=>{ $('#ua-ok').disabled=!uaf.usite.value; if(uaf.usite.value&&!UA.named) uaf.name.value=uaf.usite.value; };
 uaf.name.oninput=()=>{ UA.named=true; };
