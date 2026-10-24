@@ -45,6 +45,10 @@ type mapNode struct {
 	Zone string  `json:"zone,omitempty"` // Ort/Zone zum Filtern (z. B. „Laufenburg“)
 	Snmp bool    `json:"snmp,omitempty"` // Traffic per SNMP abfragen (zusätzlich zu Sektoren)
 	Off  bool    `json:"off,omitempty"`  // Ping aus (gekündigt, Glas, weggezogen …) – grau, keine Statistik/Meldung
+	// Lage auf der Satellitenkarte (0 = noch nicht platziert); Geo: "auto" = per Adresse gefunden, "hand" = gezogen
+	Lat float64 `json:"lat,omitempty"`
+	Lon float64 `json:"lon,omitempty"`
+	Geo string  `json:"geo,omitempty"`
 }
 
 type mapLink struct {
@@ -350,6 +354,8 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 			ID                     string
 			Host, Name, Addr, Zone *string
 			Snmp, Off              *bool
+			Lat, Lon               *float64
+			Geo                    *string
 		}
 		Add     []mapNode
 		Del     []string
@@ -411,6 +417,15 @@ func (s *Server) handleMapEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		if st.Zone != nil {
 			d.Nodes[i].Zone = clipStr(strings.TrimSpace(*st.Zone), 60)
+		}
+		if st.Lat != nil && st.Lon != nil {
+			d.Nodes[i].Lat, d.Nodes[i].Lon, d.Nodes[i].Geo = *st.Lat, *st.Lon, "hand"
+			if st.Geo != nil && *st.Geo == "auto" {
+				d.Nodes[i].Geo = "auto"
+			}
+			if *st.Lat == 0 && *st.Lon == 0 {
+				d.Nodes[i].Geo = ""
+			}
 		}
 	}
 	for _, n := range req.Add {

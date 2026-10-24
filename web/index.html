@@ -316,6 +316,10 @@ body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.s
 #mp-ctx .h{padding:6px 10px 4px;color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #mp-ctx button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;padding:6px 10px;border-radius:6px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #mp-ctx button:hover{background:var(--acc-a)}#mp-ctx button.danger{color:var(--bad)}#mp-ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+#map-geo-el{position:absolute;inset:0;display:none;z-index:1}
+#map-pane,#mp-ctx{z-index:1100}
+.geo-item{display:flex;gap:6px;align-items:center;font-size:13px;padding:3px 4px;border-radius:6px;cursor:grab}
+.geo-item:hover{background:var(--bg2,rgba(127,127,127,.12))}
 #map-pane{position:absolute;top:10px;right:10px;width:300px;max-width:calc(100% - 20px);max-height:calc(100% - 20px);overflow:auto;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
 @media(max-width:700px){#map-pane{top:auto;bottom:10px;left:10px;right:10px;width:auto;max-height:45%}}
 body.scoped [data-v=map]{display:none!important}
@@ -553,12 +557,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="seg" id="map-filter"><button data-f="all" class="on">Alle</button><button data-f="bad">Störungen</button><button data-f="down">Nicht erreichbar</button><button data-f="linked">Überwacht</button></span>
     <button class="btn sm" id="map-old" title="Geräte mit „gekündigt“, „abgebaut“, „abgeschaltet“, „weggezogen“ oder „aus)“ im Namen ausblenden">Gekündigte ausblenden</button>
     <button class="btn sm" id="map-fit" title="Ganze Karte anzeigen">⤢ Alles</button>
+    <button class="btn sm" id="map-geo" title="Geräte auf dem Satellitenbild an ihrer Adresse zeigen">🛰 Satellit</button>
     <button class="btn sm ed" id="map-edit">✏️ Bearbeiten</button>
     <button class="btn sm ed" id="map-msel" title="Mehrere Geräte auswählen: Strg (oder Shift/⌘) gedrückt halten und mit der Maus einen Rahmen ziehen · Strg + Klick wählt einzelne dazu/weg · Ohne Taste: diesen Knopf einschalten">⬚ Auswählen</button>
     <button class="btn sm" id="map-stat" title="Verfügbarkeit und Ausfälle der angezeigten Geräte">📈 Statistik</button><span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-snmp" title="Traffic der Geräte per SNMP erfassen">📶 Traffic</button><button class="btn sm" id="map-deps" title="Abhängigkeiten der überwachten Hosts aus den Verbindungen der Karte vorschlagen – fällt ein Sektor aus, kommt nur dessen Meldung">🔗 Abhängigkeiten</button><button class="btn sm" id="map-zlist" title="Orte als Liste bearbeiten: umbenennen, zusammenlegen, Geräte markieren">📍 Orte</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
   </div>
   <div class="muted" id="map-info" style="font-size:12.5px;margin:2px 0 8px"></div>
-  <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-pane" class="panel"></div><div id="mp-ctx" class="panel" style="display:none"></div></div>
+  <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-geo-el"></div><div id="map-pane" class="panel"></div><div id="mp-ctx" class="panel" style="display:none"></div></div>
   <div class="panel empty" id="map-empty" style="display:none">Noch keine Netzkarte. <button class="btn sm pri ed" id="map-new2">+ Karte anlegen</button></div>
 </section>
 <section id="v-events">
@@ -2607,6 +2612,86 @@ function drawMsDays(ds){ const c=$('#ms-days-c'); if(!c) return; const {g,W,H,mu
   ds.forEach((d,i)=>{ if(d.avail<0) return; g.fillStyle=d.avail>=99.5?'#16a34a':d.avail>=95?'#d97706':'#dc2626'; g.fillRect(L+i*bw+bw*.15,y(d.avail),bw*.7,H-B-y(d.avail)); });
   g.fillStyle=mut; const f=d=>d.day.slice(8,10)+'.'+d.day.slice(5,7)+'.'; g.fillText(f(ds[0]),L,H-4); const te=f(ds[ds.length-1]); g.fillText(te,W-R-g.measureText(te).width,H-4); }
 $('#map-zlist').onclick=openZones;
+/* ---------- Satellitenkarte (Leaflet, Bild: Esri World Imagery) ---------- */
+const GEO={on:false,map:null,mk:{},place:null,lsig:'',poll:null,job:null,q:0};
+try{ GEO.on=localStorage.getItem('pw_mapgeo')==='1'; }catch(e){}
+function loadLeaflet(){ if(window.L&&L.map) return Promise.resolve(); return new Promise((ok,err)=>{ const l=document.createElement('link'); l.rel='stylesheet'; l.href='/vendor/leaflet/leaflet.css'; document.head.appendChild(l); const sc=document.createElement('script'); sc.src='/vendor/leaflet/leaflet.js'; sc.onload=ok; sc.onerror=()=>err(new Error('Kartenbibliothek nicht geladen')); document.head.appendChild(sc); }); }
+async function geoToggle(on){ GEO.on=on; try{ localStorage.setItem('pw_mapgeo',on?'1':'0'); }catch(e){} $('#map-geo').classList.toggle('pri',on); $('#map-geo').textContent=on?'🗺 Plan':'🛰 Satellit';
+  $('#map-geo-el').style.display=on?'block':'none'; $('#map-cv').style.visibility=on?'hidden':'';
+  if(on){ try{ await loadLeaflet(); }catch(e){ uiAlert(e.message); return geoToggle(false); } geoInit(); geoJobPoll(); }
+  MP.sel=null; MP.listMode=null; drawMap(); mpPane(); }
+$('#map-geo').onclick=()=>geoToggle(!GEO.on);
+function geoInit(){ if(GEO.map){ GEO.map.invalidateSize(); return; }
+  const m=L.map('map-geo-el',{preferCanvas:true,zoomControl:true,attributionControl:true}).setView([47.62,8.08],12);
+  const sat=L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'Luftbild © Esri, Maxar, Earthstar Geographics'}),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19})]);
+  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap-Mitwirkende'});
+  sat.addTo(m); L.control.layers({'Satellit':sat,'Straßenkarte':osm},null,{position:'topleft'}).addTo(m);
+  GEO.map=m; GEO.lines=L.layerGroup().addTo(m); GEO.dots=L.layerGroup().addTo(m);
+  m.on('click',e=>{ if(GEO.place){ const id=GEO.place; GEO.place=null; m.getContainer().style.cursor=''; geoSet(id,e.latlng); } else if(MP.sel){ MP.sel=null; geoRender(); mpPane(); } });
+  const el=m.getContainer(); el.addEventListener('dragover',e=>{ if(MP.edit) e.preventDefault(); }); el.addEventListener('drop',e=>{ e.preventDefault(); const id=e.dataTransfer.getData('text/plain'); if(!id||!MP.idx[id]&&MP.idx[id]!==0) return; const r=el.getBoundingClientRect(); geoSet(id,m.containerPointToLatLng([e.clientX-r.left,e.clientY-r.top])); });
+  geoRender(); geoFit(); }
+function geoFit(){ if(!GEO.map||!MP.data) return; const pts=MP.data.nodes.filter(n=>n.lat&&mpShown(n)).map(n=>[n.lat,n.lon]); if(pts.length) GEO.map.fitBounds(pts,{padding:[30,30],maxZoom:17}); }
+function geoQueue(){ if(GEO.q) return; GEO.q=requestAnimationFrame(()=>{ GEO.q=0; geoRender(); }); }
+function geoDeg(){ if(GEO.degFor===MP.data) return GEO.deg; const d={}; for(const l of MP.data.links){ d[l.a]=(d[l.a]||0)+1; d[l.b]=(d[l.b]||0)+1; } GEO.deg=d; GEO.degFor=MP.data; return d; }
+function geoRender(){ if(!GEO.on||!GEO.map||!MP.data) return; const ns=MP.data.nodes, q=mpQ(), deg=geoDeg(), seen=new Set();
+  const dim=n=>(MP.filter==='bad'&&!mpBad(n))||(MP.filter==='down'&&!mpDown(n))||(MP.filter==='linked'&&!mpHostOf(n))||(q&&!mpMatch(n,q));
+  for(const n of ns){ if(!n.lat||!mpShown(n)) continue; seen.add(n.id); let mk=GEO.mk[n.id]; const big=(deg[n.id]||0)>2, r=big?8:5, d=dim(n), sel=MP.sel===n.id;
+    if(!mk){ mk=L.circleMarker([n.lat,n.lon],{radius:r}).addTo(GEO.dots); mk._id=n.id; mk.bindTooltip('',{direction:'top',offset:[0,-6]});
+      mk.on('click',e=>{ L.DomEvent.stopPropagation(e); if(GEO.place) return; MP.sel=mk._id; MP.listMode=null; geoRender(); mpPane(); });
+      mk.on('mousedown',e=>geoDrag(e,mk)); GEO.mk[n.id]=mk; }
+    mk.setLatLng([n.lat,n.lon]); mk.setStyle({radius:sel?r+3:r,weight:sel?3:1.5,color:sel?'#ffffff':'#0b1220',fillColor:mpColor(n)||'#888',fillOpacity:d?.2:.95,opacity:d?.3:1});
+    if(mk._tt!==n.name){ mk.setTooltipContent(esc(n.name||n.addr||'')); mk._tt=n.name; } if(big||sel) mk.bringToFront(); }
+  for(const id in GEO.mk) if(!seen.has(id)){ GEO.dots.removeLayer(GEO.mk[id]); delete GEO.mk[id]; }
+  const P=id=>{ const n=ns[MP.idx[id]]; return n&&n.lat&&mpShown(n)?n:null; };
+  const ls=MP.data.links.map(l=>[P(l.a),P(l.b),l]).filter(x=>x[0]&&x[1]);
+  const sig=ls.map(([a,b])=>a.lat+','+a.lon+'|'+b.lat+','+b.lon+(mpDown(a)||mpDown(b)?'d':'')).join(';')+(q?'|q'+q:'');
+  if(sig!==GEO.lsig){ GEO.lsig=sig; GEO.lines.clearLayers(); for(const [a,b,l] of ls){ const bad=mpDown(a)&&mpDown(b); L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color:bad?css('--bad'):(l.type==='wired'||l.type==='fiber'?'#e5e7eb':'#60a5fa'),weight:2,opacity:(q&&!(mpMatch(a,q)||mpMatch(b,q)))?.15:.75,interactive:false,dashArray:l.type==='wired'||l.type==='fiber'?null:'6 4'}).addTo(GEO.lines); } } }
+function geoDrag(e,mk){ if(!MP.edit) return; L.DomEvent.stop(e); const m=GEO.map; m.dragging.disable(); let moved=false;
+  const mv=ev=>{ moved=true; mk.setLatLng(ev.latlng); }; const up=()=>{ m.off('mousemove',mv); m.off('mouseup',up); m.dragging.enable(); if(moved) geoSet(mk._id,mk.getLatLng()); };
+  m.on('mousemove',mv); m.on('mouseup',up); }
+async function geoSet(id,ll){ const n=MP.data.nodes[MP.idx[id]]; if(!n) return; const lat=ll?+ll.lat.toFixed(7):0, lon=ll?+ll.lng.toFixed(7):0;
+  try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({ID:MP.id,Set:[{ID:id,Lat:lat,Lon:lon}]})}); n.lat=lat; n.lon=lon; n.geo=ll?'hand':''; toast(ll?'Position gespeichert':'Position entfernt'); }catch(e){ uiAlert(e.message); }
+  geoRender(); mpPane(); }
+function geoPick(id){ if(!MP.edit){ toast('Zum Platzieren erst „✏️ Bearbeiten“ einschalten'); return; } GEO.place=id; GEO.map.getContainer().style.cursor='crosshair'; const n=MP.data.nodes[MP.idx[id]]; toast('Jetzt auf die Karte klicken: '+(n?n.name:'')); }
+async function geoJobPoll(){ if(!MP.id) return; let j; try{ j=await api('/api/maps/geocode?id='+encodeURIComponent(MP.id)); }catch(e){ return; } const was=GEO.job&&GEO.job.running; GEO.job=j;
+  if(was&&!j.running){ const keep={sel:MP.sel,c:GEO.map&&GEO.map.getCenter(),z:GEO.map&&GEO.map.getZoom()}; await mpOpen(MP.id); if(keep.c) GEO.map.setView(keep.c,keep.z); toast(j.found+' Geräte per Adresse platziert'); }
+  clearTimeout(GEO.poll); if(j.running&&GEO.on) GEO.poll=setTimeout(geoJobPoll,3000);
+  // Server erreicht OpenStreetMap nicht → im Browser weitersuchen
+  if(was&&!j.running&&j.err&&j.done===0&&!GEO.local) geoBrowserRun();
+  geoPaneExtra(); }
+async function geoBrowserRun(){ if(GEO.local) return; let plan; try{ plan=await api('/api/maps/geocode?plan=1&id='+encodeURIComponent(MP.id)); }catch(e){ return uiAlert(e.message); }
+  const items=plan.items||[]; const j={running:true,total:items.length,done:0,found:0,notFound:0,noAddr:0,at:Date.now()}; GEO.local=j; GEO.job=j; toast('Adresssuche läuft hier im Browser – Seite bitte offen lassen'); geoPaneExtra();
+  const cache={}; let batch=[]; let last=0; const mapId=MP.id;
+  const flush=async()=>{ if(!batch.length) return; const b=batch; batch=[]; try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify({ID:mapId,Set:b})}); for(const x of b){ const n=MP.id===mapId&&MP.data.nodes[MP.idx[x.ID]]; if(n){ n.lat=x.Lat; n.lon=x.Lon; n.geo='auto'; } } geoRender(); }catch(e){ j.err=e.message; } };
+  const look=async q=>{ if(q in cache) return cache[q]; const wait=last+1100-Date.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait)); last=Date.now();
+    const u='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=de,ch&bounded=1&viewbox='+plan.viewbox+'&accept-language=de&q='+encodeURIComponent(q);
+    const r=await fetch(u); if(!r.ok) throw new Error('Adresssuche: HTTP '+r.status); const a=await r.json(); const h=a[0]&&a[0].address&&a[0].address.house_number?{lat:+a[0].lat,lon:+a[0].lon}:null; cache[q]=h; return h; };
+  try{ for(const it of items){ if(!GEO.local) break; let h=null; for(const q of it.qs){ h=await look(q); if(h) break; } j.done++; if(h){ j.found++; batch.push({ID:it.id,Lat:+h.lat.toFixed(7),Lon:+h.lon.toFixed(7),Geo:'auto'}); } else j.notFound++; if(batch.length>=10) await flush(); if(j.done%5===0) geoPaneExtra(); } }
+  catch(e){ j.err=e.message; }
+  await flush(); j.running=false; j.at=Date.now(); GEO.local=null; toast(j.found+' Geräte per Adresse platziert'); geoPaneExtra(); }
+function geoJobText(){ const j=GEO.job; if(!j||(!j.running&&!j.at)) return ''; return j.running?`Adresssuche läuft: ${j.done}/${j.total} · ${j.found} gefunden`:`Letzte Adresssuche: ${j.found} gefunden, ${j.notFound} ohne genauen Treffer, ${j.noAddr} ohne Adresse im Namen`+(j.err?' · '+esc(j.err):''); }
+function geoPaneExtra(){ if(!GEO.on||!MP.data||S.view!=='map') return; const p=$('#map-pane');
+  const sel=MP.sel&&MP.data.nodes[MP.idx[MP.sel]];
+  if(sel){ let x=$('#geo-x'); if(!x){ x=document.createElement('div'); x.id='geo-x'; x.style.cssText='border-top:1px solid var(--line);margin-top:10px;padding-top:8px;font-size:13px'; p.appendChild(x); }
+    x.innerHTML=(sel.lat?(sel.geo==='auto'?'📍 Per Adresse platziert':'📍 Von Hand platziert'):'⚠️ Noch nicht auf der Satellitenkarte')+(MP.edit?`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="geo-pick">${sel.lat?'Neu setzen':'Auf Karte setzen'}</button>${sel.lat?'<button class="btn sm danger" id="geo-rm">Position entfernen</button>':''}</div><div class="muted" style="font-size:12px;margin-top:4px">Im Bearbeiten-Modus lassen sich Punkte auch direkt ziehen.</div>`:'');
+    const pk=$('#geo-pick'); if(pk) pk.onclick=()=>geoPick(sel.id); const rm=$('#geo-rm'); if(rm) rm.onclick=()=>geoSet(sel.id,null); return; }
+  if(MP.listMode||MP.multi.size||mpQ()) return;
+  const all=MP.data.nodes.filter(mpShown), placed=all.filter(n=>n.lat).length, miss=all.filter(n=>!n.lat).sort((a,b)=>(geoDeg()[b.id]||0)-(geoDeg()[a.id]||0)||(a.name||'').localeCompare(b.name||'','de'));
+  const fq=(GEO.fq||'').toLowerCase(), list=miss.filter(n=>!fq||(n.name||'').toLowerCase().includes(fq)||(n.addr||'').includes(fq));
+  const html=`<div style="display:flex;align-items:center;gap:8px"><b>🛰 Satellitenkarte</b></div><div class="muted" style="font-size:12.5px;margin:4px 0 8px">${placed} von ${all.length} Geräten platziert${MP.zone?' in '+esc(MP.zone):''}.</div>
+    ${MP.edit?`<button class="btn sm pri" id="geo-run" ${GEO.job&&GEO.job.running?'disabled':''}>📍 Adressen suchen</button> <span class="muted" style="font-size:12px" id="geo-job">${geoJobText()}</span>
+    <div class="muted" style="font-size:12px;margin:8px 0 4px">Ohne Position (${miss.length}) – <b>auf die Karte ziehen</b> oder antippen und dann auf die Karte klicken. Sektoren stehen oben.</div>
+    <input id="geo-fq" placeholder="Filtern …" value="${esc(GEO.fq||'')}" style="width:100%;margin-bottom:6px" autocomplete="off">
+    <div data-scr style="max-height:46vh;overflow:auto">${list.slice(0,400).map(n=>`<div class="geo-item" draggable="true" data-gid="${esc(n.id)}" title="${esc(n.name)}"><span class="dot" style="background:${mpColor(n)||'transparent'};border:1px solid var(--mut)"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(geoDeg()[n.id]||0)>2?'📡 ':''}${esc(n.name||n.addr||n.id)}</span></div>`).join('')||'<span class="muted" style="font-size:13px">Alle platziert 👍</span>'}${list.length>400?'<div class="muted" style="font-size:12px">… filtern für mehr</div>':''}</div>`
+    :`<div class="muted" style="font-size:12.5px">${geoJobText()||'Zum Platzieren „✏️ Bearbeiten“ einschalten: dann Adressen automatisch suchen und Sektoren/Masten von Hand auf die Karte ziehen.'}</div>`}
+    <div class="muted" style="font-size:11.5px;margin-top:8px">Punkt anklicken für Details · groß = Sektor/Mast · gestrichelt = Funk</div>`;
+  const s0=p.querySelector('[data-scr]'), top=s0?s0.scrollTop:(GEO.top||0); const fo=document.activeElement&&document.activeElement.id==='geo-fq';
+  p.innerHTML=html; p.dataset.h=''; const s1=p.querySelector('[data-scr]'); if(s1){ s1.scrollTop=top; s1.onscroll=()=>{ GEO.top=s1.scrollTop; }; }
+  const r=$('#geo-run'); if(r) r.onclick=async()=>{ if(GEO.local) return; try{ GEO.job=await api('/api/maps/geocode?id='+encodeURIComponent(MP.id),{method:'POST'}); toast('Adresssuche gestartet – etwa 1 Gerät pro Sekunde'); geoJobPoll(); }catch(e){ uiAlert(e.message); } };
+  const f=$('#geo-fq'); if(f){ f.oninput=()=>{ GEO.fq=f.value; geoPaneExtra(); }; if(fo){ f.focus(); f.setSelectionRange(f.value.length,f.value.length); } }
+  p.querySelectorAll('[data-gid]').forEach(it=>{ it.ondragstart=e=>{ if(!MP.edit){ e.preventDefault(); return; } e.dataTransfer.setData('text/plain',it.dataset.gid); }; it.onclick=()=>geoPick(it.dataset.gid); }); }
+{ const _mpPane=mpPane; mpPane=function(){ _mpPane(); geoPaneExtra(); }; }
 /* Abhängigkeiten aus der Netzkarte */
 let DP={};
 async function openDeps(root){ if(!MP.id) return; let r; try{ r=await api('/api/maps/deps?id='+encodeURIComponent(MP.id)+(root?'&root='+encodeURIComponent(root):'')); }catch(e){ return uiAlert(e.message); }
@@ -3377,7 +3462,7 @@ async function loadMaps(force){ if(MP.loading) return; MP.loading=true;
   if(!MP.list.some(m=>m.id===id)) id=MP.list[0]&&MP.list[0].id;
   $('#map-sel').innerHTML=MP.list.map(m=>`<option value="${m.id}">${esc(m.name)} (${m.nodes})</option>`).join(''); $('#map-sel').style.display=MP.list.length>1?'':'none';
   if(id&&(force||id!==MP.id||!MP.data)) await mpOpen(id); else drawMap();
-  MP.loading=false; mpPane(); }
+  MP.loading=false; mpPane(); if(GEO.on&&!GEO.map) geoToggle(true); }
 async function mpOpen(id){ MP.id=id; try{ localStorage.setItem('pw_map',id); }catch(e){} $('#map-sel').value=id;
   try{ const r=await api('/api/maps?id='+encodeURIComponent(id)); MP.data=r; }catch(e){ MP.data=null; uiAlert(e.message); return; }
   MP.idx={}; MP.data.nodes.forEach((n,i)=>MP.idx[n.id]=i); MP.sel=null; MP.fitted=false; MP.loadedAt=Date.now(); mpZones(); mpPingSel(); if(MP.zone){ mpFitShown(); } drawMap(); mpPane(); }
@@ -3386,7 +3471,7 @@ function mpFit(){ const ns=MP.data&&MP.data.nodes; const c=$('#map-cv'); if(!ns|
   const w=Math.max(50,x1-x0), h=Math.max(50,y1-y0); MP.sc=Math.min(4,Math.max(0.02,Math.min((r.width-60)/w,(r.height-60)/h)));
   MP.tx=r.width/2-(x0+w/2)*MP.sc; MP.ty=r.height/2-(y0+h/2)*MP.sc; MP.fitted=true; }
 function mpScr(n){ return [n.x*MP.sc+MP.tx, n.y*MP.sc+MP.ty]; }
-function drawMap(){ if(S.view!=='map') return; const c=$('#map-cv'); const empty=$('#map-empty');
+function drawMap(){ if(S.view!=='map') return; if(GEO.on) geoQueue(); const c=$('#map-cv'); const empty=$('#map-empty');
   const has=MP.data&&MP.data.nodes; empty.style.display=MP.list&&!MP.list.length?'':'none'; c.style.display=MP.list&&!MP.list.length?'none':'';
   if(!has) return; if(!MP.fitted) mpFit();
   const {g,W,H}=setupCanvas(c); g.clearRect(0,0,W,H);
@@ -3554,7 +3639,7 @@ addEventListener('keydown',e=>{ if(S.view!=='map'||document.querySelector('dialo
   if(e.key==='Escape'){ mpCtxClose(); if(MP.linkFrom){ MP.linkFrom=null; $('#map-cv').style.cursor=''; drawMap(); } }
   if(e.key==='Escape'&&(MP.multi.size||MP.selMode)){ MP.multi.clear(); if(MP.selMode) $('#map-msel').click(); drawMap(); mpPane(); }
   if((e.key==='Delete'||e.key==='Backspace')&&MP.multi.size){ e.preventDefault(); const d=$('#mm-del'); if(d) d.click(); } });
-function mpFocus(id){ const n=MP.data.nodes[MP.idx[id]]; if(!n) return; const r=$('#map-cv').getBoundingClientRect(); if(MP.sc<1.2) MP.sc=1.2; MP.tx=r.width/2-n.x*MP.sc; MP.ty=r.height/2-n.y*MP.sc; MP.sel=id; drawMap(); mpPane(); }
+function mpFocus(id){ const n=MP.data.nodes[MP.idx[id]]; if(!n) return; if(GEO.on){ MP.sel=id; if(n.lat&&GEO.map) GEO.map.setView([n.lat,n.lon],Math.max(GEO.map.getZoom(),18)); geoRender(); mpPane(); return; } const r=$('#map-cv').getBoundingClientRect(); if(MP.sc<1.2) MP.sc=1.2; MP.tx=r.width/2-n.x*MP.sc; MP.ty=r.height/2-n.y*MP.sc; MP.sel=id; drawMap(); mpPane(); }
 async function mpEdit(body){ try{ await api('/api/maps/edit',{method:'POST',body:JSON.stringify(Object.assign({id:MP.id},body))}); }catch(e){ uiAlert(e.message); }
   const keep={tx:MP.tx,ty:MP.ty,sc:MP.sc,sel:MP.sel}; await mpOpen(MP.id); Object.assign(MP,keep,{fitted:true}); if(MP.sel&&MP.idx[MP.sel]===undefined) MP.sel=null; drawMap(); mpPane(); }
 async function mpAddNode(){ const name=await uiPrompt('Name des Geräts:',''); if(!name) return; const addr=await uiPrompt('IP / Adresse (optional):','')||''; const r=$('#map-cv').getBoundingClientRect();

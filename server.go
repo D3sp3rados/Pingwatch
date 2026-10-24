@@ -230,6 +230,7 @@ func (s *Server) routes() http.Handler {
 	for _, p := range []string{"/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png", "/icon-512.png", "/icon-maskable.png", "/favicon.ico"} {
 		mux.Handle(p, static)
 	}
+	mux.Handle("/vendor/", static) // Leaflet (Satellitenkarte)
 	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
@@ -332,6 +333,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/maps/tree", protect(s.handleMapTree))
 	mux.HandleFunc("/api/maps/stats", protect(s.handleMapStats))
 	mux.HandleFunc("/api/maps/deps", protect(s.handleMapDeps))
+	mux.HandleFunc("/api/maps/geocode", protect(s.handleMapGeocode))
 	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
 	mux.HandleFunc("/api/org/name", protect(s.handleOrgName))
 	mux.HandleFunc("/api/org/batch", protect(s.handleOrgBatch))
