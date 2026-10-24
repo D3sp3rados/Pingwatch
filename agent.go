@@ -157,6 +157,12 @@ func runAgent(args []string) {
 		}
 	}
 	af, _, err := loadAgentFile(*cfgPath, filepath.Join(exeDir(), "agent.json"), filepath.Join(dataDir, "agent.json"))
+	// im Container (z. B. MikroTik): auf die agent.json im Datenordner warten statt zu beenden
+	for err != nil && os.Getenv("PINGWACHT_CONTAINER") == "1" {
+		log.Printf("Warte auf %s (im Dashboard unter Einstellungen → Standorte herunterladen und in den Datenordner des Containers legen)", filepath.Join(dataDir, "agent.json"))
+		time.Sleep(30 * time.Second)
+		af, _, err = loadAgentFile(*cfgPath, filepath.Join(dataDir, "agent.json"))
+	}
 	if err != nil {
 		showError("PingWacht-Agent: " + err.Error() + "\n\nIm Dashboard unter Einstellungen → Standorte die Datei agent.json herunterladen und neben die pingwatch-agent.exe legen (oder auf die exe ziehen).")
 		return

@@ -14,6 +14,7 @@ import (
 var publicAgentBinaries = map[string]bool{
 	"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true,
 	"pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true,
+	"pingwacht-agent-container-arm64.tar": true, "pingwacht-agent-container-arm.tar": true, "pingwacht-agent-container-amd64.tar": true,
 }
 
 // handlePublicBinary: GET /dl/<name> – Agent-Programm ohne Anmeldung (enthält keine Zugangsdaten).

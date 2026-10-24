@@ -1213,7 +1213,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		w.Write(b)
 		return
 	}
-	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true, "pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true}
+	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true, "pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true, "pingwacht-agent-container-arm64.tar": true, "pingwacht-agent-container-arm.tar": true, "pingwacht-agent-container-amd64.tar": true}
 	if !allowed[name] {
 		http.NotFound(w, r)
 		return
@@ -1234,7 +1234,7 @@ func (s *Server) handleAgentBinary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimPrefix(r.URL.Path, "/api/agent/binary/")
-	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true, "pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true}
+	allowed := map[string]bool{"pingwatch-agent.exe": true, "pingwatch-agent-linux-amd64": true, "pingwatch-agent-linux-arm64": true, "pingwatch-agent-darwin-arm64": true, "pingwatch-agent-darwin-amd64": true, "pingwacht-agent-container-arm64.tar": true, "pingwacht-agent-container-arm.tar": true, "pingwacht-agent-container-amd64.tar": true}
 	p := filepath.Join(s.agentDir, name)
 	if !allowed[name] {
 		http.NotFound(w, r)
