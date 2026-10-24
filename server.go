@@ -331,8 +331,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/maps/rules", protect(s.handleMapRules))
 	mux.HandleFunc("/api/maps/tree", protect(s.handleMapTree))
 	mux.HandleFunc("/api/maps/stats", protect(s.handleMapStats))
+	mux.HandleFunc("/api/maps/deps", protect(s.handleMapDeps))
 	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
 	mux.HandleFunc("/api/org/name", protect(s.handleOrgName))
+	mux.HandleFunc("/api/org/batch", protect(s.handleOrgBatch))
 	mux.HandleFunc("/api/totp", protect(s.handleTOTP))
 	mux.HandleFunc("/api/terms/accept", protect(s.handleTermsAccept))
 	mux.HandleFunc("/api/actions/consent", protect(s.handleActionsConsent))
@@ -441,6 +443,7 @@ type HostView struct {
 	LastOut   *Event  `json:"lastOutage"`
 	Maint     bool    `json:"maint,omitempty"`
 	CertExp   int64   `json:"certExp,omitempty"`
+	Avail7    float64 `json:"avail7"` // Verfügbarkeit 7 Tage (Ausfallzeit ohne Wartung)
 	// Fritzbox: Passwort hinterlegt (das Passwort selbst geht nie an den Browser)
 	FritzPassSet bool `json:"fritzPassSet,omitempty"`
 }
@@ -504,6 +507,26 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	p := principal(r)
 	hv := []HostView{}
 	tnow := time.Now()
+	w7 := now - 7*86400_000
+	down7 := map[string]int64{}
+	m.evMu.Lock()
+	for _, e := range m.events {
+		if e.Type != "outage" || e.Maint || e.HostID == "" {
+			continue
+		}
+		st, en := e.Start, e.End
+		if en == 0 {
+			en = now
+		}
+		if en <= w7 {
+			continue
+		}
+		if st < w7 {
+			st = w7
+		}
+		down7[e.HostID] += en - st
+	}
+	m.evMu.Unlock()
 	for _, h := range m.hostsOf(p.Org) {
 		if p.Scope != nil && !p.canHost(h.cfg.ID, false) {
 			continue
@@ -512,7 +535,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
 		v := HostView{HostCfg: publicHost(h.cfg), FritzPassSet: h.cfg.FritzPass != "", IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
-			Threshold: h.effThreshold(), Maint: inM, CertExp: certExpiry(h.cfg.ID)}
+			Threshold: h.effThreshold(), Maint: inM, CertExp: certExpiry(h.cfg.ID), Avail7: 1 - float64(down7[h.cfg.ID])/float64(7*86400_000)}
 		if h.baseN >= 30 {
 			v.Baseline = h.baseMed
 		}

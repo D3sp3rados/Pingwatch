@@ -154,19 +154,47 @@ func (m *Monitor) dispatchAlerts(n notice) {
 	if o == nil || o.Disabled || !planHas(o.Plan, "alerts") {
 		return
 	}
+	items := batchList(n)
 	m.mu.RLock()
-	var chans []Channel
-	group, cust := m.hostGroupLocked(n.hostID), m.noticeCustomerLocked(n)
+	type cn struct {
+		c  Channel
+		ok map[string]bool
+	}
+	var chans []cn
+	meta := map[string][2]string{}
+	for _, x := range items {
+		meta[noticeKey(x)] = [2]string{m.hostGroupLocked(x.hostID), m.noticeCustomerLocked(x)}
+	}
 	for _, c := range m.cfg.Channels {
-		if c.Org == n.org && c.wantsIn(n, group, cust) {
-			chans = append(chans, c)
+		if c.Org != n.org {
+			continue
+		}
+		ok := map[string]bool{}
+		for _, x := range items {
+			g := meta[noticeKey(x)]
+			if c.wantsIn(x, g[0], g[1]) {
+				ok[noticeKey(x)] = true
+			}
+		}
+		if len(ok) > 0 {
+			chans = append(chans, cn{c, ok})
 		}
 	}
 	m.mu.RUnlock()
 	at := time.Now()
-	for _, c := range chans {
+	for _, cc := range chans {
+		c := cc.c
 		if c.Escalate > 0 {
-			m.escalate(c, n, o.Name)
+			// Eskalation läuft je Host
+			for _, x := range items {
+				if cc.ok[noticeKey(x)] && (len(items) == 1 || !batchEarly(n, x)) {
+					m.escalate(c, x, o.Name)
+				}
+			}
+			continue
+		}
+		n, ok := m.pickFor(n, func(x notice) bool { return cc.ok[noticeKey(x)] })
+		if !ok {
 			continue
 		}
 		if n.kind == "loss" || n.kind == "spike" {

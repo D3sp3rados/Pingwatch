@@ -31,6 +31,8 @@ type NetMap struct {
 	SnmpScope string `json:"snmpScope,omitempty"` // "" = Sektoren + markierte, "all", "off"
 	// Meldungen (einzelne Geräte, Sektoren, Orte, ganze Karte)
 	Rules []MapRule `json:"rules,omitempty"`
+	// Zentrale (Hauptrouter) für die Abhängigkeiten aus der Karte
+	DepRoot string `json:"depRoot,omitempty"`
 }
 
 type mapNode struct {

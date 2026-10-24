@@ -437,7 +437,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <div id="mute-banner"></div>
 <div id="pw-banner"></div>
 <div id="trial-banner"></div>
-<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button><button data-v="rmm">🖥 RMM</button></div><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
+<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button><button data-v="rmm">🖥 RMM</button></div><input id="ov-sq" type="search" placeholder="🔍 Host suchen – Name, IP, Gruppe" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" style="min-width:200px;flex:0 1 260px"><select id="ov-sort" class="orgsw" title="Sortierung – zeigt alle Hosts als eine Liste"><option value="">Sortierung: Gruppen</option><option value="name">Name A–Z</option><option value="lat">Höchste Latenz (1 h)</option><option value="loss">Meister Paketverlust (24 h)</option><option value="avail">Schlechteste Verfügbarkeit (7 Tage)</option></select><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
 
 <section id="v-host">
   <div class="det-h">
@@ -555,7 +555,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <button class="btn sm" id="map-fit" title="Ganze Karte anzeigen">⤢ Alles</button>
     <button class="btn sm ed" id="map-edit">✏️ Bearbeiten</button>
     <button class="btn sm ed" id="map-msel" title="Mehrere Geräte auswählen: Strg (oder Shift/⌘) gedrückt halten und mit der Maus einen Rahmen ziehen · Strg + Klick wählt einzelne dazu/weg · Ohne Taste: diesen Knopf einschalten">⬚ Auswählen</button>
-    <button class="btn sm" id="map-stat" title="Verfügbarkeit und Ausfälle der angezeigten Geräte">📈 Statistik</button><span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-snmp" title="Traffic der Geräte per SNMP erfassen">📶 Traffic</button><button class="btn sm" id="map-zlist" title="Orte als Liste bearbeiten: umbenennen, zusammenlegen, Geräte markieren">📍 Orte</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
+    <button class="btn sm" id="map-stat" title="Verfügbarkeit und Ausfälle der angezeigten Geräte">📈 Statistik</button><span class="ed" style="display:flex;gap:6px;align-items:center"><select id="map-ping" class="orgsw" title="Erreichbarkeit aller Geräte regelmäßig über diesen Agenten prüfen (nur Anzeige, keine Meldungen)"></select><button class="btn sm" id="map-rules">🔔 Meldungen</button><button class="btn sm" id="map-snmp" title="Traffic der Geräte per SNMP erfassen">📶 Traffic</button><button class="btn sm" id="map-deps" title="Abhängigkeiten der überwachten Hosts aus den Verbindungen der Karte vorschlagen – fällt ein Sektor aus, kommt nur dessen Meldung">🔗 Abhängigkeiten</button><button class="btn sm" id="map-zlist" title="Orte als Liste bearbeiten: umbenennen, zusammenlegen, Geräte markieren">📍 Orte</button><button class="btn sm" id="map-zones" title="Orte aus den Namen erkennen und an verbundene Geräte weitergeben">Orte erkennen</button><button class="btn sm" id="map-ren">Umbenennen</button><button class="btn sm" id="map-new">+ Karte</button><label class="btn sm" title="Karte aus JSON-Datei importieren">Import<input type="file" id="map-imp" accept=".json,application/json" hidden></label></span>
   </div>
   <div class="muted" id="map-info" style="font-size:12.5px;margin:2px 0 8px"></div>
   <div class="map-wrap"><canvas id="map-cv"></canvas><div id="map-pane" class="panel"></div><div id="mp-ctx" class="panel" style="display:none"></div></div>
@@ -652,6 +652,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="tn-tbl"></table></div>
   <h2>Alarme <span class="sub muted" style="font-weight:400;font-size:12.5px">Teams, Telegram, Webhook, Adressen ohne Login</span> <button class="btn sm pri ed" id="add-alert">+ Alarmweg</button></h2>
   <div class="panel" style="overflow-x:auto"><table class="tbl" id="al-tbl"></table></div>
+  <div class="panel" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px;margin:10px 0 6px;padding:10px 14px"><b>📦 Sammelmeldung</b><select id="bt-min" class="orgsw ed"><option value="0">aus – jede Meldung einzeln</option><option value="2">ab 2 Ausfällen pro Minute</option><option value="3">ab 3 Ausfällen pro Minute</option><option value="4">ab 4 Ausfällen pro Minute</option><option value="5">ab 5 Ausfällen pro Minute</option><option value="8">ab 8 Ausfällen pro Minute</option><option value="10">ab 10 Ausfällen pro Minute</option><option value="15">ab 15 Ausfällen pro Minute</option><option value="20">ab 20 Ausfällen pro Minute</option></select><span class="muted" style="flex:1;min-width:240px">Fallen so viele Geräte fast gleichzeitig aus, kommt <b>eine</b> Meldung mit allen statt vieler Mails/Pushes – auch für die Entwarnung. Die ersten gehen sofort raus, der Rest gesammelt nach 20–90 s.</span></div>
   <p class="muted" style="font-size:12.5px" id="al-info">Zusätzlich zu den Push-Meldungen aufs iPhone: E-Mail, Microsoft Teams, Telegram oder eigener Webhook.</p>
 
   <h2>Wartungsfenster <button class="btn sm pri ed" id="add-maint">+ Wartung planen</button></h2>
@@ -948,6 +949,20 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div class="dlg-h" id="pt-title">Test</div>
     <div class="dlg-b" style="display:block"><div id="pt-body"></div><p class="muted" style="font-size:12px;margin:10px 0 0">Einmaliger Test aus dem Rechenzentrum mit der eingestellten Methode (Ping, Webseite, Port). Die Hosts bleiben pausiert, es entstehen keine Ereignisse oder Meldungen.</p></div>
     <div class="dlg-f"><button class="btn" value="cancel">Schließen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-deps" style="width:min(820px,96vw)">
+  <form method="dialog">
+    <div class="dlg-h">Abhängigkeiten aus der Netzkarte</div>
+    <div class="dlg-b" style="display:block">
+      <p class="muted" style="font-size:13px;margin:0 0 8px">Von der Zentrale aus wird der Weg zu jedem überwachten Host verfolgt. Jeder Host „hängt ab“ vom nächsten überwachten Host auf dem Weg dorthin (z. B. Kunde → Sektor → Mast). Fällt der übergeordnete aus, gibt es für die dahinter <b>keine eigene Meldung</b>. Pausierte Hosts werden übersprungen.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label style="font-size:13px" title="Das Gerät, über das alles ans Internet geht (Hauptrouter/Uplink). Vorgeschlagen wird der überwachte Host in der Mitte des Netzes – bitte prüfen.">Zentrale (Hauptrouter) <select id="dp-root" class="orgsw"></select></label><input id="dp-q" placeholder="Filtern …" style="flex:1;min-width:140px" autocomplete="off"><button type="button" class="btn sm" id="dp-all">Alle</button><button type="button" class="btn sm" id="dp-none">Keine</button></div>
+      <div id="dp-info" class="muted" style="font-size:12.5px;margin-bottom:6px"></div>
+      <div style="max-height:55vh;overflow:auto"><table class="tbl" id="dp-tbl"></table></div>
+      <div id="dp-err" class="err"></div>
+    </div>
+    <div class="dlg-f"><button class="btn" value="cancel">Abbrechen</button><button class="btn pri" type="button" id="dp-ok">Übernehmen</button></div>
   </form>
 </dialog>
 
@@ -1517,8 +1532,11 @@ function siteHealth(st,s){ const hs=st.hosts.filter(h=>h.site===s.id&&!h.paused)
   return hs.length||ms.length||u?'ok':'off'; }
 function custOf(st,siteId){ const s=st.sites.find(x=>x.id===siteId); return s&&s.customer?(st.customers||[]).find(c=>c.id===s.customer):null; }
 function ovSiteSet(st){ if(OVF.s&&st.sites.some(x=>x.id===OVF.s)) return new Set([OVF.s]); if(OVF.c){ const cs=st.customers||[]; return new Set(st.sites.filter(s=>OVF.c==='-'?!s.customer||!cs.some(c=>c.id===s.customer):s.customer===OVF.c).map(s=>s.id)); } return null; }
-function ovFiltered(st0){ const set=useTree(st0)?ovSiteSet(st0):null; if(!set&&!OVF.bad) return st0; const st={...st0};
+function ovFiltered(st0){ const set=useTree(st0)?ovSiteSet(st0):null, sq=(OVF.sq||'').toLowerCase().trim(); if(!set&&!OVF.bad&&!sq) return st0; const st={...st0};
   if(set){ st.hosts=st0.hosts.filter(h=>set.has(h.site)); st.machines=(st0.machines||[]).filter(m=>set.has(m.site)); st.sites=st0.sites.filter(s=>set.has(s.id)); }
+  if(sq){ const gn={}; for(const g of st0.groups||[]) gn[g.id]=g.name; const terms=sq.split('|').map(x=>x.trim()).filter(Boolean), hit=t=>terms.some(q=>t.toLowerCase().includes(q));
+    st.hosts=st.hosts.filter(h=>hit([h.name,h.addr,h.ip||'',gn[h.group]||'',siteName(h.site)].join(' '))); st.machines=(st.machines||[]).filter(m=>hit([m.name,m.host||'',gn[m.group]||''].join(' ')));
+    st.sites=st.sites.filter(s=>st.hosts.some(h=>h.site===s.id)||st.machines.some(m=>m.site===s.id)||(s.unifi&&s.unifi.on&&hit(s.name))); }
   if(OVF.bad){ st.hosts=st.hosts.filter(OV_BAD); st.machines=(st.machines||[]).filter(MBAD); st.sites=st.sites.filter(s=>(s.unifi&&s.unifi.on&&(s.unifi.err||s.unifi.offline>0||s.unifi.wanDown>0))||st.hosts.some(h=>h.site===s.id)||st.machines.some(m=>m.site===s.id)); }
   return st; }
 function ovRerender(){ $('#ov').dataset.sig=''; renderOverview(); }
@@ -1722,6 +1740,15 @@ function rmPaneHost(pane,force){ const h=S.state.hosts.find(x=>x.id===RM.sel.id)
     <div><div class="rm-sec" style="margin-top:0">Ereignisse (7 Tage)</div><div class="evlist" id="rm-evs"></div></div></div></div>`;
   if(!force&&RM.paneKey===html+RM.evs.length) return; RM.paneKey=html+RM.evs.length; pane.innerHTML=html; renderEvents($('#rm-evs'),RM.evs,false,30); }
 $('#ov-bad').onclick=()=>{ OVF.bad=!OVF.bad; ovfSave(); ovRerender(); };
+$('#ov-sq').value=OVF.sq||''; $('#ov-sort').value=OVF.os||'';
+$('#ov-sq').oninput=e=>{ OVF.sq=e.target.value; ovfSave(); clearTimeout(ovRerender.t); ovRerender.t=setTimeout(ovRerender,150); };
+$('#ov-sort').onchange=e=>{ OVF.os=e.target.value; ovfSave(); ovRerender(); };
+/* flache Liste bei Suche/Sortierung */
+const OSORT={name:'Name A–Z',lat:'höchste Latenz (Ø 1 h)',loss:'meister Paketverlust (24 h)',avail:'schlechteste Verfügbarkeit (7 Tage)'};
+function ovSortHosts(hs){ const k=OVF.os, a=[...hs]; if(!k) return a;
+  const lat=h=>{ const x=agg(h.h1); return h.status==='down'||x.avg<0?-1:x.avg; }, loss=h=>{ const x=agg(h.h24); return x.n?x.lost/x.n:-1; }, av=h=>h.avail7??1;
+  const nm=(x,y)=>x.name.localeCompare(y.name,'de',{numeric:true});
+  a.sort(k==='name'?nm:k==='lat'?(x,y)=>lat(y)-lat(x)||nm(x,y):k==='loss'?(x,y)=>loss(y)-loss(x)||nm(x,y):(x,y)=>av(x)-av(y)||nm(x,y)); return a; }
 function renderOverview(){
   const st0=S.state; if(!st0) return;
   renderTree(st0); $('#ov-bad').classList.toggle('on',!!OVF.bad);
@@ -1738,7 +1765,9 @@ function renderOverview(){
   if(view==='table'){ $('#ovmode').style.display='none'; root.dataset.sig=''; cards={}; renderOvTable(root,st); return; }
   root.dataset.thtml=''; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
   const secs=[], ms=st.machines||[];
-  if(mode==='group'&&gs.length){ const d=groupDrill(root,st,gs,ms); if(!d) return; secs.push(d); }
+  const sq=(OVF.sq||'').trim();
+  if(sq||OVF.os){ const hs=ovSortHosts(st.hosts); secs.push({key:'flat',kind:'group',group:{name:(sq?`🔍 ${hs.length} Treffer für „${sq}“`:'Alle Hosts')+(OVF.os?' · sortiert: '+OSORT[OVF.os]:'')},hosts:hs,machines:OVF.os?[]:ms}); }
+  else if(mode==='group'&&gs.length){ const d=groupDrill(root,st,gs,ms); if(!d) return; secs.push(d); }
   else if(mode==='group'){
     // mehrere Standorte: Gruppen je Standort darunter (klare Trennung), sonst wie bisher
     const used=st.sites.filter(s=>st.hosts.some(h=>h.site===s.id)||ms.some(m=>m.site===s.id)||(s.unifi&&s.unifi.on));
@@ -1754,7 +1783,7 @@ function renderOverview(){
   // Pausierte Hosts je Gruppe/Standort in eine eigene, eingeklappte Unterkategorie
   for(let i=secs.length-1;i>=0;i--){ const x=secs[i], p=x.hosts.filter(h=>h.paused); if(!p.length) continue;
     x.hosts=x.hosts.filter(h=>!h.paused); secs.splice(i+1,0,{key:x.key+'~p',kind:'paused',group:x.group,hosts:p,machines:[],allPaused:!x.hosts.length&&!(x.machines||[]).length&&!(x.utiles||[]).length&&!x.site}); }
-  const sig=mode+'|'+secs.map(x=>x.key+':'+x.hosts.map(h=>h.id).join(',')+':'+(x.machines||[]).map(m=>m.id).join(',')+(x.site&&x.site.unifi&&x.site.unifi.on?':u':'')).join('|');
+  const sig=mode+'|'+secs.map(x=>x.key+':'+(x.key.startsWith('flat')?x.hosts.map(h=>h.id).sort():x.hosts.map(h=>h.id)).join(',')+':'+(x.machines||[]).map(m=>m.id).join(',')+(x.site&&x.site.unifi&&x.site.unifi.on?':u':'')).join('|');
   if(root.dataset.sig!==sig){
     root.dataset.sig=sig; root.innerHTML=''; cards={};
     for(const sec of secs){
@@ -1799,7 +1828,7 @@ function renderOverview(){
     c.classList.toggle('down',h.status==='down');
     c.querySelector('.dot').style.background=`var(${col})`;
     c.querySelector('.card-t b').textContent=h.name;
-    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+(ovMode()==='group'&&!root.querySelector('.ov-site')?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'');
+    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+(ovMode()==='group'&&!root.querySelector('.ov-site')?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'')+(OVF.os==='avail'&&h.avail7!=null?' · 7 Tage: '+(h.avail7*100).toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
     const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
     const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
@@ -1972,11 +2001,11 @@ function ovFold(root,secs,view){ const open=ovOpen();
   for(const sec of secs){ const items=[...(sec.machines||[]).map(m=>({c:cards['m:'+m.id],bad:MBAD(m)})),...sec.hosts.map(h=>({c:cards[h.id],bad:OV_BAD(h)}))]; if(!items.length) continue;
     const g=root.querySelector(`.grid[data-sec="${sec.key}"]`), mb=root.querySelector(`.ov-more[data-sec="${sec.key}"]`); if(!g||!mb) continue;
     if(sec.kind==='paused'){ const op=pausedOpen(sec); items.forEach(x=>{ if(x.c) x.c.style.display=op?'':'none'; }); mb.style.display='none'; g.style.display=op?'':'none'; continue; }
-    const bad=items.filter(x=>x.bad), good=items.filter(x=>!x.bad), order=[...bad,...good];
+    const flat=sec.key==='flat'||sec.key==='flat~p', bad=items.filter(x=>x.bad), good=items.filter(x=>!x.bad), order=flat&&OVF.os?items:[...bad,...good];
     const want=order.map(x=>x.c).filter(Boolean);
     if(want.some((c,i)=>g.children[i]!==c)) want.forEach(c=>g.appendChild(c));
     let cols=1; if(view!=='list'){ cols=(getComputedStyle(g).gridTemplateColumns||'').split(' ').filter(x=>x&&x!=='none').length||1; }
-    const limit=Math.max(view==='list'?4:cols*2, bad.length), n=order.length, isOpen=!!open[sec.key];
+    const limit=Math.max(view==='list'?4:cols*2, bad.length), n=order.length, isOpen=!!open[sec.key]||flat;
     want.forEach((c,i)=>{ c.style.display=(isOpen||i<limit)?'':'none'; });
     if(n<=limit){ mb.style.display='none'; } else { mb.style.display=''; mb.textContent=isOpen?'Weniger ▴':`Alle ${n} anzeigen ▾`; }
   } }
@@ -2578,6 +2607,26 @@ function drawMsDays(ds){ const c=$('#ms-days-c'); if(!c) return; const {g,W,H,mu
   ds.forEach((d,i)=>{ if(d.avail<0) return; g.fillStyle=d.avail>=99.5?'#16a34a':d.avail>=95?'#d97706':'#dc2626'; g.fillRect(L+i*bw+bw*.15,y(d.avail),bw*.7,H-B-y(d.avail)); });
   g.fillStyle=mut; const f=d=>d.day.slice(8,10)+'.'+d.day.slice(5,7)+'.'; g.fillText(f(ds[0]),L,H-4); const te=f(ds[ds.length-1]); g.fillText(te,W-R-g.measureText(te).width,H-4); }
 $('#map-zlist').onclick=openZones;
+/* Abhängigkeiten aus der Netzkarte */
+let DP={};
+async function openDeps(root){ if(!MP.id) return; let r; try{ r=await api('/api/maps/deps?id='+encodeURIComponent(MP.id)+(root?'&root='+encodeURIComponent(root):'')); }catch(e){ return uiAlert(e.message); }
+  DP={r,sel:new Set(r.items.filter(i=>!i.cur).map(i=>i.host))};
+  const rs=r.roots.some(x=>x.id===r.root)?r.roots:[{id:r.root,name:r.rootName,deg:0},...r.roots];
+  $('#dp-root').innerHTML=rs.map(x=>`<option value="${esc(x.id)}"${x.id===r.root?' selected':''}>${esc(x.name||x.id)}${x.deg?' ('+x.deg+' Verb.)':''}</option>`).join('');
+  $('#dp-err').textContent=''; drawDeps(); const d=$('#dlg-deps'); if(!d.open) d.showModal(); }
+function drawDeps(){ const r=DP.r, q=($('#dp-q').value||'').toLowerCase();
+  const rows=r.items.filter(i=>!q||(i.hostName+' '+i.parentName+' '+(i.zone||'')).toLowerCase().includes(q));
+  $('#dp-info').textContent=`${r.items.length} Vorschläge · ${r.same} schon richtig eingetragen · ${DP.sel.size} ausgewählt`+(r.items.some(i=>i.cur)?' · Hosts mit anderer Abhängigkeit sind nicht vorausgewählt':'');
+  $('#dp-tbl').innerHTML=rows.length?'<tr><th></th><th>Host</th><th>hängt ab von</th><th>bisher</th></tr>'+rows.slice(0,800).map(i=>`<tr><td><input type="checkbox" data-dph="${esc(i.host)}"${DP.sel.has(i.host)?' checked':''}></td><td><b>${esc(i.hostName)}</b>${i.zone?'<br><span class="muted" style="font-size:12px">📍 '+esc(i.zone)+'</span>':''}</td><td>${esc(i.parentName)}${i.hops?'<br><span class="muted" style="font-size:12px">über '+i.hops+' Gerät'+(i.hops>1?'e':'')+' ohne Überwachung</span>':''}</td><td class="muted">${i.cur?esc(i.curName||'?'):'–'}</td></tr>`).join(''):'<tr><td class="empty">'+(r.items.length?'Keine Treffer.':'Nichts vorzuschlagen – alles schon eingetragen oder keine überwachten Hosts auf der Karte verbunden.')+'</td></tr>';
+  $$('#dp-tbl [data-dph]').forEach(cb=>cb.onchange=()=>{ cb.checked?DP.sel.add(cb.dataset.dph):DP.sel.delete(cb.dataset.dph); drawDeps(); });
+  $('#dp-ok').textContent='Übernehmen ('+DP.sel.size+')'; }
+$('#map-deps').onclick=()=>openDeps('');
+$('#dp-root').onchange=e=>openDeps(e.target.value);
+$('#dp-q').oninput=()=>drawDeps();
+$('#dp-all').onclick=()=>{ DP.r.items.forEach(i=>DP.sel.add(i.host)); drawDeps(); };
+$('#dp-none').onclick=()=>{ DP.sel.clear(); drawDeps(); };
+$('#dp-ok').onclick=async()=>{ const set=DP.r.items.filter(i=>DP.sel.has(i.host)).map(i=>({host:i.host,parent:i.parent})); if(!set.length) return $('#dlg-deps').close();
+  try{ const x=await api('/api/maps/deps',{method:'POST',body:JSON.stringify({map:MP.id,root:$('#dp-root').value,set})}); toast(x.set+' Abhängigkeiten eingetragen'+(x.skipped?' · '+x.skipped+' übersprungen':'')); openDeps($('#dp-root').value); }catch(e){ $('#dp-err').textContent=e.message; } };
 $('#map-stat').onclick=()=>openMapStat({zone:MP.zone||''});
 $('#map-snmp').onclick=()=>{ const m=MP.list&&MP.list.find(x=>x.id===MP.id); if(!m) return; const f=$('#sn2-form'); f.comm.value=m.snmpComm||''; f.scope.value=m.snmpScope||''; $('#sn2-err').textContent='';
   const sn=MP.data&&MP.data.snmp; $('#sn2-state').textContent=!m.pingSite?'Erst oben die Erreichbarkeitsprüfung über einen Agenten einschalten.':sn&&sn.at?`Letzte Abfrage ${fmtTime(sn.at,false)} · ${sn.ok} Geräte haben geantwortet.`:(m.snmpComm?'Noch keine Antwort – erste Werte nach ca. 10 Minuten (Agent ab Version 1.6.5).':'');
@@ -2842,7 +2891,9 @@ $('#mf-del').onclick=async()=>{ if(!await uiConfirm('Wartungsfenster löschen?')
 /* Alarme */
 const ATYPE={email:'E-Mail',teams:'Teams',telegram:'Telegram',webhook:'Webhook'};
 let AL=null, alAt=0;
-async function loadAlerts(force){ loadTeamNotify(); if(!force&&AL&&Date.now()-alAt<15000) return renderAlerts(); alAt=Date.now(); try{ AL=await api('/api/alerts'); }catch(e){ return; } renderAlerts(); }
+async function loadBatch(){ try{ const r=await api('/api/org/batch'); const el=$('#bt-min'); if(document.activeElement!==el){ if(![...el.options].some(o=>o.value==r.min)) el.add(new Option('ab '+r.min+' Ausfällen pro Minute',r.min)); el.value=r.min; } }catch(e){} }
+$('#bt-min').onchange=async e=>{ try{ const r=await api('/api/org/batch',{method:'POST',body:JSON.stringify({min:+e.target.value||0})}); e.target.value=r.min; toast(r.min?'Sammelmeldung ab '+r.min+' Ausfällen':'Sammelmeldung aus'); }catch(err){ uiAlert(err.message); loadBatch(); } };
+async function loadAlerts(force){ loadTeamNotify(); loadBatch(); if(!force&&AL&&Date.now()-alAt<15000) return renderAlerts(); alAt=Date.now(); try{ AL=await api('/api/alerts'); }catch(e){ return; } renderAlerts(); }
 function renderAlerts(){ if(!AL) return; const cs=AL.channels||[];
   const ev=c=>c.escalate?`<span class="tag warn">Eskalation nach ${c.escalate} min</span>`:[c.outage&&'Ausfall',c.offline&&'Standort',c.loss&&'Verlust',c.spike&&'Spitzen',c.report&&'Bericht'].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join(' ');
   const stat=c=>c.disabled?'<span class="tag">pausiert</span>':c.lastErr&&c.errAt>(c.lastOK||0)?`<span class="tag bad" title="${esc(c.lastErr)}">Fehler</span> <span class="muted" style="font-size:12px">${esc(c.lastErr.slice(0,60))}</span>`:c.lastOK?`<span class="tag ok">zuletzt ${fmtDT(c.lastOK,false)}</span>`:'<span class="muted">–</span>';

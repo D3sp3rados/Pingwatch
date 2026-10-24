@@ -22,6 +22,9 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server) {
 	t.Helper()
 	os.Setenv("PINGWATCH_SIM", "1")
 	simMode = true
+	nbState.Lock()
+	nbState.b = map[string]*nbBucket{}
+	nbState.Unlock()
 	m := NewMonitor(NewFileStore(t.TempDir()))
 	m.notices = make(chan notice, 100)
 	s := &Server{m: m, envPass: "admin-pass-123"}

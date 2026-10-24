@@ -271,6 +271,13 @@ var pushThrottle = struct {
 }{m: map[string]time.Time{}}
 
 func (m *Monitor) notify(n notice) {
+	if m.notices == nil || m.batchIn(n) {
+		return
+	}
+	m.notifyNow(n)
+}
+
+func (m *Monitor) notifyNow(n notice) {
 	if m.notices == nil {
 		return
 	}
@@ -284,10 +291,13 @@ func (m *Monitor) pushLoop() {
 	for n := range m.notices {
 		m.dispatchAlerts(n)
 		m.personalMails(n)
+		items := batchList(n)
 		m.mu.RLock()
 		devs := append([]Device(nil), m.cfg.Devices...)
-		group := m.hostGroupLocked(n.hostID)
-		cust := m.noticeCustomerLocked(n)
+		meta := map[string][2]string{}
+		for _, x := range items {
+			meta[noticeKey(x)] = [2]string{m.hostGroupLocked(x.hostID), m.noticeCustomerLocked(x)}
+		}
 		prefs := map[string]*NotifyPrefs{}
 		users := map[string]User{}
 		for _, u := range m.cfg.Users {
@@ -298,17 +308,18 @@ func (m *Monitor) pushLoop() {
 			}
 		}
 		m.mu.RUnlock()
-		seen := map[string]bool{} // Benutzer → darf Meldung sehen (einmal je Meldung berechnet)
-		visible := func(uid string) bool {
+		seen := map[string]bool{} // Benutzer|Meldung → darf Meldung sehen
+		visible := func(uid string, x notice) bool {
 			u, ok := users[uid]
 			if !ok {
 				return true
 			}
-			if v, ok := seen[uid]; ok {
+			k := uid + "|" + noticeKey(x)
+			if v, ok := seen[k]; ok {
 				return v
 			}
-			v := m.noticeVisible(&u, n)
-			seen[uid] = v
+			v := m.noticeVisible(&u, x)
+			seen[k] = v
 			return v
 		}
 		now := time.Now().UnixMilli()
@@ -317,16 +328,24 @@ func (m *Monitor) pushLoop() {
 			if !d.AllOrgs && d.Org != n.org {
 				continue
 			}
-			if p := prefs[d.User]; p != nil && (p.NoPush || p.suppressed(group, now) || (p.PushSel != nil && !p.PushSel.wants(n, group, cust))) {
-				continue
-			}
-			if !d.AllOrgs && !visible(d.User) {
-				continue
-			}
-			if !d.wants(n) {
-				continue
-			}
 			if d.Kind != "web" && m.pusher == nil {
+				continue
+			}
+			p := prefs[d.User]
+			if p != nil && p.NoPush {
+				continue
+			}
+			n, ok := m.pickFor(n, func(x notice) bool {
+				g := meta[noticeKey(x)]
+				if p != nil && (p.suppressed(g[0], now) || (p.PushSel != nil && !p.PushSel.wants(x, g[0], g[1]))) {
+					return false
+				}
+				if !d.AllOrgs && !visible(d.User, x) {
+					return false
+				}
+				return d.wants(x)
+			})
+			if !ok {
 				continue
 			}
 			// Paketverlust und Spitzen höchstens alle 10 Minuten pro Host und Gerät

@@ -48,6 +48,8 @@ type Org struct {
 	ActionsConsent *Consent `json:"actionsConsent,omitempty"`
 	// Schlüssel zum Unterschreiben von Aufträgen (öffentlicher Teil; der private bleibt im Browser)
 	SignKeys []SignKey `json:"signKeys,omitempty"`
+	// Sammelmeldung ab so vielen Ausfällen pro Minute (nil = Standard 3, 0 = aus)
+	BatchMin *int `json:"batchMin,omitempty"`
 }
 
 type User struct {

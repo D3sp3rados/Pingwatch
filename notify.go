@@ -100,12 +100,17 @@ func (m *Monitor) personalMails(n notice) {
 		return
 	}
 	now := time.Now()
+	items := batchList(n)
 	m.mu.RLock()
-	group := m.hostGroupLocked(n.hostID)
-	cust := m.noticeCustomerLocked(n)
+	meta := map[string][2]string{}
+	for _, x := range items {
+		meta[noticeKey(x)] = [2]string{m.hostGroupLocked(x.hostID), m.noticeCustomerLocked(x)}
+	}
 	type rcpt struct {
-		to, org string
-		u       User
+		to string
+		u  User
+		ok map[string]bool
+		n  notice
 	}
 	var to []rcpt
 	for _, u := range m.cfg.Users {
@@ -119,42 +124,53 @@ func (m *Monitor) personalMails(n notice) {
 		if u.Expires > 0 && u.Expires < now.UnixMilli() {
 			continue
 		}
-		if p.suppressed(group, now.UnixMilli()) {
-			continue
-		}
-		if p.MailSel != nil {
-			if !p.MailSel.wants(n, group, cust) {
+		ok := map[string]bool{}
+		for _, x := range items {
+			g := meta[noticeKey(x)]
+			if p.suppressed(g[0], now.UnixMilli()) {
 				continue
 			}
-			if n.kind == "loss" || n.kind == "spike" { // höchstens alle 10 Minuten je Host und Benutzer
-				k := u.ID + "|" + n.hostID + "|" + n.kind
-				mailThrottle.Lock()
-				last := mailThrottle.m[k]
-				ok := time.Since(last) >= 10*time.Minute
-				if ok {
-					mailThrottle.m[k] = now
-				}
-				mailThrottle.Unlock()
-				if !ok {
+			if p.MailSel != nil {
+				if !p.MailSel.wants(x, g[0], g[1]) {
 					continue
 				}
+			} else if !mailKind(x.kind) {
+				continue
 			}
-		} else if !mailKind(n.kind) {
+			ok[noticeKey(x)] = true
+		}
+		if len(ok) == 0 {
 			continue
+		}
+		if p.MailSel != nil && (n.kind == "loss" || n.kind == "spike") { // höchstens alle 10 Minuten je Host und Benutzer
+			k := u.ID + "|" + n.hostID + "|" + n.kind
+			mailThrottle.Lock()
+			last := mailThrottle.m[k]
+			allow := time.Since(last) >= 10*time.Minute
+			if allow {
+				mailThrottle.m[k] = now
+			}
+			mailThrottle.Unlock()
+			if !allow {
+				continue
+			}
 		}
 		addr := strings.TrimSpace(p.MailTo)
 		if addr == "" {
 			addr = u.Email
 		}
 		if validEmail(addr) {
-			to = append(to, rcpt{addr, u.Org, u})
+			to = append(to, rcpt{to: addr, u: u, ok: ok})
 		}
 	}
 	m.mu.RUnlock()
-	// eingeschränkte Benutzer nur für ihre Kunden/Hosts
+	// eingeschränkte Benutzer nur für ihre Kunden/Hosts; bei Sammelmeldungen je Empfänger zusammenstellen
 	keep := to[:0]
 	for _, r := range to {
-		if m.noticeVisible(&r.u, n) {
+		u := r.u
+		nn, ok := m.pickFor(n, func(x notice) bool { return r.ok[noticeKey(x)] && m.noticeVisible(&u, x) })
+		if ok {
+			r.n = nn
 			keep = append(keep, r)
 		}
 	}
@@ -167,12 +183,12 @@ func (m *Monitor) personalMails(n notice) {
 		orgName = o.Name
 	}
 	for _, r := range to {
-		go func(addr string) {
+		go func(addr string, n notice) {
 			c := Channel{Type: "email", Target: addr, Name: "persönlich"}
 			if err := sendAlert(c, n, now, orgName); err != nil {
 				log.Printf("Persönliche Mail an %s: %v", addr, err)
 			}
-		}(r.to)
+		}(r.to, r.n)
 	}
 }
 
