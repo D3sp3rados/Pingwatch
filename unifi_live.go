@@ -399,18 +399,25 @@ func (m *Monitor) unifiNotify(site SiteCfg, starts, ends []Event, errText string
 		}
 		body := "Gerät meldet sich nicht mehr bei der UniFi-Konsole (" + site.Name + ")"
 		if errText != "" {
-			body = "Der Agent erreicht die UniFi-Konsole nicht: " + errText
+			addr := site.UniFi.URL
+			if site.UniFi.isCloud() && site.UniFi.ConsoleName != "" {
+				addr = site.UniFi.ConsoleName
+			}
+			if addr != "" {
+				addr = " (" + addr + ")"
+			}
+			body = "Standort „" + site.Name + "“: Der Agent erreicht die UniFi-Konsole" + addr + " nicht – " + errText
 			if site.UniFi.isCloud() {
-				body = "Die UniFi-Konsole ist über die UniFi-Cloud nicht erreichbar (Internet beim Kunden weg?): " + errText
+				body = "Standort „" + site.Name + "“: Die UniFi-Konsole" + addr + " ist über die UniFi-Cloud nicht erreichbar (Internet beim Kunden weg?) – " + errText
 			}
 		}
-		m.notify(notice{"devoff", "", "🔴 UniFi: " + e.HostName + " offline", body + unifiVia(site), site.Org, site.ID})
+		m.notify(notice{"devoff", "", "🔴 UniFi " + site.Name + ": " + e.HostName + " offline", body + unifiVia(site), site.Org, site.ID})
 	}
 	for _, e := range ends {
 		if !e.Notified {
 			continue
 		}
-		m.notify(notice{"devon", "", "🟢 UniFi: " + e.HostName + " wieder online",
+		m.notify(notice{"devon", "", "🟢 UniFi " + site.Name + ": " + e.HostName + " wieder online",
 			fmt.Sprintf("War %s offline (%s)", fmtDurShort(e.End-e.Start), site.Name) + unifiVia(site), site.Org, site.ID})
 	}
 }

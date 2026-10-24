@@ -77,8 +77,10 @@ func noticeLabel(n notice) string {
 	if i := strings.Index(t, " "); i > 0 && i <= 5 { // Emoji vorne
 		t = t[i+1:]
 	}
-	for _, p := range []string{"UniFi Protect: ", "UniFi: "} {
-		t = strings.TrimPrefix(t, p)
+	if strings.HasPrefix(t, "UniFi") {
+		if i := strings.Index(t, ": "); i > 0 {
+			t = t[i+2:]
+		}
 	}
 	for _, s := range []string{" antwortet nicht", " wieder erreichbar", " wieder online", " offline"} {
 		t = strings.TrimSuffix(t, s)
