@@ -3,6 +3,7 @@ import SwiftUI
 struct OverviewView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("ovMode") private var mode = "group"
+    @State private var statusList: String?
 
     var body: some View {
         List {
@@ -64,6 +65,7 @@ struct OverviewView: View {
         }
         .navigationTitle("PingWacht")
         .refreshable { await model.refresh() }
+        .navigationDestination(item: $statusList) { k in StatusListView(kind: k) }
     }
 
     @ViewBuilder
@@ -75,13 +77,61 @@ struct OverviewView: View {
         let ok = active.count - down - warn - nodata
         Section {
             HStack(spacing: 12) {
-                SummaryTile(value: "\(ok)/\(active.count)", label: "OK", color: PW.ok)
-                SummaryTile(value: "\(down)", label: "ohne Antwort", color: down > 0 ? PW.bad : .secondary)
-                SummaryTile(value: "\(warn)", label: "Störung", color: warn > 0 ? PW.warn : .secondary)
+                Button { statusList = "ok" } label: {
+                    SummaryTile(value: "\(ok)/\(active.count)", label: "OK", color: PW.ok)
+                }
+                Button { statusList = "down" } label: {
+                    SummaryTile(value: "\(down)", label: "ohne Antwort", color: down > 0 ? PW.bad : .secondary)
+                }
+                Button { statusList = "warn" } label: {
+                    SummaryTile(value: "\(warn)", label: "Störung", color: warn > 0 ? PW.warn : .secondary)
+                }
             }
+            .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             .listRowBackground(Color.clear)
         }
+    }
+}
+
+/// Liste der Hosts hinter einer Kachel oben (OK / ohne Antwort / Störung).
+struct StatusListView: View {
+    @Environment(AppModel.self) private var model
+    let kind: String
+
+    private var title: String {
+        switch kind {
+        case "down": return "Ohne Antwort"
+        case "warn": return "Störung"
+        default: return "OK"
+        }
+    }
+
+    private func match(_ h: HostView) -> Bool {
+        if h.paused { return false }
+        switch kind {
+        case "down": return h.status == "down"
+        case "warn": return h.status == "loss" || h.status == "spike"
+        default: return !["down", "loss", "spike", "stale", "siteoff", "unknown"].contains(h.status)
+        }
+    }
+
+    var body: some View {
+        let hosts = (model.state?.hosts ?? []).filter(match)
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        List {
+            if hosts.isEmpty {
+                ContentUnavailableView(kind == "ok" ? "Keine Hosts" : "Alles in Ordnung",
+                                       systemImage: kind == "ok" ? "network" : "checkmark.circle")
+            }
+            ForEach(hosts) { h in
+                NavigationLink(value: h.id) {
+                    HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
+                }
+            }
+        }
+        .navigationTitle("\(title) (\(hosts.count))")
+        .refreshable { await model.refresh() }
     }
 }
 
@@ -97,6 +147,7 @@ private struct SummaryTile: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
