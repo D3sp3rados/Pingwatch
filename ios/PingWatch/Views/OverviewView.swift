@@ -19,18 +19,32 @@ struct OverviewView: View {
                                            description: Text("Hosts legst du im Dashboard unter Einstellungen an."))
                 }
                 let groups = st.groups ?? []
-                if !groups.isEmpty {
+                let agents = st.sites.filter(\.isAgent)
+                if !groups.isEmpty || !agents.isEmpty {
                     Section {
                         Picker("Ansicht", selection: $mode) {
-                            Text("Gruppen").tag("group")
+                            if !groups.isEmpty { Text("Gruppen").tag("group") }
                             Text("Standorte").tag("site")
+                            if !agents.isEmpty { Text("Agenten").tag("agent") }
                         }
                         .pickerStyle(.segmented)
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                 }
-                if !groups.isEmpty && mode == "group" {
+                if mode == "agent" && !agents.isEmpty {
+                    Section {
+                        ForEach(agents) { a in
+                            NavigationLink {
+                                AgentView(siteID: a.id)
+                            } label: {
+                                AgentRow(site: a, hosts: st.hosts.filter { $0.site == a.id })
+                            }
+                        }
+                    } footer: {
+                        Text("Agenten prüfen Geräte im lokalen Netz. Ist ein Agent offline, werden seine Hosts grau und es gehen keine Einzelmeldungen raus.")
+                    }
+                } else if !groups.isEmpty && mode == "group" {
                     Section {
                         ForEach(pwFolders(st)) { f in
                             NavigationLink {
@@ -131,6 +145,68 @@ struct StatusListView: View {
             }
         }
         .navigationTitle("\(title) (\(hosts.count))")
+        .refreshable { await model.refresh() }
+    }
+}
+
+struct AgentRow: View {
+    let site: SiteView
+    let hosts: [HostView]
+    var body: some View {
+        let active = hosts.filter { !$0.paused }
+        let bad = active.filter { $0.status == "down" }.count
+        let warn = active.filter { $0.status == "loss" || $0.status == "spike" }.count
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                StatusDot(color: site.online ? PW.ok : PW.bad)
+                Image(systemName: "desktopcomputer").foregroundStyle(.secondary)
+                Text(site.name).font(.headline).lineLimit(1)
+                Spacer()
+                if site.online && bad > 0 {
+                    Text("\(bad) ohne Antwort").font(.caption.bold()).foregroundStyle(PW.bad)
+                } else if site.online && warn > 0 {
+                    Text("\(warn) Störung\(warn == 1 ? "" : "en")").font(.caption.bold()).foregroundStyle(PW.warn)
+                }
+            }
+            Text(site.online
+                 ? "online" + (site.ip.isEmpty ? "" : " · \(site.ip)") + (site.version.isEmpty ? "" : " · v\(site.version)")
+                 : (site.lastSeen > 0 ? "offline seit \(fmtDayTime(Date(ms: site.lastSeen)))" : "nie verbunden"))
+                .font(.caption).foregroundStyle(site.online ? Color.secondary : PW.bad)
+            Text("\(hosts.count) Host\(hosts.count == 1 ? "" : "s")" + (site.unifi?.on == true ? " · UniFi" : ""))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct AgentView: View {
+    @Environment(AppModel.self) private var model
+    let siteID: String
+    var body: some View {
+        let st = model.state
+        let site = st?.sites.first { $0.id == siteID }
+        let hosts = (st?.hosts ?? []).filter { $0.site == siteID }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        List {
+            if let site {
+                Section {
+                    AgentRow(site: site, hosts: hosts)
+                }
+            }
+            if !hosts.isEmpty {
+                Section("Hosts") {
+                    ForEach(hosts) { h in
+                        NavigationLink(value: h.id) {
+                            HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
+                        }
+                    }
+                }
+            }
+            if let site, let u = site.unifi, u.on {
+                Section { UniFiSection(summary: u, siteName: site.name, siteID: site.id) }
+            }
+        }
+        .navigationTitle(site?.name ?? "Agent")
         .refreshable { await model.refresh() }
     }
 }

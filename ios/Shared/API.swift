@@ -161,6 +161,9 @@ struct SiteView: Decodable, Identifiable, Hashable {
     let version: String
     let hosts: Int
     var unifi: UniFiSummary?
+    var kind: String?
+    /// Standort mit eigenem Agenten (PC, Container …) – nicht Cloud, nicht nur UniFi über die Cloud
+    var isAgent: Bool { id != "cloud" && kind != "unifi" }
 }
 
 struct UniFiWAN: Decodable, Hashable {
