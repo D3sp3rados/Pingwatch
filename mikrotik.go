@@ -529,6 +529,20 @@ func mtHW(hs []mtKV) map[string]bool {
 			out[strings.TrimSuffix(n, "-state")] = strings.EqualFold(h.Value, "ok")
 		}
 	}
+	// Geräte ohne psuX-state (z. B. CCR1072): Netzteil über die Spannung bewerten
+	for _, h := range hs {
+		n := strings.ToLower(h.Name)
+		if strings.HasPrefix(n, "psu") && strings.HasSuffix(n, "-voltage") {
+			k := strings.TrimSuffix(n, "-voltage")
+			if _, has := out[k]; has {
+				continue
+			}
+			v, err := strconv.ParseFloat(h.Value, 64)
+			if err == nil {
+				out[k] = v >= 10
+			}
+		}
+	}
 	return out
 }
 

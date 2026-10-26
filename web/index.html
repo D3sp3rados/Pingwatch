@@ -2586,7 +2586,7 @@ async function loadMt(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.ho
   const st=(k,v,col)=>`<div class="panel stat"><span>${k}</span><b class="num" ${col?`style="color:var(${col})"`:''}>${v}</b></div>`, n=x=>+x||0;
   const cpu=n(res['cpu-load']), memU=n(res['total-memory'])?100*(1-n(res['free-memory'])/n(res['total-memory'])):0, hdd=n(res['total-hdd-space'])?100*(1-n(res['free-hdd-space'])/n(res['total-hdd-space'])):0;
   const hl=c.health||[], temps=hl.filter(x=>/temperature/.test(x.n)), tmax=temps.length?Math.max(...temps.map(x=>+x.v||0)):null;
-  const hw=hl.filter(x=>/^(psu|fan)\d*-state$/.test(x.n)), hwBad=hw.filter(x=>!/^ok$/i.test(x.v));
+  const hwS=hl.filter(x=>/^(psu|fan)\d*-state$/.test(x.n)), hwV=hwS.some(x=>/^psu/.test(x.n))?[]:hl.filter(x=>/^psu\d*-voltage$/.test(x.n)).map(x=>({n:x.n.replace('-voltage','-state'),v:(+x.v>=10?'ok':'aus')})), hw=hwS.concat(hwV), hwBad=hw.filter(x=>!/^ok$/i.test(x.v));
   const bgp=c.bgp||[], bgpUp=bgp.filter(b=>b.up).length;
   const upd=up['latest-version']&&up['installed-version']&&up['latest-version']!==up['installed-version'];
   const fwUpd=rb['upgrade-firmware']&&rb['current-firmware']&&rb['upgrade-firmware']!==rb['current-firmware'];
