@@ -317,6 +317,7 @@ body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.s
 #mp-ctx button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;padding:6px 10px;border-radius:6px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #mp-ctx button:hover{background:var(--acc-a)}#mp-ctx button.danger{color:var(--bad)}#mp-ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 #map-geo-el{position:absolute;inset:0;display:none;z-index:1}
+.tr-cat{cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-radius:6px}.tr-cat:hover{background:var(--acc-a)}.tr-cat.on{background:var(--acc-a);color:var(--fg)}
 #d-name{cursor:text;border-radius:6px;padding:0 4px;margin-left:-4px}#d-name:hover{background:var(--acc-a)}#d-name[contenteditable="true"]{outline:2px solid var(--acc);background:var(--panel)}body.viewer #d-name{cursor:default}body.viewer #d-name:hover{background:none}
 #geo-hist{position:absolute;left:10px;bottom:22px;z-index:1100;width:330px;max-width:calc(100% - 20px);padding:8px 10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
 #geo-hist .geo-undo{display:flex;gap:8px;align-items:center;justify-content:space-between;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
@@ -1565,8 +1566,9 @@ function siteHealth(st,s){ const hs=st.hosts.filter(h=>h.site===s.id&&!h.paused)
   return hs.length||ms.length||u?'ok':'off'; }
 function custOf(st,siteId){ const s=st.sites.find(x=>x.id===siteId); return s&&s.customer?(st.customers||[]).find(c=>c.id===s.customer):null; }
 function ovSiteSet(st){ if(OVF.s&&st.sites.some(x=>x.id===OVF.s)) return new Set([OVF.s]); if(OVF.c){ const cs=st.customers||[]; return new Set(st.sites.filter(s=>OVF.c==='-'?!s.customer||!cs.some(c=>c.id===s.customer):s.customer===OVF.c).map(s=>s.id)); } return null; }
-function ovFiltered(st0){ const set=useTree(st0)?ovSiteSet(st0):null, sq=(OVF.sq||'').toLowerCase().trim(); if(!set&&!OVF.bad&&!sq&&!OVF.mt) return st0; const st={...st0};
-  if(OVF.mt){ st.hosts=st0.hosts.filter(h=>h.mt); st.machines=[]; st.sites=st0.sites.filter(x=>st.hosts.some(h=>h.site===x.id)).map(x=>({...x,unifi:null})); }
+function ovFiltered(st0){ const set=useTree(st0)?ovSiteSet(st0):null, sq=(OVF.sq||'').toLowerCase().trim(); const cat=useTree(st0)?OVF.cat:''; if(!set&&!OVF.bad&&!sq&&!cat) return st0; const st={...st0};
+  if(cat==='mt'){ st.hosts=st0.hosts.filter(h=>h.mt); st.machines=[]; st.sites=st0.sites.filter(x=>st.hosts.some(h=>h.site===x.id)).map(x=>({...x,unifi:null})); }
+  else if(cat){ const inCat=x=>cat==='unifi'?x.kind==='unifi':cat==='cloud'?x.id==='cloud':x.id!=='cloud'&&x.kind!=='unifi'; st.sites=st0.sites.filter(inCat); const ids=new Set(st.sites.map(x=>x.id)); st.hosts=st0.hosts.filter(h=>ids.has(h.site)); st.machines=(st0.machines||[]).filter(m=>ids.has(m.site)); }
   if(set){ st.hosts=st0.hosts.filter(h=>set.has(h.site)); st.machines=(st0.machines||[]).filter(m=>set.has(m.site)); st.sites=st0.sites.filter(s=>set.has(s.id)); }
   if(sq){ const gn={}; for(const g of st0.groups||[]) gn[g.id]=g.name; const terms=sq.split('|').map(x=>x.trim()).filter(Boolean), hit=t=>terms.some(q=>t.toLowerCase().includes(q));
     st.hosts=st.hosts.filter(h=>hit([h.name,h.addr,h.ip||'',gn[h.group]||'',siteName(h.site)].join(' '))); st.machines=(st.machines||[]).filter(m=>hit([m.name,m.host||'',gn[m.group]||''].join(' ')));
@@ -1584,27 +1586,28 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   const rest=sites.filter(s=>!s.customer||!cs.some(c=>c.id===s.customer));
   if(rest.length&&cs.length) groups.push({id:'-',name:'Ohne Kunde',sites:rest});
   else if(rest.length){ const ag=rest.filter(s=>s.id!=='cloud'&&s.kind!=='unifi'), uf=rest.filter(s=>s.kind==='unifi'), cl=rest.filter(s=>s.id==='cloud');
-    if(ag.length) groups.push({id:'-',name:'💻 Agenten',sites:ag,flat:true,ord:1}); if(uf.length) groups.push({id:'-',name:'📶 Ubiquiti',sites:uf,flat:true,ord:2}); if(cl.length) groups.push({id:'-',name:'☁️ Cloud',sites:cl,flat:true,ord:3}); }
+    if(ag.length) groups.push({id:'-',name:'💻 Agenten',sites:ag,flat:true,ord:1,cat:'agent'}); if(uf.length) groups.push({id:'-',name:'📶 Ubiquiti',sites:uf,flat:true,ord:2,cat:'unifi'}); if(cl.length) groups.push({id:'-',name:'☁️ Cloud',sites:cl,flat:true,ord:3,cat:'cloud'}); }
   // gestörte Kunden zuerst, sonst alphabetisch
   const rank=g=>({bad:0,warn:1,ok:2,off:3})[worstH(g.sites.map(s=>H[s.id]))]; groups.sort((a,b)=>(a.id==='-')-(b.id==='-')||(a.ord||0)-(b.ord||0)||rank(a)-rank(b)||a.name.localeCompare(b.name,'de'));
   const nb=Object.values(H).filter(x=>x==='bad').length;
   let html=`<div class="tr-search"><input id="tr-q" placeholder="Kunde, Standort oder Nr. suchen" value="${esc(OVF.q||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></div>`;
-  html+=`<div class="tr-i${!OVF.c&&!OVF.s&&!OVF.mt?' on':''}" data-tc=""><span class="tr-x"></span><span class="dot" style="background:var(${HCOL[worstH(Object.values(H))]})"></span><span class="tr-t"><b>Alle</b></span><span class="tr-n">${nb?`<b style="color:var(--bad)">${nb} gestört</b> · `:''}${sites.length}</span></div>`;
+  html+=`<div class="tr-i${!OVF.c&&!OVF.s&&!OVF.cat?' on':''}" data-tc=""><span class="tr-x"></span><span class="dot" style="background:var(${HCOL[worstH(Object.values(H))]})"></span><span class="tr-t"><b>Alle</b></span><span class="tr-n">${nb?`<b style="color:var(--bad)">${nb} gestört</b> · `:''}${sites.length}</span></div>`;
   for(const g of groups){ const gm=match(g.name+' '+(g.number||'')); const ss=g.sites.filter(s=>gm||match(s.name+' '+(s.number||''))); if(q&&!gm&&!ss.length) continue;
     const open=g.flat||(q&&ss.length)||exp[g.id]||OVF.c===g.id||g.sites.some(s=>s.id===OVF.s), gb=g.sites.filter(s=>H[s.id]==='bad').length;
-    if(g.flat) html+=`<div class="tr-h">${esc(g.name)}</div>`;
+    if(g.flat) html+=g.cat?`<div class="tr-h tr-cat${OVF.cat===g.cat?' on':''}" data-tcat="${g.cat}" title="Alle als Kacheln anzeigen">${esc(g.name)} <span class="tr-n">${g.sites.length}</span></div>`:`<div class="tr-h">${esc(g.name)}</div>`;
     else html+=`<div class="tr-i${OVF.c===g.id&&!OVF.s?' on':''}" data-tc="${g.id}"><span class="tr-x" data-tx="${g.id}">${g.sites.length?(open?'▾':'▸'):''}</span><span class="dot" style="background:var(${HCOL[g.sites.length?worstH(g.sites.map(s=>H[s.id])):'off']})"></span><span class="tr-t" title="${esc(g.name)}">${esc(g.name)}${g.number?` <span class="muted">${esc(g.number)}</span>`:''}</span><span class="tr-n">${gb?`<b style="color:var(--bad)">${gb}</b>/`:''}${g.sites.length}</span></div>`;
     if(open) for(const s of ss) html+=`<div class="tr-i tr-s${OVF.s===s.id?' on':''}" data-ts="${s.id}" data-tcs="${g.id}"${g.flat?' style="padding-left:8px"':''}><span class="dot" style="background:var(${HCOL[H[s.id]]})"></span><span class="tr-t" title="${esc(s.name)}">${esc(s.name)}${s.number?` <span class="muted">${esc(s.number)}</span>`:''}</span></div>`; }
-  const mth=st0.hosts.filter(h=>h.mt); if(mth.length){ const mb=mth.filter(h=>h.status==='down').length; html+=`<div class="tr-h">🛡 MikroTik</div><div class="tr-i tr-s${OVF.mt?' on':''}" data-tmt="1" style="padding-left:8px"><span class="dot" style="background:var(${mb?'--bad':'--ok'})"></span><span class="tr-t">MikroTik-Geräte</span><span class="tr-n">${mth.length}</span></div>`; }
+  const mth=st0.hosts.filter(h=>h.mt).sort((a,b)=>a.name.localeCompare(b.name,'de')); if(mth.length){ const hcol=h=>h.status==='down'?'--bad':['loss','spike'].includes(h.status)?'--warn':h.status==='ok'?'--ok':'--off';
+    html+=`<div class="tr-h tr-cat${OVF.cat==='mt'?' on':''}" data-tcat="mt" title="Alle als Kacheln anzeigen">🛡 MikroTik <span class="tr-n">${mth.length}</span></div>`+mth.filter(h=>match(h.name+' '+h.addr)).map(h=>`<div class="tr-i tr-s" data-th="${h.id}" style="padding-left:8px"><span class="dot" style="background:var(${hcol(h)})"></span><span class="tr-t" title="${esc(h.name)} · ${esc(h.addr)}">${esc(h.name)}</span></div>`).join(''); }
   const body=el.querySelector('.tr-body');
   if(body.dataset.html!==html){ const a=document.activeElement, f=a&&a.id==='tr-q', pos=f?a.selectionStart:0; body.innerHTML=html; body.dataset.html=html; if(f){ const i=$('#tr-q'); i.focus(); try{ i.setSelectionRange(pos,pos); }catch(e){} } }
   // Überschrift der Auswahl
   const selS=OVF.s&&st0.sites.find(x=>x.id===OVF.s), selC=OVF.c&&OVF.c!=='-'&&cs.find(c=>c.id===OVF.c);
-  const lbl=OVF.mt?'🛡 MikroTik-Geräte':selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
+  const lbl=OVF.cat?({mt:'🛡 MikroTik',unifi:'📶 Ubiquiti',agent:'💻 Agenten',cloud:'☁️ Cloud'})[OVF.cat]:selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
   const muteable=selS||selC, canEd=!st0.me||st0.me.role!=='viewer';
   const actable=muteable&&canEd&&st0.sites.some(x=>siteActOK(x)&&(selS?x.id===selS.id:x.customer===OVF.c));
   const ch=lbl?`📍 ${lbl} ${actable?'<button class="btn sm" id="crumb-upd" type="button">⬆️ Updates</button><button class="btn sm" id="crumb-scr" type="button">▶ Script</button>':''}${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
-  if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s='';OVF.mt=0; ovfSave(); ovRerender(); };
+  if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s='';OVF.cat=''; ovfSave(); ovRerender(); };
     const ub=$('#crumb-upd'); if(ub) ub.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('winupdate','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('winupdate','customer',OVF.c,co?co.name:''); } };
     const sb=$('#crumb-scr'); if(sb) sb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('script','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('script','customer',OVF.c,co?co.name:''); } };
     const mb=$('#crumb-mute'); if(mb) mb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openMute('site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openMute('customer',OVF.c,co?co.name:''); } }; }
@@ -1612,9 +1615,10 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
 (()=>{ const el=$('#ov-tree');
   el.addEventListener('click',e=>{ if(e.target.closest('#tr-mob')){ el.classList.toggle('open'); return; }
     const x=e.target.closest('[data-tx]'); if(x){ e.stopPropagation(); OVF.x=OVF.x||{}; const id=x.dataset.tx; const open=x.textContent==='▾'; if(open){ delete OVF.x[id]; if(OVF.c===id&&!OVF.s){} } else OVF.x[id]=1; ovfSave(); renderTree(S.state); return; }
-    const mtb=e.target.closest('[data-tmt]'); if(mtb){ OVF.mt=1; OVF.c=''; OVF.s=''; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
-    const s=e.target.closest('[data-ts]'); if(s){ OVF.mt=0; OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
-    const c=e.target.closest('[data-tc]'); if(c){ OVF.mt=0; OVF.c=c.dataset.tc; OVF.s=''; if(OVF.c){ OVF.x=OVF.x||{}; OVF.x[OVF.c]=1; } ovfSave(); el.classList.remove('open'); ovRerender(); } });
+    const th=e.target.closest('[data-th]'); if(th){ el.classList.remove('open'); location.hash='#/host/'+th.dataset.th; return; }
+    const tc=e.target.closest('[data-tcat]'); if(tc){ OVF.cat=OVF.cat===tc.dataset.tcat?'':tc.dataset.tcat; OVF.c=''; OVF.s=''; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
+    const s=e.target.closest('[data-ts]'); if(s){ OVF.cat=''; OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
+    const c=e.target.closest('[data-tc]'); if(c){ OVF.cat=''; OVF.c=c.dataset.tc; OVF.s=''; if(OVF.c){ OVF.x=OVF.x||{}; OVF.x[OVF.c]=1; } ovfSave(); el.classList.remove('open'); ovRerender(); } });
   el.addEventListener('input',e=>{ if(e.target.id==='tr-q'){ OVF.q=e.target.value; ovfSave(); renderTree(S.state); } }); })();
 const PKIND={camera:'📷 Kamera',sensor:'🌡 Sensor',light:'💡 Licht',chime:'🔔 Gong',viewer:'🖥 Viewer',nvr:'💾 NVR'};
 const protOn=d=>!!d.ign||!d.state||d.state==='CONNECTED', protLow=d=>!d.ign&&(d.batLow||(d.bat>=0&&d.bat<=15));
