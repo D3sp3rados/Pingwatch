@@ -317,6 +317,7 @@ body.scoped [data-cat]:not([data-cat=konto]),body.scoped [data-v=install],body.s
 #mp-ctx button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;padding:6px 10px;border-radius:6px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #mp-ctx button:hover{background:var(--acc-a)}#mp-ctx button.danger{color:var(--bad)}#mp-ctx hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 #map-geo-el{position:absolute;inset:0;display:none;z-index:1}
+#d-name{cursor:text;border-radius:6px;padding:0 4px;margin-left:-4px}#d-name:hover{background:var(--acc-a)}#d-name[contenteditable="true"]{outline:2px solid var(--acc);background:var(--panel)}body.viewer #d-name{cursor:default}body.viewer #d-name:hover{background:none}
 #geo-hist{position:absolute;left:10px;bottom:22px;z-index:1100;width:330px;max-width:calc(100% - 20px);padding:8px 10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
 #geo-hist .geo-undo{display:flex;gap:8px;align-items:center;justify-content:space-between;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
 #geo-hist .geo-hh{cursor:pointer;font-weight:600;font-size:12.5px}
@@ -447,13 +448,13 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 <div id="mute-banner"></div>
 <div id="pw-banner"></div>
 <div id="trial-banner"></div>
-<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button><button data-v="rmm">🖥 RMM</button></div><input id="ov-sq" type="search" placeholder="🔍 Host suchen – Name, IP, Gruppe" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" style="min-width:200px;flex:0 1 260px"><select id="ov-sort" class="orgsw" title="Sortierung – zeigt alle Hosts als eine Liste"><option value="">Sortierung: Gruppen</option><option value="name">Name A–Z</option><option value="lat">Höchste Latenz (1 h)</option><option value="loss">Meister Paketverlust (24 h)</option><option value="avail">Schlechteste Verfügbarkeit (7 Tage)</option></select><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
+<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button><button data-m="agent">💻 Agenten</button><button data-m="unifi">📶 Ubiquiti</button><button data-m="mt">🛡 MikroTik</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button><button data-v="rmm">🖥 RMM</button></div><input id="ov-sq" type="search" placeholder="🔍 Host suchen – Name, IP, Gruppe" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" style="min-width:200px;flex:0 1 260px"><select id="ov-sort" class="orgsw" title="Sortierung – zeigt alle Hosts als eine Liste"><option value="">Sortierung: Gruppen</option><option value="name">Name A–Z</option><option value="lat">Höchste Latenz (1 h)</option><option value="loss">Meister Paketverlust (24 h)</option><option value="avail">Schlechteste Verfügbarkeit (7 Tage)</option></select><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
 
 <section id="v-host">
   <div class="det-h">
     <a class="btn sm" href="#/">← Übersicht</a>
     <span class="dot" id="d-dot"></span>
-    <h1 id="d-name"></h1>
+    <h1 id="d-name" title="Klicken zum Umbenennen" spellcheck="false"></h1>
     <span class="muted" id="d-sub"></span>
     <select class="ed" id="d-group" title="Gruppe" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></select>
     <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
@@ -1794,10 +1795,13 @@ function renderOverview(){
   if(view==='rmm'){ $('#ovmode').style.display='none'; root.dataset.sig=''; cards={}; renderOvRMM(root,st); return; }
   if(root.querySelector('.rmm')) root.innerHTML='';
   if(view==='table'){ $('#ovmode').style.display='none'; root.dataset.sig=''; cards={}; renderOvTable(root,st); return; }
-  root.dataset.thtml=''; $('#ovmode').style.display=gs.length?'':'none'; $$('#ovmode button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  root.dataset.thtml=''; const avm=ovModesAvail(st0); $('#ovmode').style.display=Object.values(avm).filter(Boolean).length>1?'':'none'; $$('#ovmode button').forEach(b=>{ b.classList.toggle('on',b.dataset.m===mode); b.style.display=avm[b.dataset.m]?'':'none'; });
   const secs=[], ms=st.machines||[];
   const sq=(OVF.sq||'').trim();
   if(sq||OVF.os){ const hs=ovSortHosts(st.hosts); secs.push({key:'flat',kind:'group',group:{name:(sq?`🔍 ${hs.length} Treffer für „${sq}“`:'Alle Hosts')+(OVF.os?' · sortiert: '+OSORT[OVF.os]:'')},hosts:hs,machines:OVF.os?[]:ms}); }
+  else if(mode==='agent'){ for(const s of st.sites.filter(s=>s.id!=='cloud'&&s.kind!=='unifi')){ const hs=st.hosts.filter(h=>h.site===s.id), mm=ms.filter(m=>m.site===s.id); secs.push({key:'a'+s.id,kind:'site',site:s,hosts:hs,machines:mm}); } }
+  else if(mode==='unifi'){ for(const s of st.sites.filter(s=>s.unifi&&s.unifi.on)) secs.push({key:'uu'+s.id,kind:'site',site:s,hosts:st.hosts.filter(h=>h.site===s.id&&h.method==='unifiwan'),machines:[]}); }
+  else if(mode==='mt'){ secs.push({key:'mt',kind:'group',group:{name:'MikroTik-Geräte'},hosts:st.hosts.filter(h=>h.mt),machines:[]}); }
   else if(mode==='group'&&gs.length){ const d=groupDrill(root,st,gs,ms); if(!d) return; secs.push(d); }
   else if(mode==='group'){
     // mehrere Standorte: Gruppen je Standort darunter (klare Trennung), sonst wie bisher
@@ -1859,7 +1863,7 @@ function renderOverview(){
     c.classList.toggle('down',h.status==='down');
     c.querySelector('.dot').style.background=`var(${col})`;
     c.querySelector('.card-t b').textContent=h.name;
-    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+(ovMode()==='group'&&!root.querySelector('.ov-site')?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'')+(OVF.os==='avail'&&h.avail7!=null?' · 7 Tage: '+(h.avail7*100).toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'');
+    c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+((ovMode()==='group'&&!root.querySelector('.ov-site'))||ovMode()==='mt'?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'')+(OVF.os==='avail'&&h.avail7!=null?' · 7 Tage: '+(h.avail7*100).toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
     const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
     const kv=c.querySelectorAll('.kv b'); const a1=agg(h.h1),a24=agg(h.h24);
@@ -2113,7 +2117,7 @@ async function loadDetail(){
 function renderDetailHead(){
   const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); if(!h) return;
   const [lbl,col]=STATUS[h.status]||STATUS.unknown;
-  $('#d-dot').style.background=`var(${col})`; $('#d-name').textContent=h.name+(h.maint?' · Wartung':'');
+  $('#d-dot').style.background=`var(${col})`; { const dn=$('#d-name'); if(document.activeElement!==dn){ dn.textContent=h.name; dn.dataset.id=h.id; } }
   $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
   const site=S.state.sites.find(s=>s.id===h.site);
   $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
@@ -2426,7 +2430,8 @@ $('#pf-save').onclick=async()=>{ const me=(S.state&&S.state.me)||{}; const body=
   try{ await api('/api/me/profile',{method:'POST',body:JSON.stringify(body)}); $('#pf-cur').value=''; $('#pf-name').dataset.sig=''; toast(body.email?'E-Mail-Adresse geändert – künftig damit anmelden':'Gespeichert'); refreshState(); }catch(e){ uiAlert(e.message); } };
 
 /* Übersicht: Gruppen oder Standorte */
-function ovMode(){ const gs=(S.state&&S.state.groups)||[]; if(!gs.length) return 'site'; let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} return m==='site'?'site':'group'; }
+function ovModesAvail(st){ st=st||S.state||{}; const ss=st.sites||[], hs=st.hosts||[]; return {group:!!(st.groups||[]).length,site:true,agent:ss.some(s=>s.id!=='cloud'&&s.kind!=='unifi'),unifi:ss.some(s=>s.unifi&&s.unifi.on),mt:hs.some(h=>h.mt)}; }
+function ovMode(){ const av=ovModesAvail(); let m=null; try{ m=localStorage.getItem('pw_ovmode'); }catch(e){} if(m&&av[m]) return m; return av.group?'group':'site'; }
 function ovView(){ let v=null; try{ v=localStorage.getItem('pw_ovview'); }catch(e){} if(v==='list'||v==='tiles'||v==='table'||v==='rmm') return v;
   const st=S.state||{hosts:[],sites:[]}; return st.hosts.length+(st.machines||[]).length>40||st.sites.length>6?'table':'tiles'; }
 $$('#ovview button').forEach(b=>b.onclick=()=>{ try{ localStorage.setItem('pw_ovview',b.dataset.v); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); });
@@ -2550,6 +2555,16 @@ function drawFritzChart(pts){ const c=$('#fz-chart'), dpr=devicePixelRatio||1, W
   for(const p of pts) if(p.c===0){ g.fillStyle=bad; g.globalAlpha=.35; g.fillRect(X(p.t)-1,0,3,H-14); g.globalAlpha=1; }
   g.strokeStyle=acc; g.lineWidth=1.6; g.beginPath(); let first=true; for(const p of pts){ if(!p.d) continue; const x=X(p.t), y=Y(p.d); first?g.moveTo(x,y):g.lineTo(x,y); first=false; } g.stroke();
   g.fillStyle=mut; g.font='11px system-ui'; const nl=W<500?2:4; for(let i=0;i<=nl;i++){ const t=t0+i*24/nl*36e5; const x=Math.min(W-30,Math.max(0,X(t)-14)); g.fillText(new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),x,H-2); } }
+
+/* Host-Name in der Detailansicht direkt umbenennen */
+(()=>{ const dn=$('#d-name'); if(!dn) return; let orig='';
+  dn.addEventListener('click',()=>{ if(document.body.classList.contains('viewer')||dn.isContentEditable) return; orig=dn.textContent; dn.contentEditable='true'; dn.focus(); const r=document.createRange(); r.selectNodeContents(dn); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); });
+  const done=async save=>{ if(!dn.isContentEditable) return; dn.contentEditable='false'; const name=dn.textContent.replace(/\s+/g,' ').trim(); const h=S.state&&S.state.hosts.find(x=>x.id===dn.dataset.id);
+    if(!save||!h||!name||name===h.name){ dn.textContent=h?h.name:orig; return; }
+    try{ await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),name})}); h.name=name; toast('Umbenannt'); $('#ov').dataset.sig=''; refreshState(); }catch(e){ dn.textContent=orig; uiAlert(e.message); } };
+  dn.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); done(true); } if(e.key==='Escape'){ e.preventDefault(); done(false); } });
+  dn.addEventListener('blur',()=>done(true));
+})();
 
 /* MikroTik */
 const MK={host:null,at:0,hours:24,ser:'cpu',tab:'',r:null};
