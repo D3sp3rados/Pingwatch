@@ -2433,7 +2433,7 @@ function renderSettings(){
   const stor=st.storage==='postgres'?'Datenbank (PostgreSQL)':'<b style="color:var(--warn)">Dateien im Container</b> – gehen bei Redeploy verloren, falls kein Volume eingebunden ist';
   $('#bk-wrap').style.display=sup?'':'none'; if(sup&&!BK.loading&&Date.now()-BK.at>60000) bkLoad();
   if(!sup){ $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · ${esc(st.me.email||'')} · Rolle: ${ROLES[st.me.role]||st.me.role}`; return; }
-  $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
+  $('#g-info').innerHTML=`PingWacht ${esc(st.version)} · läuft seit ${fmtDT(st.started,false)} · ICMP in der Cloud: ${icmp}${st.egressIP?` · Ausgehende IP (Cloud-Prüfungen): <b class="num" style="user-select:all">${esc(st.egressIP)}</b>`:''} · Speicher: ${stor}${st.envPassword?' · Passwort über ADMIN_PASSWORD festgelegt':''}`;
 }
 $('#d-group').onchange=async()=>{ const sel=$('#d-group'), h=S.state.hosts.find(x=>x.id===S.hostId); if(!h) return; let g=sel.value;
   try{ if(g==='+'){ const n=await uiPrompt('Name der neuen Gruppe:'); if(!n){ sel.value=h.group||''; return; } const ng=await api('/api/groups',{method:'POST',body:JSON.stringify({name:n})}); g=ng.id; }

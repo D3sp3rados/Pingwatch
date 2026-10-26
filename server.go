@@ -144,6 +144,7 @@ func runServer(args []string) {
 		m.Shutdown()
 		os.Exit(0)
 	}()
+	go egressLoop()
 	log.Printf("Dashboard auf Port %s", *port)
 	go m.statusLogLoop()
 	select {}
@@ -656,7 +657,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{
 		"now": now, "hosts": hv, "sites": sv, "version": version, "started": m.started,
-		"icmp": m.icmpOK, "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
+		"icmp": m.icmpOK, "egressIP": currentEgressIP(), "retentionDays": ret, "envPassword": s.envPass != "", "storage": m.store.Kind(), "push": m.pusher != nil, "pushErr": m.pushErr, "devices": devs,
 		"groups":    filterGroups(p, m.groupsOf(p.Org)),
 		"customers": filterCustomers(p, m.customersOf(p.Org)),
 		"mutes":     m.activeMutesFor(p),
