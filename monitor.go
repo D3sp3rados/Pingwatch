@@ -186,7 +186,7 @@ func (h *HostCfg) normalize() {
 	}
 	if !h.Mt || h.Site == "cloud" || h.Site == "" {
 		h.Mt, h.MtUser, h.MtPass, h.MtPort = false, "", "", 0
-	} else if h.MtPort != 80 {
+	} else if h.MtPort <= 0 || h.MtPort > 65535 {
 		h.MtPort = 443
 	}
 	if h.Method != "snmp" {

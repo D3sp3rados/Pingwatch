@@ -1437,7 +1437,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
             <label class="field">Benutzer<input name="mtUser" autocomplete="off" placeholder="z. B. pingwacht"></label>
             <label class="field">Passwort<input name="mtPass" type="password" autocomplete="new-password"></label>
-            <label class="field" style="max-width:170px">Zugang<select name="mtPort"><option value="443">https (www-ssl)</option><option value="80">http (www)</option></select></label>
+            <label class="field" style="max-width:170px">Zugang<select name="mtPort"><option value="443">https (www-ssl, 443)</option><option value="8443">https (www-ssl, 8443)</option><option value="80">http (www, 80)</option></select></label>
           </div>
           <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">Auf dem MikroTik (RouterOS 7): Gruppe nur mit <b>read, api, rest-api</b> und einen Benutzer dazu anlegen, Dienst <b>www-ssl</b> aktivieren und auf die Adresse des Agenten beschränken. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
         </div>
@@ -3919,7 +3919,7 @@ function openHost(id){
   hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
   hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzFullNums.checked=!!(h&&h.fritzFullNums); hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
   hf.fritzPass.placeholder=h&&h.fritzPassSet?'gespeichert – leer lassen = unverändert':'';
-  hf.mt.checked=!!(h&&h.mt); hf.mtUser.value=h&&h.mtUser||''; hf.mtPass.value=''; hf.mtPort.value=String(h&&h.mtPort===80?80:443); hf.mtPass.placeholder=h&&h.mtPassSet?'gespeichert – leer lassen = unverändert':'';
+  hf.mt.checked=!!(h&&h.mt); hf.mtUser.value=h&&h.mtUser||''; hf.mtPass.value=''; hf.mtPort.value=String(h&&[80,8443].includes(h.mtPort)?h.mtPort:443); hf.mtPass.placeholder=h&&h.mtPassSet?'gespeichert – leer lassen = unverändert':'';
   syncHostForm(); dlg.showModal();
 }
 function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'||mt==='snmp'?'':'none'; $('#hf-commf').style.display=mt==='snmp'?'':'none';
