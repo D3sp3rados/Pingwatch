@@ -485,7 +485,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <h2>Schnittstellen <span class="sub muted" id="sn-sub" style="font-weight:400;font-size:12.5px"></span></h2>
     <div class="panel" style="overflow-x:auto"><table class="tbl" id="sn-tbl"></table></div>
     <div class="panel" id="sn-chartbox" style="display:none;margin-top:10px;padding:12px">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="sn-ctitle"></b><div class="seg" id="sn-range"><button data-h="24" class="on">24 h</button><button data-h="168">7 Tage</button><button data-h="720">30 Tage</button></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="sn-ctitle"></b><div class="seg" id="sn-range"><button data-h="0.25">15 min</button><button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="168">7 Tage</button><button data-h="720">30 Tage</button></div>
         <span class="muted" style="font-size:12.5px"><i style="display:inline-block;width:10px;height:3px;background:var(--acc);vertical-align:middle"></i> Eingang · <i style="display:inline-block;width:10px;height:3px;background:#6366f1;vertical-align:middle"></i> Ausgang</span></div>
       <canvas id="sn-chart" style="width:100%;height:200px;display:block;margin-top:8px"></canvas></div>
     <p class="muted" style="font-size:12.5px">Haken bei „Alarm“ = Meldung, wenn der Port auf „down“ geht (z. B. Uplink, Kamera, AP).</p>
@@ -495,7 +495,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <div id="mt-open"></div>
     <div class="stats" id="mt-stats"></div>
     <div class="panel" style="padding:12px;margin-top:10px">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="seg" id="mt-ser"></div><div class="seg" id="mt-range"><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="48">48 h</button></div></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="seg" id="mt-ser"></div><div class="seg" id="mt-range"><button data-h="0.25">15 min</button><button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="48">48 h</button></div></div>
       <canvas id="mt-chart" style="width:100%;height:150px;display:block;margin-top:8px"></canvas></div>
     <div style="margin-top:12px"><div class="seg" id="mt-tabs"></div><div class="panel" style="overflow-x:auto;margin-top:8px" id="mt-body"></div></div>
   </div>
@@ -2588,7 +2588,8 @@ async function loadMt(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.ho
     +st('RAM',Math.round(memU)+' %',memU>90?'--warn':'')+(hdd?st('Speicher',Math.round(hdd)+' %',hdd>90?'--warn':''):'')
     +(tmax!==null?st('Temperatur',tmax+' °C',tmax>=75?'--bad':tmax>=65?'--warn':''):'')
     +(hw.length?st('Netzteile / Lüfter',hwBad.length?hwBad.map(x=>esc(x.n.replace('-state',''))).join(', ')+' gestört':'alle ok',hwBad.length?'--bad':'--ok'):'')
-    +st('Laufzeit',fmtUp(mtDurJS(res.uptime)),r.boots24?'--warn':'')
+    +st('Laufzeit',fmtUp(mtDurJS(res.uptime))+`<br><small class="muted" style="font-weight:400">Neustart ${fmtDT((r.at||Date.now())-mtDurJS(res.uptime)*1000,false)}</small>`,r.boots24?'--warn':'')
+    +st('Logins 24 h',`${r.loginOK24} ok · <span style="color:var(${r.loginFail24?'--bad':'--mut'})">${r.loginFail24} fehlgeschlagen</span>`)
     +(bgp.length?st('BGP',bgpUp+' / '+bgp.length+' aufgebaut',bgpUp<bgp.length?'--bad':'--ok'):'')
     +(c.ppp>=0?st('PPP-Sitzungen',c.ppp.toLocaleString('de-DE')):'')+(c.dhcp>=0?st('DHCP-Leases',c.dhcp.toLocaleString('de-DE')):'')
     +(c.conns>=0?st('Verbindungen',c.conns.toLocaleString('de-DE')):'')
@@ -2611,7 +2612,7 @@ function drawMtChart(){ const c=$('#mt-chart'), dpr=devicePixelRatio||1, W=c.cli
   g.strokeStyle=acc; g.lineWidth=1.6; g.beginPath(); pts.forEach((p,i)=>{ const x=X(p.t), y=Y(p[k]); i?g.lineTo(x,y):g.moveTo(x,y); }); g.stroke(); }
 function renderMtTabs(){ const r=MK.r, c=r&&r.cur; if(!c) return; const dot=on=>`<span class="dot" style="display:inline-block;margin-right:6px;background:var(${on?'--ok':'--off'})"></span>`;
   const ifx=c.ifx||[], sfp=ifx.filter(i=>i.sfp), wg=c.wg||[];
-  const tabs=[['ports',`Ports (${ifx.filter(i=>i.up).length}/${ifx.length})`,ifx.length],['sfp','SFP-Pegel',sfp.length],['bgp','BGP',(c.bgp||[]).length],['ospf','OSPF',(c.ospf||[]).length],['wg','WireGuard',wg.length],['hw','Sensoren',(c.health||[]).length],['log','Log',(r.logs||[]).length],['info','Gerät',1]].filter(t=>t[2]);
+  const tabs=[['ports',`Ports (${ifx.filter(i=>i.up).length}/${ifx.length})`,ifx.length],['sfp','SFP-Pegel',sfp.length],['bgp','BGP',(c.bgp||[]).length],['ospf','OSPF',(c.ospf||[]).length],['wg','WireGuard',wg.length],['hw','Sensoren',(c.health||[]).length],['log','Logins & Neustarts',(r.logs||[]).length],['info','Gerät',1]].filter(t=>t[2]);
   if(!tabs.some(t=>t[0]===MK.tab)) MK.tab=tabs[0][0];
   $('#mt-tabs').innerHTML=tabs.map(t=>`<button data-t="${t[0]}" class="${t[0]===MK.tab?'on':''}">${t[1]}</button>`).join('');
   $$('#mt-tabs button').forEach(b=>b.onclick=()=>{ MK.tab=b.dataset.t; renderMtTabs(); });
@@ -2624,7 +2625,7 @@ function renderMtTabs(){ const r=MK.r, c=r&&r.cur; if(!c) return; const dot=on=>
   if(MK.tab==='ospf') h='<table class="tbl"><tr><th>Nachbar</th><th>Status</th><th>Instanz</th></tr>'+(c.ospf||[]).map(o=>`<tr><td>${dot(/full/i.test(o.v))}<b>${esc(o.n)}</b></td><td>${esc(o.v)}</td><td>${esc(o.t||'')}</td></tr>`).join('')+'</table>';
   if(MK.tab==='wg') h='<table class="tbl"><tr><th>Gegenstelle</th><th>Schnittstelle</th><th>Endpunkt</th><th>Letzter Handshake</th></tr>'+wg.map(p=>`<tr><td>${dot(p.hs>=0&&p.hs<300)}<b>${esc(p.n)}</b></td><td>${esc(p.i||'')}</td><td class="num">${esc(p.e||'–')}</td><td class="num">${p.hs<0?'nie':'vor '+ago(p.hs)}</td></tr>`).join('')+'</table>';
   if(MK.tab==='hw') h='<table class="tbl"><tr><th>Sensor</th><th>Wert</th></tr>'+(c.health||[]).map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${/-state$/.test(x.n)?dot(/^ok$/i.test(x.v))+esc(x.v):esc(x.v)+(x.t==='C'?' °C':x.t==='V'?' V':x.t==='RPM'?' U/min':x.t==='W'?' W':x.t==='A'?' A':'')}</td></tr>`).join('')+'</table>';
-  if(MK.tab==='log') h=`<div class="muted" style="padding:8px 12px 0;font-size:12px">Auffällige Einträge (Fehler, kritisch, Änderungen, Login-Fehler) · neueste zuerst · alle 5 Minuten</div><div style="padding:8px 12px;font-size:12.5px;line-height:1.6;max-height:360px;overflow:auto">${(r.logs||[]).map(l=>`<span class="muted num">${esc(l.t)}</span> <span class="muted">${esc(l.topic)}</span> ${esc(l.msg)}`).join('<br>')}</div>`;
+  if(MK.tab==='log') h=`<div class="muted" style="padding:8px 12px 0;font-size:12px">Anmeldungen (erfolgreich und fehlgeschlagen) und Neustarts aus dem MikroTik-Log · neueste zuerst · alle 5 Minuten</div><div style="padding:8px 12px;font-size:12.5px;line-height:1.6;max-height:360px;overflow:auto">${(r.logs||[]).map(l=>`<span class="muted num">${esc(l.t)}</span> ${/login failure/i.test(l.msg)?'<b style="color:var(--bad)">✖</b> ':/logged in/i.test(l.msg)?'<span style="color:var(--ok)">✔</span> ':'🔄 '}${esc(l.msg)}`).join('<br>')}</div>`;
   if(MK.tab==='info'){ const res=c.res||{}, rb=c.rb||{}, up=c.upd||{}, row=(k,v)=>v?`<tr><td class="muted">${k}</td><td>${esc(v)}</td></tr>`:'';
     h='<table class="tbl">'+row('Name',res.identity)+row('Modell',rb.model||res['board-name'])+row('Seriennummer',rb['serial-number'])+row('Architektur',res['architecture-name'])+row('CPU',res.cpu)+row('RouterOS',res.version)+row('Update-Kanal',up.channel)+row('Neueste Version',up['latest-version'])+row('Firmware',rb['current-firmware'])+row('Firmware verfügbar',rb['upgrade-firmware'])
       +((c.miss||[]).length?`<tr><td class="muted">Nicht abfragbar</td><td><span class="muted" style="font-size:12px">${c.miss.map(esc).join('<br>')}</span></td></tr>`:'')+'</table>'; }

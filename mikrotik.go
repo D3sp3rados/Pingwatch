@@ -60,6 +60,7 @@ type mtWG struct {
 }
 
 type mtLog struct {
+	R     int64  `json:"r,omitempty"` // Eingang beim Server (ms)
 	T     string `json:"t"`
 	Topic string `json:"topic"`
 	Msg   string `json:"msg"`
@@ -234,7 +235,8 @@ func mtRateMbit(r string) int64 {
 	return int64(f * mul)
 }
 
-var mtLogNote = regexp.MustCompile(`(?i)critical|error|changed by|added by|removed by|login failure|link down|failure`)
+// Nur Anmeldungen (fehlgeschlagen/erfolgreich) und Neustarts – nicht das ganze Log.
+var mtLogNote = regexp.MustCompile(`(?i)login failure|logged in|rebooted|reboot`)
 
 // mtQuery fragt alles ab. Fehlt einer Rolle die Berechtigung für einen Bereich, wird der übersprungen.
 func mtQuery(c *mtClient, st *mtAgentState) mtSnap {
@@ -403,7 +405,7 @@ func mtQuery(c *mtClient, st *mtAgentState) mtSnap {
 				}
 				msg, top := mtStr(x, "message"), mtStr(x, "topics")
 				if mtLogNote.MatchString(top + " " + msg) {
-					s.Log = append(s.Log, mtLog{mtStr(x, "time"), top, msg})
+					s.Log = append(s.Log, mtLog{T: mtStr(x, "time"), Topic: top, Msg: msg})
 				}
 			}
 			if st.logID == 0 && len(s.Log) > 30 { // erster Abruf: nur die letzten 30
@@ -656,14 +658,11 @@ func (m *Monitor) ingestMikrotik(hc HostCfg, snaps []mtSnap) {
 				}
 			}
 		}
-		// Log
-		for _, l := range s.Log {
-			if strings.Contains(l.Msg, "changed by") || strings.Contains(l.Msg, "added by") || strings.Contains(l.Msg, "removed by") {
-				m.closeSiteEvent(m.newHostEvent(hc, "config", name+" · Konfiguration: "+trunc(l.Msg, 120), s.T, maint), s.T)
-			}
-		}
-		for j := len(s.Log) - 1; j >= 0; j-- {
-			mh.logs = append([]mtLog{s.Log[j]}, mh.logs...)
+		// Log (Anmeldungen, Neustarts)
+		for j := range s.Log {
+			l := s.Log[j]
+			l.R = s.T
+			mh.logs = append([]mtLog{l}, mh.logs...)
 		}
 		if len(mh.logs) > 200 {
 			mh.logs = mh.logs[:200]
@@ -713,16 +712,18 @@ type mtView struct {
 	Open   []string  `json:"open,omitempty"`
 	Logs   []mtLog   `json:"logs,omitempty"`
 	CPUMax float32   `json:"cpuMax24"`
+	Fail24 int       `json:"loginFail24"`
+	OK24   int       `json:"loginOK24"`
 }
 
-func (m *Monitor) mtHostView(hc HostCfg, hours int) mtView {
+func (m *Monitor) mtHostView(hc HostCfg, hours float64) mtView {
 	v := mtView{On: hc.Mt}
 	if !hc.Mt {
 		return v
 	}
 	mh := getMtHost(hc.ID)
 	now := time.Now().UnixMilli()
-	from := now - int64(hours)*3600000
+	from := now - int64(hours*3600000)
 	mh.mu.Lock()
 	defer mh.mu.Unlock()
 	v.At, v.Err, v.Boots, v.Logs = mh.at, mh.err, len(mh.boots), mh.logs
@@ -743,6 +744,17 @@ func (m *Monitor) mtHostView(hc HostCfg, hours int) mtView {
 	step := len(pts)/300 + 1
 	for i := 0; i < len(pts); i += step {
 		v.Hist = append(v.Hist, pts[i])
+	}
+	for _, l := range mh.logs {
+		if l.R < now-86400000 {
+			continue
+		}
+		ml := strings.ToLower(l.Msg)
+		if strings.Contains(ml, "login failure") {
+			v.Fail24++
+		} else if strings.Contains(ml, "logged in") {
+			v.OK24++
+		}
 	}
 	for _, e := range mh.open {
 		v.Open = append(v.Open, e.HostName)
@@ -787,7 +799,7 @@ func (s *Server) handleMikrotik(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unbekannter Host", 404)
 		return
 	}
-	hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
+	hours, _ := strconv.ParseFloat(r.URL.Query().Get("hours"), 64)
 	if hours <= 0 || hours > 48 {
 		hours = 24
 	}

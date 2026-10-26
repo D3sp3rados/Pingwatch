@@ -46,7 +46,7 @@ func fakeRouterOS(t *testing.T, uptime *string, psu *string, ppp *int) *httptest
 		case "/ip/firewall/connection/tracking":
 			out = map[string]any{"total-entries": "12345"}
 		case "/log":
-			out = []map[string]any{{".id": "*10", "time": "12:00:01", "topics": "system,info", "message": "address changed by pw"}, {".id": "*11", "time": "12:00:02", "topics": "dhcp,info", "message": "ok"}}
+			out = []map[string]any{{".id": "*10", "time": "12:00:01", "topics": "system,info", "message": "login failure for user admin from 1.2.3.4 via winbox"}, {".id": "*11", "time": "12:00:02", "topics": "dhcp,info", "message": "ok"}}
 		default:
 			w.WriteHeader(404)
 			w.Write([]byte(`{"error":404,"message":"Not Found"}`))

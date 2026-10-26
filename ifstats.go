@@ -263,11 +263,11 @@ func (s *Server) handleSNMP(w http.ResponseWriter, r *http.Request) {
 	}
 	var series []ifPoint
 	idx, _ := strconv.Atoi(r.URL.Query().Get("if"))
-	hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
+	hours, _ := strconv.ParseFloat(r.URL.Query().Get("hours"), 64)
 	if hours <= 0 {
 		hours = 24
 	}
-	from := now - int64(hours)*3600000
+	from := now - int64(hours*3600000)
 	if idx > 0 && hours <= 48 {
 		for _, p := range ih.series[idx] {
 			if p.T >= from {
