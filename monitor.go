@@ -94,6 +94,9 @@ type SiteCfg struct {
 	AgentVer     string `json:"agentVer,omitempty"`
 	AgentUpdated int64  `json:"agentUpdated,omitempty"`
 	AgentPrev    string `json:"agentPrev,omitempty"`
+	// Haupt-Agent (Rechner-Kennung); leer = automatisch (Linux/Pi vor Windows), andere Agenten sind Reserve
+	PrimaryAgent    string  `json:"primaryAgent,omitempty"`
+	SetPrimaryAgent *string `json:"setPrimaryAgent,omitempty"` // nur API-Eingabe
 }
 
 type Config struct {
@@ -291,6 +294,8 @@ type siteState struct {
 	version  string
 	offEv    *Event
 	pushMu   sync.Mutex
+	agents   map[string]*agentMachine // Agenten am Standort (Haupt + Reserve)
+	active   string                   // aktiver Agent (X-Machine)
 }
 
 type Monitor struct {
@@ -871,7 +876,7 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 		if s.SetNumber != nil {
 			s.Number = *s.SetNumber
 		}
-		s.SetCustomer, s.SetNumber = nil, nil
+		s.SetCustomer, s.SetNumber, s.SetPrimaryAgent = nil, nil, nil
 		if s.Sys != nil {
 			sc := *s.Sys
 			sc.norm()
@@ -890,6 +895,9 @@ func (m *Monitor) UpsertSite(s SiteCfg) SiteCfg {
 				}
 				if s.SetAuto != nil {
 					m.cfg.Sites[i].NoAutoUpdate = !*s.SetAuto
+				}
+				if s.SetPrimaryAgent != nil {
+					m.cfg.Sites[i].PrimaryAgent = *s.SetPrimaryAgent
 				}
 				if s.CheckUpdate {
 					m.cfg.Sites[i].UpdateNow = time.Now().UnixMilli()

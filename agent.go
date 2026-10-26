@@ -9,9 +9,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -70,6 +73,10 @@ type Agent struct {
 	backupKeep int
 	// Rechner-Überwachung
 	sysOnly bool
+	lanMu   sync.Mutex
+	lanIP   string
+	lanAt   time.Time
+	standby bool // Reserve-Agent: wartet, bis der Haupt-Agent ausfällt
 	sysOn   bool
 	sysSvcs []string
 	sysErr  string
@@ -213,6 +220,34 @@ func runAgent(args []string) {
 	a.shutdown()
 }
 
+// localIP: Adresse der Netzwerkkarte, über die der Server erreicht wird (UDP-„Verbindung“ sendet nichts).
+func (a *Agent) localIP() string {
+	a.lanMu.Lock()
+	defer a.lanMu.Unlock()
+	if time.Since(a.lanAt) < 5*time.Minute {
+		return a.lanIP
+	}
+	a.lanAt = time.Now()
+	a.lanIP = a.findLocalIP()
+	return a.lanIP
+}
+
+func (a *Agent) findLocalIP() string {
+	u, err := url.Parse(a.file.Server)
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	c, err := net.Dial("udp", net.JoinHostPort(u.Hostname(), "443"))
+	if err != nil {
+		return ""
+	}
+	defer c.Close()
+	if ua, ok := c.LocalAddr().(*net.UDPAddr); ok {
+		return ua.IP.String()
+	}
+	return ""
+}
+
 func (a *Agent) req(method, path string, body io.Reader, gz bool) (*http.Response, error) {
 	r, err := http.NewRequest(method, a.file.Server+path, body)
 	if err != nil {
@@ -222,6 +257,13 @@ func (a *Agent) req(method, path string, body io.Reader, gz bool) (*http.Respons
 	r.Header.Set("X-Agent-Version", version)
 	if a.machine != "" {
 		r.Header.Set("X-Machine", a.machine) // für rechnerbezogene Einstellungen (z. B. eigene Dienste)
+	}
+	if hn, err := os.Hostname(); err == nil {
+		r.Header.Set("X-Host", hn) // Anzeige bei mehreren Agenten am Standort (Haupt/Reserve)
+	}
+	r.Header.Set("X-OS", runtime.GOOS+"/"+runtime.GOARCH)
+	if ip := a.localIP(); ip != "" {
+		r.Header.Set("X-LAN", ip) // LAN-Adresse (z. B. für RADIUS-Eintrag in den Geräten)
 	}
 	if a.sysOnly {
 		r.Header.Set("X-Agent-Mode", "sysonly")
@@ -305,6 +347,7 @@ func (a *Agent) fetchConfig() bool {
 		Radius   *radiusAgentCfg `json:"radius"`
 		Auto     *bool           `json:"autoUpdate"`
 		CheckNow int64           `json:"checkNow"`
+		Standby  bool            `json:"standby"`
 		Backup   *struct {
 			On   bool `json:"on"`
 			Keep int  `json:"keep"`
@@ -357,6 +400,17 @@ func (a *Agent) fetchConfig() bool {
 	a.trust.learn(a.dataDir, cfg.Site.Org, cfg.SignKeys)
 	if a.sysOnly {
 		a.siteName += " (nur Rechner)"
+	}
+	if cfg.Standby != a.standby {
+		if cfg.Standby {
+			log.Printf("Reserve-Agent: ein anderer Agent ist an diesem Standort aktiv – warte in Bereitschaft")
+		} else {
+			log.Printf("Agent ist jetzt aktiv an diesem Standort")
+		}
+		a.standby = cfg.Standby
+	}
+	if a.standby {
+		a.siteName += " (Reserve)"
 	}
 	a.sysOn, a.sysSvcs, a.sysHeal, a.sysRestart = cfg.Sys != nil && cfg.Sys.On, nil, false, nil
 	a.sysActions = cfg.Sys != nil && cfg.Sys.On && cfg.Sys.Updates && !a.file.NoActions

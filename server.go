@@ -463,12 +463,13 @@ type HostView struct {
 
 type SiteView struct {
 	SiteCfg
-	Online   bool          `json:"online"`
-	LastSeen int64         `json:"lastSeen"`
-	IP       string        `json:"ip"`
-	Version  string        `json:"version"`
-	Hosts    int           `json:"hosts"`
-	UniFi    *unifiSummary `json:"unifi,omitempty"`
+	Online   bool           `json:"online"`
+	LastSeen int64          `json:"lastSeen"`
+	IP       string         `json:"ip"`
+	Version  string         `json:"version"`
+	Hosts    int            `json:"hosts"`
+	UniFi    *unifiSummary  `json:"unifi,omitempty"`
+	Agents   []agentMachine `json:"agents,omitempty"`
 }
 
 func (m *Monitor) hostList() []*Host {
@@ -637,7 +638,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	sv := []SiteView{{SiteCfg: SiteCfg{ID: "cloud", Name: "Cloud"}, Online: true, Hosts: cnt["cloud"]}}
 	for _, sc := range sites {
 		on, st := m.siteOnline(sc.ID)
-		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind, Customer: sc.Customer, Number: sc.Number, AgentUpdated: sc.AgentUpdated, AgentPrev: sc.AgentPrev}, Online: on, Hosts: cnt[sc.ID]}
+		v := SiteView{SiteCfg: SiteCfg{ID: sc.ID, Name: sc.Name, NoAutoUpdate: sc.NoAutoUpdate, Kind: sc.Kind, Customer: sc.Customer, Number: sc.Number, AgentUpdated: sc.AgentUpdated, AgentPrev: sc.AgentPrev, PrimaryAgent: sc.PrimaryAgent}, Online: on, Hosts: cnt[sc.ID], Agents: m.siteAgents(sc)}
 		if sc.Sys != nil {
 			sy := sc.Sys.eff()
 			v.Sys = &sy
@@ -1226,6 +1227,10 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/download/")
+	if name == "pi-setup.zip" {
+		s.handlePiSetup(w, r)
+		return
+	}
 	if name == "agent.json" {
 		site := s.siteFor(r, r.URL.Query().Get("site"))
 		if site == nil {
@@ -1339,7 +1344,22 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, out)
 		return
 	}
-	s.m.siteSeen(site.ID, clientIP(r), r.Header.Get("X-Agent-Version"))
+	standby := s.m.agentStandby(site, r)
+	if standby {
+		s.m.siteSeen(site.ID, clientIP(r), "") // Standort bleibt online, Version zeigt der aktive Agent
+	} else {
+		s.m.siteSeen(site.ID, clientIP(r), r.Header.Get("X-Agent-Version"))
+	}
+	if standby {
+		// Reserve-Agent: nur Bereitschaft (RADIUS läuft trotzdem mit), übernimmt automatisch
+		out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name, "org": site.Org, "customer": site.Customer}, "signKeys": s.m.orgSignKeys(site.Org), "hosts": []HostCfg{},
+			"latest": version, "autoUpdate": !site.NoAutoUpdate, "checkNow": site.UpdateNow, "sys": sysOut, "standby": true}
+		if rc := s.m.radiusForSite(site); rc != nil {
+			out["radius"] = rc
+		}
+		writeJSON(w, out)
+		return
+	}
 	s.m.mu.RLock()
 	hosts := []HostCfg{}
 	for _, hc := range s.m.cfg.Hosts {
@@ -1408,6 +1428,7 @@ func (s *Server) handleAgentPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.m.siteSeen(site.ID, clientIP(r), r.Header.Get("X-Agent-Version"))
+	s.m.agentTouch(site.ID, r.Header.Get("X-Machine"))
 	s.m.mu.RLock()
 	st := s.m.sites[site.ID]
 	s.m.mu.RUnlock()
