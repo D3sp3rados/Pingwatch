@@ -3,10 +3,13 @@ package main
 import (
 	"archive/zip"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -52,20 +55,30 @@ chpasswd:
   - {name: pingwacht, password: "` + o.Pass + `", type: text}
 ssh_pwauth: true
 write_files:
-- path: /etc/pingwacht-firstboot.sh
-  permissions: '0700'
+- path: /etc/systemd/system/pingwacht-agent.service
   content: |
-    #!/bin/sh
-    # Agent installieren – wartet, bis Netz und Server erreichbar sind
-    i=0
-    until curl -fsSL ` + o.Server + `/install.sh -o /tmp/pingwacht-install.sh; do
-      i=$((i+1)); [ $i -gt 90 ] && exit 1; sleep 10
-    done
-    sh /tmp/pingwacht-install.sh ` + o.Token + `
+    [Unit]
+    Description=PingWacht-Agent
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    ExecStart=/opt/pingwacht/pingwacht-agent agent -config /var/lib/pingwacht/agent.json -data /var/lib/pingwacht
+    Restart=always
+    RestartSec=10
+    AmbientCapabilities=CAP_NET_RAW
+
+    [Install]
+    WantedBy=multi-user.target
 runcmd:
+- [mkdir, -p, /opt/pingwacht, /var/lib/pingwacht]
+- [install, -m, '0755', /boot/firmware/pingwacht/pingwacht-agent, /opt/pingwacht/pingwacht-agent]
+- [install, -m, '0600', /boot/firmware/pingwacht/agent.json, /var/lib/pingwacht/agent.json]
+- [rm, -f, /boot/firmware/pingwacht/agent.json]
+- [systemctl, daemon-reload]
+- [systemctl, enable, --now, pingwacht-agent.service]
 - [systemctl, enable, --now, ssh]
-- [sh, /etc/pingwacht-firstboot.sh]
-- [sh, -c, "sed -i 's/password: \".*\"/password: \"(entfernt)\"/' /boot/firmware/user-data || true"]
+- [sed, -i, 's/password: ".*"/password: "(entfernt)"/', /boot/firmware/user-data]
 `
 }
 
@@ -105,7 +118,7 @@ Geeignet: Raspberry Pi 3, 4, 5, 400, 500, Zero 2 W (64-bit).
    Die Frage nach „Anpassungen / OS customisation“ mit NEIN beantworten.
 3. Nach dem Schreiben den Stick einmal ab- und wieder anstecken.
    Es erscheint ein Laufwerk „bootfs“.
-4. Die Dateien aus diesem ZIP (user-data, meta-data`+map[bool]string{true: ", network-config", false: ""}[o.IP != ""]+`)
+4. ALLES aus diesem ZIP (user-data, meta-data, Ordner „pingwacht“`+map[bool]string{true: ", network-config", false: ""}[o.IP != ""]+`)
    auf „bootfs“ kopieren und die vorhandenen ERSETZEN.
 5. Stick sicher auswerfen, in den Pi stecken, Netzwerkkabel dran, Strom dran.
    (Pi 4/5 starten direkt vom USB-Stick; beim Pi 3 einmal USB-Boot aktivieren
@@ -155,6 +168,13 @@ func (s *Server) handlePiSetup(w http.ResponseWriter, r *http.Request) {
 		}
 		o.IP, o.GW, o.DNS = ip, gw, dns
 	}
+	bin := filepath.Join(s.agentDir, "pingwatch-agent-linux-arm64")
+	exe, err := os.ReadFile(bin)
+	if err != nil {
+		http.Error(w, "Agent für Raspberry Pi (linux-arm64) ist auf dem Server nicht vorhanden", 500)
+		return
+	}
+	aj, _ := json.MarshalIndent(map[string]string{"server": o.Server, "token": o.Token, "site": o.Site}, "", "  ")
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="pingwacht-pi-`+o.Host+`.zip"`)
 	w.Header().Set("Cache-Control", "no-store")
@@ -169,5 +189,9 @@ func (s *Server) handlePiSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	add("meta-data", fmt.Sprintf("instance-id: pingwacht-%s\n", randHex(6)))
 	add("LIES-MICH.txt", piReadme(o))
+	add("pingwacht/agent.json", string(aj))
+	if f, err := zw.CreateHeader(&zip.FileHeader{Name: "pingwacht/pingwacht-agent", Method: zip.Deflate}); err == nil {
+		f.Write(exe)
+	}
 	zw.Close()
 }

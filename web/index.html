@@ -1521,8 +1521,8 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
   const out=(d,e)=>{ const r=d.getBoundingClientRect(); return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom; };
   let down=null; document.addEventListener('pointerdown',e=>{ down=e.target.tagName==='DIALOG'&&out(e.target,e)?e.target:null; },true);
   document.addEventListener('click',e=>{ const d=e.target; if(d.tagName!=='DIALOG'||d!==down||!d.open||KEEP.has(d.id)||d.dataset.dirty||!out(d,e)) return; d.close('cancel'); },true); })();
-function uiDialog({title='',text='',input=null,ok='OK',cancel=null,danger=false}){ return new Promise(res=>{
-  const d=$('#dlg-ui'); $('#ui-t').textContent=title||'PingWacht'; $('#ui-x').textContent=text||''; const inp=$('#ui-in');
+function uiDialog({title='',text='',html='',input=null,ok='OK',cancel=null,danger=false}){ return new Promise(res=>{
+  const d=$('#dlg-ui'); $('#ui-t').textContent=title||'PingWacht'; if(html) $('#ui-x').innerHTML=html; else $('#ui-x').textContent=text||''; const inp=$('#ui-in');
   inp.style.display=input===null?'none':''; inp.value=input===null?'':String(input);
   if(/^Ort/.test(text||'')&&MP&&MP.data){ const z=[...new Set(MP.data.nodes.map(n=>n.zone).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'de')); $('#zn-dl').innerHTML=z.map(k=>`<option value="${esc(k)}">`).join(''); inp.setAttribute('list','zn-dl'); } else inp.removeAttribute('list');
   const okb=$('#ui-ok'), cb=$('#ui-cancel'); okb.textContent=ok; okb.className='btn '+(danger?'danger':'pri');
@@ -1548,8 +1548,14 @@ async function piSetup(site){
   let gw='';
   if(ip.trim()){ gw=await uiPrompt('Gateway (Router), z. B. 192.168.215.1:',''); if(!gw) return; }
   const q=new URLSearchParams({site,host:host.trim()}); if(ip.trim()){ q.set('ip',ip.trim()); q.set('gw',gw.trim()); }
-  location.href='/download/pi-setup.zip?'+q.toString();
-  setTimeout(()=>uiAlert('ZIP wird geladen – Anleitung und Pi-Passwort stehen in LIES-MICH.txt. Kurz: Raspberry Pi Imager → Raspberry Pi OS Lite (64-bit) auf den Stick (Anpassungen: Nein) → Stick neu anstecken → Dateien aus dem ZIP auf „bootfs“ kopieren und ersetzen → Stick in den Pi, Kabel + Strom. Nach ca. 5 Minuten erscheint der Pi hier als Haupt-Agent.'),300);
+  toast('ZIP wird erstellt …');
+  try{
+    const r=await fetch('/download/pi-setup.zip?'+q.toString(),{credentials:'same-origin'});
+    if(!r.ok) throw new Error(await r.text()||r.statusText);
+    const b=await r.blob(), u=URL.createObjectURL(b);
+    const name='pingwacht-pi-'+host.trim()+'.zip';
+    uiDialog({title:'Raspberry Pi einrichten',html:`<div class="muted" style="margin:8px 0 12px;font-size:13px">Raspberry Pi Imager → Raspberry Pi OS Lite (64-bit) auf den Stick (Anpassungen: Nein) → Stick neu anstecken → <b>alles</b> aus der ZIP auf „bootfs“ kopieren und ersetzen → Stick in den Pi, Kabel + Strom. Nach ca. 5 Minuten erscheint der Pi hier als Haupt-Agent. Pi-Passwort steht in LIES-MICH.txt.</div><a class="btn pri" href="${u}" download="${esc(name)}">⬇ ${esc(name)} herunterladen (${(b.size/1048576).toFixed(1)} MB)</a>`,ok:'Schließen'});
+  }catch(e){ uiAlert('ZIP konnte nicht erstellt werden: '+e.message); }
 }
 function uiPrompt(text,val){ return uiDialog({text,input:val==null?'':val,ok:'OK',cancel:'Abbrechen'}); }
 
