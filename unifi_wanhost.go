@@ -94,7 +94,7 @@ func (m *Monitor) unifiWanHost(site SiteCfg, d unifiDevice, w unifiWAN, addr str
 	if n := m.unifiGatewayCount(site.ID); n > 1 && strings.TrimSpace(d.Name) != "" {
 		name += " (" + strings.TrimSpace(d.Name) + ")"
 	}
-	hc := m.UpsertHost(HostCfg{Name: name, Addr: addr, Site: site.ID, Method: methodUniFiWAN, IntervalMs: 60000, OutageCount: 2, Org: site.Org})
+	hc := m.UpsertHost(HostCfg{Name: name, Addr: addr, Site: site.ID, Method: methodUniFiWAN, IntervalMs: 60000, OutageCount: 2, Org: site.Org, Group: m.siteMainGroup(site.ID)})
 	return m.host(hc.ID)
 }
 
@@ -110,4 +110,24 @@ func (m *Monitor) unifiGatewayCount(siteID string) int {
 		}
 	}
 	return n
+}
+
+// siteMainGroup: die Gruppe, in der die meisten Hosts dieses Standorts liegen (damit die
+// Internet-Leitung beim Kunden einsortiert wird und nicht unter „Ohne Gruppe“).
+func (m *Monitor) siteMainGroup(siteID string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := map[string]int{}
+	for _, hc := range m.cfg.Hosts {
+		if hc.Site == siteID && hc.Group != "" && !isUniFiWanHost(hc) {
+			n[hc.Group]++
+		}
+	}
+	best, bn := "", 0
+	for g, c := range n {
+		if c > bn || c == bn && g < best {
+			best, bn = g, c
+		}
+	}
+	return best
 }
