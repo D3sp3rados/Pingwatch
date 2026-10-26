@@ -58,6 +58,13 @@ type HostCfg struct {
 	MtActPass   string `json:"mtActPass,omitempty"`   // nur an den Agenten
 	MtActPorts  string `json:"mtActPorts,omitempty"`  // Komma-Liste, „*“ = alle
 	MtActReboot bool   `json:"mtActReboot,omitempty"` // Neustart des Geräts erlaubt
+	// Netonix-Switch über die Web-Schnittstelle (JSON) durch den Agenten auslesen
+	Nx         bool   `json:"nx,omitempty"`
+	NxUser     string `json:"nxUser,omitempty"`
+	NxPass     string `json:"nxPass,omitempty"`     // nur an den Agenten
+	NxPort     int    `json:"nxPort,omitempty"`     // HTTPS-Port der Weboberfläche (Standard 443)
+	NxActPorts string `json:"nxActPorts,omitempty"` // Ports mit PoE-Neustart/Link-Neustart, „*“ = alle
+	NxTempMax  int    `json:"nxTempMax,omitempty"`  // CPU-Temperatur-Alarm ab °C: 0 = 85, -1 = aus
 	// Alarm, wenn ein überwachter Port langsamer verbindet (z. B. 1 G → 100 M); Standard an
 	NoSpeedAlarm bool `json:"noSpeedAlarm,omitempty"`
 }
@@ -199,9 +206,14 @@ func (h *HostCfg) normalize() {
 	} else if h.MtPort <= 0 || h.MtPort > 65535 {
 		h.MtPort = 443
 	}
+	if !h.Nx || h.Site == "cloud" || h.Site == "" {
+		h.Nx, h.NxUser, h.NxPass, h.NxPort, h.NxActPorts, h.NxTempMax = false, "", "", 0, "", 0
+	} else if h.NxPort <= 0 || h.NxPort > 65535 {
+		h.NxPort = 443
+	}
 	if h.Method != "snmp" {
 		h.Community = ""
-		if !h.Mt {
+		if !h.Mt && !h.Nx {
 			h.Watch = ""
 		}
 	}

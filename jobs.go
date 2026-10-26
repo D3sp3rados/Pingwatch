@@ -315,6 +315,8 @@ func (a *Agent) runJob(j agentJob) {
 		res = pingList(strings.Split(j.Params["ips"], ","))
 	case "mtaction":
 		res, err = a.mtActionJob(j)
+	case "nxaction":
+		res, err = a.nxActionJob(j)
 	case "snmpif": // Schnittstellenzähler mehrerer Geräte (Netzkarte); Communities der Reihe nach probieren
 		res = snmpIfList(strings.Split(j.Params["ips"], ","), strings.Split(j.Params["communities"], ","))
 	case "unifi":
