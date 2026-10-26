@@ -60,7 +60,9 @@ struct OverviewView: View {
                         if !hosts.isEmpty || site.unifi?.on == true {
                             Section {
                                 ForEach(hosts) { h in
-                                    NavigationLink(value: h.id) {
+                                    NavigationLink {
+                                        HostDetailView(hostID: h.id)
+                                    } label: {
                                         HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
                                     }
                                 }
@@ -139,7 +141,9 @@ struct StatusListView: View {
                                        systemImage: kind == "ok" ? "network" : "checkmark.circle")
             }
             ForEach(hosts) { h in
-                NavigationLink(value: h.id) {
+                NavigationLink {
+                    HostDetailView(hostID: h.id)
+                } label: {
                     HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
                 }
             }
@@ -196,7 +200,9 @@ struct AgentView: View {
             if !hosts.isEmpty {
                 Section("Hosts") {
                     ForEach(hosts) { h in
-                        NavigationLink(value: h.id) {
+                        NavigationLink {
+                            HostDetailView(hostID: h.id)
+                        } label: {
                             HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
                         }
                     }
@@ -580,7 +586,9 @@ struct FolderView: View {
                 if !f.hosts.isEmpty {
                     Section("Hosts") {
                         ForEach(f.hosts) { h in
-                            NavigationLink(value: h.id) {
+                            NavigationLink {
+                                HostDetailView(hostID: h.id)
+                            } label: {
                                 HostRow(host: h, buckets: model.overview?.hosts[h.id] ?? [])
                             }
                         }

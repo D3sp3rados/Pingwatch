@@ -333,7 +333,7 @@ struct MapNodeView: View {
                 if let k = node.kids, !k.isEmpty { LabeledContent("Kunden", value: "\(k.count)") }
             }
             if let h = node.host {
-                Section { NavigationLink(value: h) { Label("Überwachter Host – Verlauf und Statistik", systemImage: "chart.xyaxis.line") } }
+                Section { NavigationLink { HostDetailView(hostID: h) } label: { Label("Überwachter Host – Verlauf und Statistik", systemImage: "chart.xyaxis.line") } }
             } else {
                 Section {
                     Text("Nur Erreichbarkeit (alle 5 Minuten). Für Meldungen und Verlauf das Gerät im Web-Dashboard unter Netzkarte → „Als Host überwachen“ anlegen.")
