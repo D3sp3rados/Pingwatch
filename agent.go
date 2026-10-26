@@ -296,14 +296,15 @@ func (a *Agent) fetchConfig() bool {
 			Org      string `json:"org"`
 			Customer string `json:"customer"`
 		} `json:"site"`
-		SignKeys []SignKey  `json:"signKeys"`
-		Hosts    []HostCfg  `json:"hosts"`
-		Version  int64      `json:"version"`
-		Jobs     []agentJob `json:"jobs"`
-		UniFi    *UniFiCfg  `json:"unifi"`
-		Latest   string     `json:"latest"`
-		Auto     *bool      `json:"autoUpdate"`
-		CheckNow int64      `json:"checkNow"`
+		SignKeys []SignKey       `json:"signKeys"`
+		Hosts    []HostCfg       `json:"hosts"`
+		Version  int64           `json:"version"`
+		Jobs     []agentJob      `json:"jobs"`
+		UniFi    *UniFiCfg       `json:"unifi"`
+		Latest   string          `json:"latest"`
+		Radius   *radiusAgentCfg `json:"radius"`
+		Auto     *bool           `json:"autoUpdate"`
+		CheckNow int64           `json:"checkNow"`
 		Backup   *struct {
 			On   bool `json:"on"`
 			Keep int  `json:"keep"`
@@ -368,6 +369,7 @@ func (a *Agent) fetchConfig() bool {
 		a.backupKeep = cfg.Backup.Keep
 	}
 	a.unifi = cfg.UniFi
+	a.radiusApply(cfg.Radius)
 	if a.sysOnly {
 		a.unifi, cfg.Hosts = nil, nil
 	}

@@ -114,15 +114,16 @@ type Config struct {
 	UpdatePlans   []UpdatePlan `json:"updatePlans,omitempty"`
 	Scripts       []Script     `json:"scripts,omitempty"`
 	// Zwei-Faktor-Code des Betreiber-Logins (ADMIN_PASSWORD)
-	AdminTOTP        string            `json:"adminTotp,omitempty"`
-	AdminTOTPPending string            `json:"adminTotpPending,omitempty"`
-	AdminPasskeys    []Passkey         `json:"adminPasskeys,omitempty"`
-	Requests         []FeatureRequest  `json:"requests,omitempty"` // Änderungswünsche aus dem KI-Assistenten
-	Machines         []MachineCfg      `json:"machines,omitempty"` // überwachte Rechner (Rechner-Überwachung)
-	Acs              []AcsDevice       `json:"acs,omitempty"`      // TR-069: Fritzboxen am ACS (Prototyp)
-	AcsProfiles      []AcsCodeProfile  `json:"acsProfiles,omitempty"`
-	VapidKey         string            `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
-	UniFiKeys        map[string]string `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
+	AdminTOTP        string                `json:"adminTotp,omitempty"`
+	AdminTOTPPending string                `json:"adminTotpPending,omitempty"`
+	AdminPasskeys    []Passkey             `json:"adminPasskeys,omitempty"`
+	Requests         []FeatureRequest      `json:"requests,omitempty"` // Änderungswünsche aus dem KI-Assistenten
+	Machines         []MachineCfg          `json:"machines,omitempty"` // überwachte Rechner (Rechner-Überwachung)
+	Acs              []AcsDevice           `json:"acs,omitempty"`      // TR-069: Fritzboxen am ACS (Prototyp)
+	AcsProfiles      []AcsCodeProfile      `json:"acsProfiles,omitempty"`
+	VapidKey         string                `json:"vapidKey,omitempty"`  // Web-Push-Schlüssel (privat)
+	UniFiKeys        map[string]string     `json:"unifiKeys,omitempty"` // Kunde → UniFi-Cloud-Key (Site Manager)
+	Radius           map[string]*RadiusCfg `json:"radius,omitempty"`    // Kunde → RADIUS (Netonix-Anmeldung)
 	// Datenbank-Sicherungen auf Agenten (Standort → Einstellung / letzter Stand)
 	BackupTargets map[string]*BackupCfg    `json:"backupTargets,omitempty"`
 	BackupStatus  map[string]*BackupStatus `json:"backupStatus,omitempty"`

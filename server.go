@@ -259,6 +259,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/agent/fritz", s.handleAgentFritz)
 	mux.HandleFunc("/api/agent/mikrotik", s.handleAgentMikrotik)
 	mux.HandleFunc("/api/agent/netonix", s.handleAgentNetonix)
+	mux.HandleFunc("/api/agent/radius", s.handleAgentRadius)
 	mux.HandleFunc("/api/agent/sys", s.handleAgentSys)
 	mux.HandleFunc("/api/agent/inventory", s.handleAgentInventory)
 	mux.HandleFunc("/api/agent/binary/", s.handleAgentBinary)
@@ -362,6 +363,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/mikrotik", protect(s.handleMikrotik))
 	mux.HandleFunc("/api/mikrotik/action", protect(s.handleMikrotikAction))
 	mux.HandleFunc("/api/netonix", protect(s.handleNetonix))
+	mux.HandleFunc("/api/radius", protect(s.handleRadius))
 	mux.HandleFunc("/api/netonix/action", protect(s.handleNetonixAction))
 	mux.HandleFunc("/api/machine", protect(s.handleMachine))
 	mux.HandleFunc("/api/machine/inventory", protect(s.handleMachineInventory))
@@ -1347,6 +1349,14 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	ver := s.m.cfg.Version
 	s.m.mu.RUnlock()
+	// Netonix ohne eigene Zugangsdaten: Dienst-Benutzer des PingWacht-RADIUS verwenden
+	if su, sp := s.m.radiusService(site.Org); su != "" {
+		for i := range hosts {
+			if hosts[i].Nx && hosts[i].NxUser == "" {
+				hosts[i].NxUser, hosts[i].NxPass = su, sp
+			}
+		}
+	}
 	out := map[string]any{"site": map[string]string{"id": site.ID, "name": site.Name, "org": site.Org, "customer": site.Customer}, "signKeys": s.m.orgSignKeys(site.Org), "hosts": hosts, "version": ver,
 		"latest": version, "autoUpdate": !site.NoAutoUpdate, "checkNow": site.UpdateNow, "sys": sysOut}
 	if site.UniFi != nil && site.UniFi.On && !site.UniFi.isCloud() {
@@ -1354,6 +1364,9 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if b := s.m.backupTarget(site); b != nil {
 		out["backup"] = map[string]any{"on": true, "keep": b.keep()}
+	}
+	if rc := s.m.radiusForSite(site); rc != nil {
+		out["radius"] = rc
 	}
 	if jb := takeJobs(site.ID); len(jb) > 0 {
 		s.m.actionJobsTaken(jb)
