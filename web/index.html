@@ -460,6 +460,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <select class="ed" id="d-group" title="Gruppe" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></select>
     <button class="btn sm ed" id="d-edit" title="Einstellungen dieses Hosts">⚙ Einstellungen</button>
     <a class="btn sm" id="d-open" target="_blank" rel="noopener" style="display:none" title="Weboberfläche des Geräts öffnen">🌐 Öffnen</a>
+    <button class="btn sm" id="d-uni" style="display:none" title="Alle UniFi-Geräte dieses Standorts">📶 UniFi-Geräte</button>
     <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
     <span class="pill num" id="d-now"></span>
   </div>
@@ -1684,7 +1685,8 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
     const x=e.target.closest('[data-tx]'); if(x){ e.stopPropagation(); OVF.x=OVF.x||{}; const id=x.dataset.tx; const open=x.textContent==='▾'; if(open){ delete OVF.x[id]; if(OVF.c===id&&!OVF.s){} } else OVF.x[id]=1; ovfSave(); renderTree(S.state); return; }
     const th=e.target.closest('[data-th]'); if(th){ el.classList.remove('open'); location.hash='#/host/'+th.dataset.th; return; }
     const tc=e.target.closest('[data-tcat]'); if(tc){ OVF.cat=OVF.cat===tc.dataset.tcat?'':tc.dataset.tcat; OVF.c=''; OVF.s=''; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
-    const s=e.target.closest('[data-ts]'); if(s){ OVF.cat=''; OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
+    const s=e.target.closest('[data-ts]'); if(s&&uniOnlySite(s.dataset.ts)){ el.classList.remove('open'); goUniFi(s.dataset.ts); return; }
+    if(s){ OVF.cat=''; OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
     const c=e.target.closest('[data-tc]'); if(c){ OVF.cat=''; OVF.c=c.dataset.tc; OVF.s=''; if(OVF.c){ OVF.x=OVF.x||{}; OVF.x[OVF.c]=1; } ovfSave(); el.classList.remove('open'); ovRerender(); } });
   el.addEventListener('input',e=>{ if(e.target.id==='tr-q'){ OVF.q=e.target.value; ovfSave(); renderTree(S.state); } }); })();
 const PKIND={camera:'📷 Kamera',sensor:'🌡 Sensor',light:'💡 Licht',chime:'🔔 Gong',viewer:'🖥 Viewer',nvr:'💾 NVR'};
@@ -2027,6 +2029,11 @@ function renderInstall(){ const st=S.state; if(!st) return; const me=st.me||{}; 
 /* Übersicht: je Abschnitt zunächst ~2 Zeilen (Liste: 4 Einträge), gestörte Hosts immer zuerst und immer sichtbar */
 /* ---------- Gruppen zum Durchklicken: Ordner → Inhalt → UniFi-Bereich ---------- */
 let OVG={g:null,u:null,c:'all'}; try{ Object.assign(OVG,JSON.parse(sessionStorage.getItem('pw_ovg')||'{}')); }catch(e){}
+// Standort nur mit UniFi (z. B. Cloud-Konsole): direkt die Geräteliste im Reiter Ubiquiti zeigen
+function uniOnlySite(sid){ const st=S.state, s=st&&st.sites.find(x=>x.id===sid); return !!(s&&s.unifi&&s.unifi.on&&!st.hosts.some(h=>h.site===sid&&!/^unifi:/.test(h.addr))); }
+function goUniFi(sid){ UF.open[sid]=true; try{ localStorage.setItem('pw_ufopen',JSON.stringify(UF.open)); }catch(e){}
+  OVF.cat=''; OVF.s=sid; OVF.c=''; ovfSave(); if(location.hash!=='#/'&&location.hash!=='') location.hash='#/';
+  setTimeout(()=>{ const b=document.querySelector('#ovmode [data-m="unifi"]'); if(b&&!b.classList.contains('on')) b.click(); else ovRerender(); setTimeout(()=>{ const u=document.querySelector(`.uf[data-site="${sid}"]`); if(u) u.scrollIntoView({block:'start'}); },150); },60); }
 function ovgSet(o){ Object.assign(OVG,o); try{ sessionStorage.setItem('pw_ovg',JSON.stringify(OVG)); }catch(e){} $('#ov').dataset.sig=''; renderOverview(); window.scrollTo({top:0}); }
 const UOFF=d=>!d.ign&&['OFFLINE','CONNECTION_INTERRUPTED','ISOLATED','DISCONNECTED'].includes(d.state);
 function gdFolders(st,gs,ms){ const fs=[], used=new Set();
@@ -2199,6 +2206,7 @@ function renderDetailHead(){
   $('#d-dot').style.background=`var(${col})`; { const dn=$('#d-name'); if(document.activeElement!==dn){ dn.textContent=h.name; dn.dataset.id=h.id; } }
   $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
   $('#d-edit').onclick=()=>openHost(h.id);
+  { const s0=S.state.sites.find(x=>x.id===h.site), ub=$('#d-uni'); const on=!!(s0&&s0.unifi&&s0.unifi.on); ub.style.display=on?'':'none'; ub.onclick=()=>goUniFi(h.site); }
   { const o=$('#d-open'), url=h.nx?'https://'+h.addr+(h.nxPort&&h.nxPort!==443?':'+h.nxPort:''):h.mt?'https://'+h.addr+(h.mtPort&&h.mtPort!==443&&h.mtPort!==80?':'+h.mtPort:''):(h.method==='http'&&/^https?:/.test(h.addr)?h.addr:''); o.style.display=url?'':'none'; if(url) o.href=url; }
   const site=S.state.sites.find(s=>s.id===h.site);
   $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
