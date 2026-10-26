@@ -68,3 +68,28 @@ func TestMapStatsAPI(t *testing.T) {
 		t.Fatal(body)
 	}
 }
+
+func TestMapSpeedDrop(t *testing.T) {
+	sv, _ := newTestServer(t)
+	m := sv.m
+	m.mu.Lock()
+	m.cfg.Sites = append(m.cfg.Sites, SiteCfg{ID: "s1", Name: "Büro", Org: "default"})
+	m.cfg.Maps = append(m.cfg.Maps, NetMap{ID: "mpx", Org: "default", Name: "Dude", PingSite: "s1"})
+	m.mu.Unlock()
+	t0 := time.Now().Add(-30 * time.Minute)
+	m.recordMapSNMP("mpx", map[string][]ifSample{"10.0.0.1": {{Name: "ether1", Up: true, Speed: 1000, In: 1, HC: true}, {Name: "wlan1", Up: true, Speed: 300, In: 1, HC: true}}}, t0)
+	m.recordMapSNMP("mpx", map[string][]ifSample{"10.0.0.1": {{Name: "ether1", Up: true, Speed: 100, In: 2, HC: true}, {Name: "wlan1", Up: true, Speed: 100, In: 2, HC: true}}}, t0.Add(10*time.Minute))
+	mapStats.Lock()
+	n := len(mapStats.slow["mpx"])
+	mapStats.Unlock()
+	if n != 1 {
+		t.Fatalf("erwartet 1 Alarm (nur ether1), %d", n)
+	}
+	m.recordMapSNMP("mpx", map[string][]ifSample{"10.0.0.1": {{Name: "ether1", Up: true, Speed: 1000, In: 3, HC: true}}}, t0.Add(20*time.Minute))
+	mapStats.Lock()
+	n = len(mapStats.slow["mpx"])
+	mapStats.Unlock()
+	if n != 0 {
+		t.Fatal("nicht geschlossen")
+	}
+}

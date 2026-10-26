@@ -45,7 +45,9 @@ var mapStats = struct {
 	snmpLast map[string]int64                 // Karte → letztes SNMP-Ergebnis
 	snmpOK   map[string]int                   // Karte → Geräte mit SNMP-Antwort
 	cur      map[string]map[string][3]float64 // Karte → IP|Schnittstelle → [Zeit ms, In, Out] (Bit/s, letzte Messung)
-}{cur: map[string]map[string][3]float64{}, days: map[string]*mapDay{}, dirty: map[string]bool{}, down: map[string]map[string]int64{},
+	norm     map[string]map[string]int64      // Karte → IP|Schnittstelle → übliche Geschwindigkeit (Mbit/s)
+	slow     map[string]map[string]*Event     // Karte → IP|Schnittstelle → offenes „langsamer“-Ereignis
+}{norm: map[string]map[string]int64{}, slow: map[string]map[string]*Event{},cur: map[string]map[string][3]float64{}, days: map[string]*mapDay{}, dirty: map[string]bool{}, down: map[string]map[string]int64{},
 	prev: map[string]map[string]ifPrev{}, snmp: map[string]time.Time{}, sjobs: map[string]string{},
 	snmpLast: map[string]int64{}, snmpOK: map[string]int{}}
 
@@ -137,8 +139,50 @@ func (m *Monitor) recordMapReach(mapID string, ips []string, rtt map[string]int3
 // recordMapSNMP: Zählerstände → Bit/s je Schnittstelle (stündlich Ø und Max).
 func (m *Monitor) recordMapSNMP(mapID string, res map[string][]ifSample, at time.Time) {
 	day, hr, ms := at.Format("2006-01-02"), at.Hour(), at.UnixMilli()
+	// Port-Geschwindigkeit: Namen der Geräte und Einstellungen der Karte
+	var mp NetMap
+	m.mu.RLock()
+	for _, x := range m.cfg.Maps {
+		if x.ID == mapID {
+			mp = x
+		}
+	}
+	m.mu.RUnlock()
+	names := map[string]string{}
+	if mp.ID != "" {
+		if d, err := m.loadMap(mapID); err == nil {
+			for _, n := range d.Nodes {
+				if a := strings.TrimSpace(n.Addr); a != "" && names[a] == "" {
+					names[a] = n.Name
+				}
+			}
+		}
+	}
+	var slowStart, slowEnd []Event
+	defer func() {
+		for _, e := range slowStart {
+			if !e.Maint {
+				m.notify(notice{"portdown", "", "🟠 Port langsamer: " + e.HostName, "Verbindet seit " + time.UnixMilli(e.Start).Format("15:04") + " mit geringerer Geschwindigkeit (Kabel, Gegenstelle oder Stecker prüfen) · Netzkarte „" + mp.Name + "“", mp.Org, mp.PingSite})
+			}
+		}
+		for _, e := range slowEnd {
+			if e.Notified {
+				m.notify(notice{"portup", "", "🟢 Port wieder volle Geschwindigkeit: " + e.HostName, "War " + fmtDurShort(e.End-e.Start) + " langsamer", mp.Org, mp.PingSite})
+			}
+		}
+	}()
 	mapStats.Lock()
 	defer mapStats.Unlock()
+	nm, sm := mapStats.norm[mapID], mapStats.slow[mapID]
+	if nm == nil {
+		nm, sm = map[string]int64{}, map[string]*Event{}
+		mapStats.norm[mapID], mapStats.slow[mapID] = nm, sm
+	}
+	alarmOn := mp.ID != "" && mp.SpeedAlarm != "off" && mp.PingSite != ""
+	var site SiteCfg
+	if alarmOn {
+		site, alarmOn = m.siteByID(mp.PingSite)
+	}
 	d := m.mapDayLocked(mapID, day)
 	pv := mapStats.prev[mapID]
 	if pv == nil {
@@ -157,6 +201,24 @@ func (m *Monitor) recordMapSNMP(mapID string, res map[string][]ifSample, at time
 				name += " (" + f.Alias + ")"
 			}
 			k := ip + "|" + name
+			if f.Up && f.Speed > 0 && physPort(f.Name) {
+				if f.Speed > nm[k] {
+					nm[k] = f.Speed
+				}
+				switch {
+				case alarmOn && f.Speed < nm[k] && sm[k] == nil:
+					dev := names[ip]
+					if dev == "" {
+						dev = ip
+					}
+					e := m.newSiteEvent(site, "port", dev+" · "+name+" · "+fmtMbit(nm[k])+" → "+fmtMbit(f.Speed), ms, m.inMaintSite(mp.Org, mp.PingSite, at))
+					sm[k] = e
+					slowStart = append(slowStart, *e)
+				case f.Speed >= nm[k] && sm[k] != nil:
+					slowEnd = append(slowEnd, m.closeSiteEvent(sm[k], ms))
+					delete(sm, k)
+				}
+			}
 			p, ok := pv[k]
 			pv[k] = ifPrev{T: ms, In: f.In, Out: f.Out, HC: f.HC}
 			if !ok || ms-p.T < 30_000 || ms-p.T > 20*60_000 {
@@ -642,4 +704,15 @@ func (m *Monitor) mapIfNames(mapID, ip string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// physPort: echte Ports (Ethernet/SFP), keine Funk-, Bridge-, VLAN- oder Tunnel-Schnittstellen.
+func physPort(name string) bool {
+	n := strings.ToLower(name)
+	for _, x := range []string{"wlan", "wifi", "ath", "bridge", "br-", "vlan", "pppoe", "ppp", "loopback", "lo", "wg", "ovpn", "gre", "eoip", "l2tp", "sstp", "ipip", "tun", "veth", "dummy", "null", "bond"} {
+		if strings.HasPrefix(n, x) {
+			return false
+		}
+	}
+	return true
 }

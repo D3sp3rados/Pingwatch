@@ -1007,6 +1007,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <p class="muted" style="font-size:13px;margin:0 0 10px">Der Agent der Erreichbarkeitsprüfung fragt alle 5 Minuten die Schnittstellenzähler der Geräte ab (SNMP v2c, nur lesend) und speichert daraus den Traffic je Schnittstelle (Ø und Spitze je Stunde, 90 Tage). Auf den Geräten muss SNMP eingeschaltet und die Adresse des Agenten erlaubt sein.</p>
       <label class="field">Communities (mehrere mit Komma, werden der Reihe nach probiert)<input name="comm" placeholder="public" autocomplete="off" data-1p-ignore data-lpignore="true"></label>
       <label class="field">Welche Geräte<select name="scope"><option value="">Sektoren / Masten (mehrere Verbindungen) und einzeln markierte</option><option value="all">Alle Geräte der Karte</option><option value="off">Aus</option></select></label>
+      <label class="check" style="margin:4px 0 8px"><input type="checkbox" name="speed"> <span>Melden, wenn ein Port langsamer verbindet (z. B. 1 G → 100 M) – nur Ethernet/SFP</span></label>
       <div class="muted" id="sn2-state" style="font-size:12px"></div>
     </div>
     <div class="dlg-err" id="sn2-err"></div>
@@ -2875,11 +2876,11 @@ $('#dp-none').onclick=()=>{ DP.sel.clear(); drawDeps(); };
 $('#dp-ok').onclick=async()=>{ const set=DP.r.items.filter(i=>DP.sel.has(i.host)).map(i=>({host:i.host,parent:i.parent})); if(!set.length) return $('#dlg-deps').close();
   try{ const x=await api('/api/maps/deps',{method:'POST',body:JSON.stringify({map:MP.id,root:$('#dp-root').value,set})}); toast(x.set+' Abhängigkeiten eingetragen'+(x.skipped?' · '+x.skipped+' übersprungen':'')); openDeps($('#dp-root').value); }catch(e){ $('#dp-err').textContent=e.message; } };
 $('#map-stat').onclick=()=>openMapStat({zone:MP.zone||''});
-$('#map-snmp').onclick=()=>{ const m=MP.list&&MP.list.find(x=>x.id===MP.id); if(!m) return; const f=$('#sn2-form'); f.comm.value=m.snmpComm||''; f.scope.value=m.snmpScope||''; $('#sn2-err').textContent='';
+$('#map-snmp').onclick=()=>{ const m=MP.list&&MP.list.find(x=>x.id===MP.id); if(!m) return; const f=$('#sn2-form'); f.comm.value=m.snmpComm||''; f.scope.value=m.snmpScope||''; f.speed.checked=m.speedAlarm!=='off'; $('#sn2-err').textContent='';
   const sn=MP.data&&MP.data.snmp; $('#sn2-state').textContent=!m.pingSite?'Erst oben die Erreichbarkeitsprüfung über einen Agenten einschalten.':sn&&sn.at?`Letzte Abfrage ${fmtTime(sn.at,false)} · ${sn.ok} Geräte haben geantwortet.`:(m.snmpComm?'Noch keine Antwort – erste Werte nach ca. 10 Minuten (Agent ab Version 1.6.5).':'');
   $('#dlg-msnmp').showModal(); };
 $('#sn2-form').addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); const f=e.target;
-  try{ await api('/api/maps',{method:'POST',body:JSON.stringify({id:MP.id,snmpComm:f.comm.value.trim(),snmpScope:f.scope.value})}); $('#dlg-msnmp').close(); toast('Gespeichert – erste Traffic-Werte nach ca. 10 Minuten'); await loadMaps(true); }catch(err){ $('#sn2-err').textContent=err.message; } });
+  try{ await api('/api/maps',{method:'POST',body:JSON.stringify({id:MP.id,snmpComm:f.comm.value.trim(),snmpScope:f.scope.value,speedAlarm:f.speed.checked?'':'off'})}); $('#dlg-msnmp').close(); toast('Gespeichert – erste Traffic-Werte nach ca. 10 Minuten'); await loadMaps(true); }catch(err){ $('#sn2-err').textContent=err.message; } });
 
 /* Netzwerk-Scan & UniFi-Import */
 const idlg=$('#dlg-import'), imf=$('#im-form'); let IM={};

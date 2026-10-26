@@ -29,6 +29,8 @@ type NetMap struct {
 	// Traffic per SNMP: Communities (Komma, werden der Reihe nach probiert) und Umfang
 	SnmpComm  string `json:"snmpComm,omitempty"`
 	SnmpScope string `json:"snmpScope,omitempty"` // "" = Sektoren + markierte, "all", "off"
+	// Meldung, wenn ein Port langsamer verbindet (z. B. 1 G → 100 M): "" = an, "off" = aus
+	SpeedAlarm string `json:"speedAlarm,omitempty"`
 	// Meldungen (einzelne Geräte, Sektoren, Orte, ganze Karte)
 	Rules []MapRule `json:"rules,omitempty"`
 	// Zentrale (Hauptrouter) für die Abhängigkeiten aus der Karte
@@ -238,6 +240,7 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			PingSite         *string
 			SnmpComm         *string
 			SnmpScope        *string
+			SpeedAlarm       *string
 			Nodes            *[]mapNode
 			Links            *[]mapLink
 		}
@@ -269,6 +272,9 @@ func (s *Server) handleMaps(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.SnmpScope != nil && (*req.SnmpScope == "" || *req.SnmpScope == "all" || *req.SnmpScope == "off") {
 				m.cfg.Maps[i].SnmpScope = *req.SnmpScope
+			}
+			if req.SpeedAlarm != nil && (*req.SpeedAlarm == "" || *req.SpeedAlarm == "off") {
+				m.cfg.Maps[i].SpeedAlarm = *req.SpeedAlarm
 			}
 			if req.PingSite != nil {
 				ps := *req.PingSite
