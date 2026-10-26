@@ -1564,7 +1564,8 @@ function siteHealth(st,s){ const hs=st.hosts.filter(h=>h.site===s.id&&!h.paused)
   return hs.length||ms.length||u?'ok':'off'; }
 function custOf(st,siteId){ const s=st.sites.find(x=>x.id===siteId); return s&&s.customer?(st.customers||[]).find(c=>c.id===s.customer):null; }
 function ovSiteSet(st){ if(OVF.s&&st.sites.some(x=>x.id===OVF.s)) return new Set([OVF.s]); if(OVF.c){ const cs=st.customers||[]; return new Set(st.sites.filter(s=>OVF.c==='-'?!s.customer||!cs.some(c=>c.id===s.customer):s.customer===OVF.c).map(s=>s.id)); } return null; }
-function ovFiltered(st0){ const set=useTree(st0)?ovSiteSet(st0):null, sq=(OVF.sq||'').toLowerCase().trim(); if(!set&&!OVF.bad&&!sq) return st0; const st={...st0};
+function ovFiltered(st0){ const set=useTree(st0)?ovSiteSet(st0):null, sq=(OVF.sq||'').toLowerCase().trim(); if(!set&&!OVF.bad&&!sq&&!OVF.mt) return st0; const st={...st0};
+  if(OVF.mt){ st.hosts=st0.hosts.filter(h=>h.mt); st.machines=[]; st.sites=st0.sites.filter(x=>st.hosts.some(h=>h.site===x.id)).map(x=>({...x,unifi:null})); }
   if(set){ st.hosts=st0.hosts.filter(h=>set.has(h.site)); st.machines=(st0.machines||[]).filter(m=>set.has(m.site)); st.sites=st0.sites.filter(s=>set.has(s.id)); }
   if(sq){ const gn={}; for(const g of st0.groups||[]) gn[g.id]=g.name; const terms=sq.split('|').map(x=>x.trim()).filter(Boolean), hit=t=>terms.some(q=>t.toLowerCase().includes(q));
     st.hosts=st.hosts.filter(h=>hit([h.name,h.addr,h.ip||'',gn[h.group]||'',siteName(h.site)].join(' '))); st.machines=(st.machines||[]).filter(m=>hit([m.name,m.host||'',gn[m.group]||''].join(' ')));
@@ -1579,26 +1580,30 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   const H={}; for(const s of sites) H[s.id]=siteHealth(st0,s);
   const q=(OVF.q||'').toLowerCase().trim(), match=t=>!q||t.toLowerCase().includes(q), exp=OVF.x||{};
   const groups=cs.map(c=>({id:c.id,name:c.name,number:c.number,sites:sites.filter(s=>s.customer===c.id)}));
-  const rest=sites.filter(s=>!s.customer||!cs.some(c=>c.id===s.customer)); if(rest.length) groups.push({id:'-',name:cs.length?'Ohne Kunde':'Standorte',sites:rest,flat:!cs.length});
+  const rest=sites.filter(s=>!s.customer||!cs.some(c=>c.id===s.customer));
+  if(rest.length&&cs.length) groups.push({id:'-',name:'Ohne Kunde',sites:rest});
+  else if(rest.length){ const ag=rest.filter(s=>s.id!=='cloud'&&s.kind!=='unifi'), uf=rest.filter(s=>s.kind==='unifi'), cl=rest.filter(s=>s.id==='cloud');
+    if(ag.length) groups.push({id:'-',name:'💻 Agenten',sites:ag,flat:true,ord:1}); if(uf.length) groups.push({id:'-',name:'📶 Ubiquiti',sites:uf,flat:true,ord:2}); if(cl.length) groups.push({id:'-',name:'☁️ Cloud',sites:cl,flat:true,ord:3}); }
   // gestörte Kunden zuerst, sonst alphabetisch
-  const rank=g=>({bad:0,warn:1,ok:2,off:3})[worstH(g.sites.map(s=>H[s.id]))]; groups.sort((a,b)=>(a.id==='-')-(b.id==='-')||rank(a)-rank(b)||a.name.localeCompare(b.name,'de'));
+  const rank=g=>({bad:0,warn:1,ok:2,off:3})[worstH(g.sites.map(s=>H[s.id]))]; groups.sort((a,b)=>(a.id==='-')-(b.id==='-')||(a.ord||0)-(b.ord||0)||rank(a)-rank(b)||a.name.localeCompare(b.name,'de'));
   const nb=Object.values(H).filter(x=>x==='bad').length;
   let html=`<div class="tr-search"><input id="tr-q" placeholder="Kunde, Standort oder Nr. suchen" value="${esc(OVF.q||'')}" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" data-protonpass-ignore="true" spellcheck="false" readonly data-noaf></div>`;
-  html+=`<div class="tr-i${!OVF.c&&!OVF.s?' on':''}" data-tc=""><span class="tr-x"></span><span class="dot" style="background:var(${HCOL[worstH(Object.values(H))]})"></span><span class="tr-t"><b>Alle</b></span><span class="tr-n">${nb?`<b style="color:var(--bad)">${nb} gestört</b> · `:''}${sites.length}</span></div>`;
+  html+=`<div class="tr-i${!OVF.c&&!OVF.s&&!OVF.mt?' on':''}" data-tc=""><span class="tr-x"></span><span class="dot" style="background:var(${HCOL[worstH(Object.values(H))]})"></span><span class="tr-t"><b>Alle</b></span><span class="tr-n">${nb?`<b style="color:var(--bad)">${nb} gestört</b> · `:''}${sites.length}</span></div>`;
   for(const g of groups){ const gm=match(g.name+' '+(g.number||'')); const ss=g.sites.filter(s=>gm||match(s.name+' '+(s.number||''))); if(q&&!gm&&!ss.length) continue;
     const open=g.flat||(q&&ss.length)||exp[g.id]||OVF.c===g.id||g.sites.some(s=>s.id===OVF.s), gb=g.sites.filter(s=>H[s.id]==='bad').length;
     if(g.flat) html+=`<div class="tr-h">${esc(g.name)}</div>`;
     else html+=`<div class="tr-i${OVF.c===g.id&&!OVF.s?' on':''}" data-tc="${g.id}"><span class="tr-x" data-tx="${g.id}">${g.sites.length?(open?'▾':'▸'):''}</span><span class="dot" style="background:var(${HCOL[g.sites.length?worstH(g.sites.map(s=>H[s.id])):'off']})"></span><span class="tr-t" title="${esc(g.name)}">${esc(g.name)}${g.number?` <span class="muted">${esc(g.number)}</span>`:''}</span><span class="tr-n">${gb?`<b style="color:var(--bad)">${gb}</b>/`:''}${g.sites.length}</span></div>`;
     if(open) for(const s of ss) html+=`<div class="tr-i tr-s${OVF.s===s.id?' on':''}" data-ts="${s.id}" data-tcs="${g.id}"${g.flat?' style="padding-left:8px"':''}><span class="dot" style="background:var(${HCOL[H[s.id]]})"></span><span class="tr-t" title="${esc(s.name)}">${esc(s.name)}${s.number?` <span class="muted">${esc(s.number)}</span>`:''}</span></div>`; }
+  const mth=st0.hosts.filter(h=>h.mt); if(mth.length){ const mb=mth.filter(h=>h.status==='down').length; html+=`<div class="tr-h">🛡 MikroTik</div><div class="tr-i tr-s${OVF.mt?' on':''}" data-tmt="1" style="padding-left:8px"><span class="dot" style="background:var(${mb?'--bad':'--ok'})"></span><span class="tr-t">MikroTik-Geräte</span><span class="tr-n">${mth.length}</span></div>`; }
   const body=el.querySelector('.tr-body');
   if(body.dataset.html!==html){ const a=document.activeElement, f=a&&a.id==='tr-q', pos=f?a.selectionStart:0; body.innerHTML=html; body.dataset.html=html; if(f){ const i=$('#tr-q'); i.focus(); try{ i.setSelectionRange(pos,pos); }catch(e){} } }
   // Überschrift der Auswahl
   const selS=OVF.s&&st0.sites.find(x=>x.id===OVF.s), selC=OVF.c&&OVF.c!=='-'&&cs.find(c=>c.id===OVF.c);
-  const lbl=selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
+  const lbl=OVF.mt?'🛡 MikroTik-Geräte':selS?(custOf(st0,selS.id)?esc(custOf(st0,selS.id).name)+' <span class="muted">›</span> ':'')+esc(selS.name):selC?esc(selC.name):OVF.c==='-'?'Ohne Kunde':'';
   const muteable=selS||selC, canEd=!st0.me||st0.me.role!=='viewer';
   const actable=muteable&&canEd&&st0.sites.some(x=>siteActOK(x)&&(selS?x.id===selS.id:x.customer===OVF.c));
   const ch=lbl?`📍 ${lbl} ${actable?'<button class="btn sm" id="crumb-upd" type="button">⬆️ Updates</button><button class="btn sm" id="crumb-scr" type="button">▶ Script</button>':''}${muteable&&canEd?'<button class="btn sm" id="crumb-mute" type="button">🔕 Stummschalten</button>':''}<button class="btn sm" id="crumb-x" type="button">✕ Alle</button>`:'';
-  if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s=''; ovfSave(); ovRerender(); };
+  if(crumb.dataset.html!==ch){ crumb.innerHTML=ch; crumb.dataset.html=ch; const x=$('#crumb-x'); if(x) x.onclick=()=>{ OVF.c='';OVF.s='';OVF.mt=0; ovfSave(); ovRerender(); };
     const ub=$('#crumb-upd'); if(ub) ub.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('winupdate','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('winupdate','customer',OVF.c,co?co.name:''); } };
     const sb=$('#crumb-scr'); if(sb) sb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openAction('script','site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openAction('script','customer',OVF.c,co?co.name:''); } };
     const mb=$('#crumb-mute'); if(mb) mb.onclick=()=>{ if(OVF.s){ const so=S.state.sites.find(z=>z.id===OVF.s); openMute('site',OVF.s,so?so.name:''); } else { const co=(S.state.customers||[]).find(z=>z.id===OVF.c); openMute('customer',OVF.c,co?co.name:''); } }; }
@@ -1606,8 +1611,9 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
 (()=>{ const el=$('#ov-tree');
   el.addEventListener('click',e=>{ if(e.target.closest('#tr-mob')){ el.classList.toggle('open'); return; }
     const x=e.target.closest('[data-tx]'); if(x){ e.stopPropagation(); OVF.x=OVF.x||{}; const id=x.dataset.tx; const open=x.textContent==='▾'; if(open){ delete OVF.x[id]; if(OVF.c===id&&!OVF.s){} } else OVF.x[id]=1; ovfSave(); renderTree(S.state); return; }
-    const s=e.target.closest('[data-ts]'); if(s){ OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
-    const c=e.target.closest('[data-tc]'); if(c){ OVF.c=c.dataset.tc; OVF.s=''; if(OVF.c){ OVF.x=OVF.x||{}; OVF.x[OVF.c]=1; } ovfSave(); el.classList.remove('open'); ovRerender(); } });
+    const mtb=e.target.closest('[data-tmt]'); if(mtb){ OVF.mt=1; OVF.c=''; OVF.s=''; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
+    const s=e.target.closest('[data-ts]'); if(s){ OVF.mt=0; OVF.s=s.dataset.ts; OVF.c=s.dataset.tcs==='-'?'':s.dataset.tcs; OVF.bad=OVF.bad; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
+    const c=e.target.closest('[data-tc]'); if(c){ OVF.mt=0; OVF.c=c.dataset.tc; OVF.s=''; if(OVF.c){ OVF.x=OVF.x||{}; OVF.x[OVF.c]=1; } ovfSave(); el.classList.remove('open'); ovRerender(); } });
   el.addEventListener('input',e=>{ if(e.target.id==='tr-q'){ OVF.q=e.target.value; ovfSave(); renderTree(S.state); } }); })();
 const PKIND={camera:'📷 Kamera',sensor:'🌡 Sensor',light:'💡 Licht',chime:'🔔 Gong',viewer:'🖥 Viewer',nvr:'💾 NVR'};
 const protOn=d=>!!d.ign||!d.state||d.state==='CONNECTED', protLow=d=>!d.ign&&(d.batLow||(d.bat>=0&&d.bat<=15));
