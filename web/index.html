@@ -489,6 +489,15 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <canvas id="sn-chart" style="width:100%;height:200px;display:block;margin-top:8px"></canvas></div>
     <p class="muted" style="font-size:12.5px">Haken bei „Alarm“ = Meldung, wenn der Port auf „down“ geht (z. B. Uplink, Kamera, AP).</p>
   </div>
+  <div id="d-mt" style="display:none">
+    <h2>MikroTik <span class="sub muted" id="mt-sub" style="font-weight:400;font-size:12.5px"></span></h2>
+    <div id="mt-open"></div>
+    <div class="stats" id="mt-stats"></div>
+    <div class="panel" style="padding:12px;margin-top:10px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="seg" id="mt-ser"></div><div class="seg" id="mt-range"><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="48">48 h</button></div></div>
+      <canvas id="mt-chart" style="width:100%;height:150px;display:block;margin-top:8px"></canvas></div>
+    <div style="margin-top:12px"><div class="seg" id="mt-tabs"></div><div class="panel" style="overflow-x:auto;margin-top:8px" id="mt-body"></div></div>
+  </div>
   <div id="d-fritz" style="display:none">
     <h2>Fritzbox <span class="sub muted" id="fz-sub" style="font-weight:400;font-size:12.5px"></span></h2>
     <div class="stats" id="fz-stats"></div>
@@ -1421,6 +1430,17 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
           <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">In der Fritzbox einrichten: <b>System → FRITZ!Box-Benutzer</b> → Benutzer anlegen mit Recht „FRITZ!Box Einstellungen“ · <b>Heimnetz → Netzwerk → Netzwerkeinstellungen</b> → „Zugriff für Anwendungen zulassen“ aktivieren. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
         </div>
       </div>
+      <div class="full" id="hf-mtf" style="display:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+        <label class="check"><input type="checkbox" name="mt" id="hf-mt"> <span><b>MikroTik auslesen (RouterOS-API)</b> – CPU, Temperatur, Netzteile, Ports/SFP, BGP, Sitzungen, Log</span></label>
+        <div id="hf-mtb" style="display:none;margin-top:10px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <label class="field">Benutzer<input name="mtUser" autocomplete="off" placeholder="z. B. pingwacht"></label>
+            <label class="field">Passwort<input name="mtPass" type="password" autocomplete="new-password"></label>
+            <label class="field" style="max-width:170px">Zugang<select name="mtPort"><option value="443">https (www-ssl)</option><option value="80">http (www)</option></select></label>
+          </div>
+          <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">Auf dem MikroTik (RouterOS 7): Gruppe nur mit <b>read, api, rest-api</b> und einen Benutzer dazu anlegen, Dienst <b>www-ssl</b> aktivieren und auf die Adresse des Agenten beschränken. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
+        </div>
+      </div>
       <label class="field">Intervall (Sekunden)<select name="interval"><option value="500">0,5</option><option value="1000" selected>1</option><option value="2000">2</option><option value="5000">5</option><option value="10000">10</option><option value="30000">30</option><option value="60000">60</option></select></label>
       <label class="field">Timeout (ms)<input name="timeoutMs" type="number" min="100" max="10000" value="1000"></label>
       <label class="field">Spitze ab (ms)<input name="thresholdMs" type="number" min="0" placeholder="leer = automatisch"><small>Automatisch: 3× normaler Wert, mind. +30 ms</small></label>
@@ -2080,7 +2100,7 @@ const RANGES={'15m':15*60e3,'1h':36e5,'6h':6*36e5,'24h':864e5,'7d':7*864e5,'30d'
 let D={preset:'1h',from:0,to:0,data:null,scale:'lin',hover:-1,drag:null,stack:[]};
 function dRange(){ if(D.preset){ const to=Date.now(); return [to-RANGES[D.preset],to]; } return [D.from,D.to]; }
 async function loadDetail(){
-  const id=S.hostId; if(!id) return; loadSNMP(); loadFritz();
+  const id=S.hostId; if(!id) return; loadSNMP(); loadFritz(); loadMt();
   const [from,to]=dRange(); const c=$('#chart'); const w=c.getBoundingClientRect().width||800;
   const n=Math.max(60,Math.min(1200,Math.round(w/2)));
   try{
@@ -2355,7 +2375,7 @@ function enableOvDrag(root,secs){ const me=(S.state&&S.state.me)||{}; if(me.role
   for(const [k,c] of Object.entries(cards)){ if(c.dataset.dragset) continue; c.dataset.dragset='1'; c.draggable=true;
     c.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/pw-item',k); e.dataTransfer.effectAllowed='move'; c.classList.add('dragging'); setTimeout(()=>document.body.classList.add('pw-dragging'),0); });
     c.addEventListener('dragend',()=>{ c.classList.remove('dragging'); document.body.classList.remove('pw-dragging'); }); } }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev,fritzFullNums:!!h.fritzFullNums}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev,fritzFullNums:!!h.fritzFullNums,mt:!!h.mt,mtUser:h.mtUser||'',mtPort:h.mtPort||0}; }
 /* UniFi-Cloud-Key des Kunden */
 const UC={keySet:false,loaded:false};
 async function ucLoad(){ try{ const r=await api('/api/unifi/cloud'); UC.keySet=!!r.keySet; }catch(e){} UC.loaded=true; ucRender(); }
@@ -2531,11 +2551,75 @@ function drawFritzChart(pts){ const c=$('#fz-chart'), dpr=devicePixelRatio||1, W
   g.strokeStyle=acc; g.lineWidth=1.6; g.beginPath(); let first=true; for(const p of pts){ if(!p.d) continue; const x=X(p.t), y=Y(p.d); first?g.moveTo(x,y):g.lineTo(x,y); first=false; } g.stroke();
   g.fillStyle=mut; g.font='11px system-ui'; const nl=W<500?2:4; for(let i=0;i<=nl;i++){ const t=t0+i*24/nl*36e5; const x=Math.min(W-30,Math.max(0,X(t)-14)); g.fillText(new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),x,H-2); } }
 
+/* MikroTik */
+const MK={host:null,at:0,hours:24,ser:'cpu',tab:'',r:null};
+async function loadMt(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); const box=$('#d-mt');
+  if(!h||!h.mt){ box.style.display='none'; return; } box.style.display='';
+  if(MK.host===h.id&&!force&&Date.now()-MK.at<30000) return; MK.host=h.id; MK.at=Date.now();
+  let r; try{ r=await api(`/api/mikrotik?host=${h.id}&hours=${MK.hours}`); }catch(e){ return; } if(S.hostId!==h.id) return; MK.r=r;
+  const c=r.cur||null, res=c&&c.res||{}, rb=c&&c.rb||{}, up=c&&c.upd||{};
+  $('#mt-sub').textContent=r.err?'Fehler: '+r.err:r.at?'Stand '+fmtTime(r.at,false)+(res['board-name']?' · '+(res.identity?res.identity+' · ':'')+res['board-name']:'')+(res.version?' · RouterOS '+res.version:''):'warte auf erste Abfrage durch den Agenten (bis 1 Minute) …';
+  $('#mt-sub').style.color=r.err?'var(--bad)':'';
+  $('#mt-open').innerHTML=(r.open||[]).map(o=>`<div class="panel" style="padding:8px 12px;margin-bottom:8px;border-left:4px solid var(--bad)"><b style="color:var(--bad)">●</b> ${esc(o)}</div>`).join('');
+  if(!c){ $('#mt-stats').innerHTML=''; $('#mt-body').innerHTML=''; return; }
+  const st=(k,v,col)=>`<div class="panel stat"><span>${k}</span><b class="num" ${col?`style="color:var(${col})"`:''}>${v}</b></div>`, n=x=>+x||0;
+  const cpu=n(res['cpu-load']), memU=n(res['total-memory'])?100*(1-n(res['free-memory'])/n(res['total-memory'])):0, hdd=n(res['total-hdd-space'])?100*(1-n(res['free-hdd-space'])/n(res['total-hdd-space'])):0;
+  const hl=c.health||[], temps=hl.filter(x=>/temperature/.test(x.n)), tmax=temps.length?Math.max(...temps.map(x=>+x.v||0)):null;
+  const hw=hl.filter(x=>/^(psu|fan)\d*-state$/.test(x.n)), hwBad=hw.filter(x=>!/^ok$/i.test(x.v));
+  const bgp=c.bgp||[], bgpUp=bgp.filter(b=>b.up).length;
+  const upd=up['latest-version']&&up['installed-version']&&up['latest-version']!==up['installed-version'];
+  const fwUpd=rb['upgrade-firmware']&&rb['current-firmware']&&rb['upgrade-firmware']!==rb['current-firmware'];
+  $('#mt-stats').innerHTML=st('CPU',cpu+' %'+(res['cpu-count']?` <small class="muted">(${res['cpu-count']} Kerne)</small>`:''),cpu>=90?'--bad':cpu>=70?'--warn':'')+st('Max. CPU 24 h',Math.round(r.cpuMax24)+' %',r.cpuMax24>=90?'--warn':'')
+    +st('RAM',Math.round(memU)+' %',memU>90?'--warn':'')+(hdd?st('Speicher',Math.round(hdd)+' %',hdd>90?'--warn':''):'')
+    +(tmax!==null?st('Temperatur',tmax+' °C',tmax>=75?'--bad':tmax>=65?'--warn':''):'')
+    +(hw.length?st('Netzteile / Lüfter',hwBad.length?hwBad.map(x=>esc(x.n.replace('-state',''))).join(', ')+' gestört':'alle ok',hwBad.length?'--bad':'--ok'):'')
+    +st('Laufzeit',fmtUp(mtDurJS(res.uptime)),r.boots24?'--warn':'')
+    +(bgp.length?st('BGP',bgpUp+' / '+bgp.length+' aufgebaut',bgpUp<bgp.length?'--bad':'--ok'):'')
+    +(c.ppp>=0?st('PPP-Sitzungen',c.ppp.toLocaleString('de-DE')):'')+(c.dhcp>=0?st('DHCP-Leases',c.dhcp.toLocaleString('de-DE')):'')
+    +(c.conns>=0?st('Verbindungen',c.conns.toLocaleString('de-DE')):'')
+    +st('RouterOS',esc((res.version||'').replace(' (stable)',''))+(upd?` <small style="color:var(--warn)">→ ${esc(up['latest-version'])}</small>`:''),upd?'--warn':'')
+    +(rb['current-firmware']?st('Firmware',esc(rb['current-firmware'])+(fwUpd?` <small style="color:var(--warn)">→ ${esc(rb['upgrade-firmware'])}</small>`:''),fwUpd?'--warn':''):'');
+  const sers=[['cpu','CPU %'],['mem','RAM %']].concat(tmax!==null?[['temp','Temperatur']]:[]).concat(c.ppp>=0?[['ppp','PPP']]:[]).concat(c.dhcp>=0?[['dhcp','DHCP']]:[]).concat(c.conns>=0?[['conns','Verbindungen']]:[]);
+  if(!sers.some(x=>x[0]===MK.ser)) MK.ser='cpu';
+  $('#mt-ser').innerHTML=sers.map(x=>`<button data-s="${x[0]}" class="${x[0]===MK.ser?'on':''}">${x[1]}</button>`).join('');
+  $$('#mt-ser button').forEach(b=>b.onclick=()=>{ MK.ser=b.dataset.s; $$('#mt-ser button').forEach(x=>x.classList.toggle('on',x===b)); drawMtChart(); });
+  drawMtChart(); renderMtTabs(); }
+function mtDurJS(s){ if(!s) return 0; let t=0; const hm=s.match(/(\d+):(\d+):(\d+)$/); if(hm){ t+=hm[1]*3600+hm[2]*60+ +hm[3]; s=s.slice(0,hm.index); } for(const m of s.matchAll(/(\d+)([wdhms])/g)) t+=m[1]*{w:604800,d:86400,h:3600,m:60,s:1}[m[2]]; return t; }
+$$('#mt-range button').forEach(b=>b.onclick=()=>{ MK.hours=+b.dataset.h; $$('#mt-range button').forEach(x=>x.classList.toggle('on',x===b)); loadMt(true); });
+function drawMtChart(){ const c=$('#mt-chart'), dpr=devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight; if(!W||!MK.r) return; c.width=W*dpr; c.height=H*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.body), acc=cs.getPropertyValue('--acc').trim(), mut=cs.getPropertyValue('--mut').trim(), line=cs.getPropertyValue('--line').trim();
+  const k=MK.ser, pts=(MK.r.hist||[]).filter(p=>p[k]!==undefined&&p[k]>=0); if(pts.length<2){ g.fillStyle=mut; g.font='13px system-ui'; g.fillText('Noch kein Verlauf – Werte kommen jede Minute.',10,24); return; }
+  const L=56,R=8,T=8,B=18, t0=pts[0].t, t1=pts[pts.length-1].t, pct=k==='cpu'||k==='mem'; const vmax=pct?100:Math.max(1,...pts.map(p=>p[k]))*1.1, vmin=pct?0:Math.max(0,Math.min(...pts.map(p=>p[k]))*.9);
+  const X=t=>L+(W-L-R)*(t-t0)/(t1-t0||1), Y=v=>T+(H-T-B)*(1-(v-vmin)/(vmax-vmin||1));
+  g.strokeStyle=line; g.fillStyle=mut; g.font='11px system-ui'; for(let i=0;i<=3;i++){ const v=vmin+(vmax-vmin)*i/3, y=Y(v); g.beginPath(); g.moveTo(L,y); g.lineTo(W-R,y); g.stroke(); g.fillText(Math.round(v).toLocaleString('de-DE')+(pct?' %':k==='temp'?' °C':''),4,y+4); }
+  g.fillText(fmtDT(t0,false),L,H-3); const te=fmtDT(t1,false); g.fillText(te,W-R-g.measureText(te).width,H-3);
+  g.strokeStyle=acc; g.lineWidth=1.6; g.beginPath(); pts.forEach((p,i)=>{ const x=X(p.t), y=Y(p[k]); i?g.lineTo(x,y):g.moveTo(x,y); }); g.stroke(); }
+function renderMtTabs(){ const r=MK.r, c=r&&r.cur; if(!c) return; const dot=on=>`<span class="dot" style="display:inline-block;margin-right:6px;background:var(${on?'--ok':'--off'})"></span>`;
+  const ifx=c.ifx||[], sfp=ifx.filter(i=>i.sfp), wg=c.wg||[];
+  const tabs=[['ports',`Ports (${ifx.filter(i=>i.up).length}/${ifx.length})`,ifx.length],['sfp','SFP-Pegel',sfp.length],['bgp','BGP',(c.bgp||[]).length],['ospf','OSPF',(c.ospf||[]).length],['wg','WireGuard',wg.length],['hw','Sensoren',(c.health||[]).length],['log','Log',(r.logs||[]).length],['info','Gerät',1]].filter(t=>t[2]);
+  if(!tabs.some(t=>t[0]===MK.tab)) MK.tab=tabs[0][0];
+  $('#mt-tabs').innerHTML=tabs.map(t=>`<button data-t="${t[0]}" class="${t[0]===MK.tab?'on':''}">${t[1]}</button>`).join('');
+  $$('#mt-tabs button').forEach(b=>b.onclick=()=>{ MK.tab=b.dataset.t; renderMtTabs(); });
+  const ago=s=>s<0?'nie':s<120?s+' s':s<7200?Math.round(s/60)+' min':s<172800?Math.round(s/3600)+' h':Math.round(s/86400)+' Tage';
+  const pw=v=>v===undefined||v===null?'–':`<span style="color:var(${v<-20?'--bad':v<-15?'--warn':'--ok'})">${v.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} dBm</span>`;
+  let h='';
+  if(MK.tab==='ports') h='<table class="tbl"><tr><th>Port</th><th>Typ</th><th>Status</th><th>Speed</th><th class="hide-m">Link-Abbrüche</th></tr>'+ifx.map(i=>`<tr${i.dis?' style="opacity:.5"':''}><td>${dot(i.up)}<b>${esc(i.n)}</b>${i.c?`<br><span class="muted" style="font-size:12px">${esc(i.c)}</span>`:''}</td><td>${esc(i.type||'')}</td><td>${i.dis?'deaktiviert':i.up?'up':'down'}</td><td class="num">${esc(i.rate||'–')}</td><td class="hide-m num">${i.ld||0}</td></tr>`).join('')+'</table><div class="muted" style="padding:8px 12px;font-size:12px">Traffic je Port und Port-Alarm: Tabelle „Schnittstellen“ oben.</div>';
+  if(MK.tab==='sfp') h='<table class="tbl"><tr><th>Port</th><th>Empfang (RX)</th><th>Senden (TX)</th><th>Temperatur</th><th>Speed</th></tr>'+sfp.map(i=>`<tr><td>${dot(i.up)}<b>${esc(i.n)}</b>${i.c?` <span class="muted">${esc(i.c)}</span>`:''}</td><td class="num">${pw(i.rx)}</td><td class="num">${pw(i.tx)}</td><td class="num">${i.st?i.st+' °C':'–'}</td><td class="num">${esc(i.rate||'–')}</td></tr>`).join('')+'</table><div class="muted" style="padding:8px 12px;font-size:12px">Richtwert Empfang: besser als −15 dBm gut, unter −20 dBm kritisch (je nach Modul).</div>';
+  if(MK.tab==='bgp') h='<table class="tbl"><tr><th>Sitzung</th><th>Gegenstelle</th><th>AS</th><th>Status</th><th>Seit</th><th>Präfixe</th></tr>'+(c.bgp||[]).map(b=>`<tr><td>${dot(b.up)}<b>${esc(b.n)}</b></td><td class="num">${esc(b.r||'')}</td><td class="num">${esc(b.as||'')}</td><td>${b.up?'aufgebaut':'<b style="color:var(--bad)">getrennt</b>'}</td><td class="num">${b.up&&b.ut>0?fmtUp(b.ut):'–'}</td><td class="num">${b.p?b.p.toLocaleString('de-DE'):'–'}</td></tr>`).join('')+'</table>';
+  if(MK.tab==='ospf') h='<table class="tbl"><tr><th>Nachbar</th><th>Status</th><th>Instanz</th></tr>'+(c.ospf||[]).map(o=>`<tr><td>${dot(/full/i.test(o.v))}<b>${esc(o.n)}</b></td><td>${esc(o.v)}</td><td>${esc(o.t||'')}</td></tr>`).join('')+'</table>';
+  if(MK.tab==='wg') h='<table class="tbl"><tr><th>Gegenstelle</th><th>Schnittstelle</th><th>Endpunkt</th><th>Letzter Handshake</th></tr>'+wg.map(p=>`<tr><td>${dot(p.hs>=0&&p.hs<300)}<b>${esc(p.n)}</b></td><td>${esc(p.i||'')}</td><td class="num">${esc(p.e||'–')}</td><td class="num">${p.hs<0?'nie':'vor '+ago(p.hs)}</td></tr>`).join('')+'</table>';
+  if(MK.tab==='hw') h='<table class="tbl"><tr><th>Sensor</th><th>Wert</th></tr>'+(c.health||[]).map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${/-state$/.test(x.n)?dot(/^ok$/i.test(x.v))+esc(x.v):esc(x.v)+(x.t==='C'?' °C':x.t==='V'?' V':x.t==='RPM'?' U/min':x.t==='W'?' W':x.t==='A'?' A':'')}</td></tr>`).join('')+'</table>';
+  if(MK.tab==='log') h=`<div class="muted" style="padding:8px 12px 0;font-size:12px">Auffällige Einträge (Fehler, kritisch, Änderungen, Login-Fehler) · neueste zuerst · alle 5 Minuten</div><div style="padding:8px 12px;font-size:12.5px;line-height:1.6;max-height:360px;overflow:auto">${(r.logs||[]).map(l=>`<span class="muted num">${esc(l.t)}</span> <span class="muted">${esc(l.topic)}</span> ${esc(l.msg)}`).join('<br>')}</div>`;
+  if(MK.tab==='info'){ const res=c.res||{}, rb=c.rb||{}, up=c.upd||{}, row=(k,v)=>v?`<tr><td class="muted">${k}</td><td>${esc(v)}</td></tr>`:'';
+    h='<table class="tbl">'+row('Name',res.identity)+row('Modell',rb.model||res['board-name'])+row('Seriennummer',rb['serial-number'])+row('Architektur',res['architecture-name'])+row('CPU',res.cpu)+row('RouterOS',res.version)+row('Update-Kanal',up.channel)+row('Neueste Version',up['latest-version'])+row('Firmware',rb['current-firmware'])+row('Firmware verfügbar',rb['upgrade-firmware'])
+      +((c.miss||[]).length?`<tr><td class="muted">Nicht abfragbar</td><td><span class="muted" style="font-size:12px">${c.miss.map(esc).join('<br>')}</span></td></tr>`:'')+'</table>'; }
+  $('#mt-body').innerHTML=h; }
+
 /* SNMP-Schnittstellen */
 const SN={host:null,ifIdx:0,hours:24,at:0};
 const fmtBit=v=>v>=1e9?(v/1e9).toLocaleString('de-DE',{maximumFractionDigits:2})+' Gbit/s':v>=1e6?(v/1e6).toLocaleString('de-DE',{maximumFractionDigits:1})+' Mbit/s':v>=1e3?Math.round(v/1e3)+' kbit/s':Math.round(v)+' bit/s';
 async function loadSNMP(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.hostId); const box=$('#d-snmp');
-  if(!h||h.method!=='snmp'){ box.style.display='none'; return; } box.style.display='';
+  if(!h||(h.method!=='snmp'&&!h.mt)){ box.style.display='none'; return; } box.style.display='';
   if(SN.host!==h.id){ SN.host=h.id; SN.ifIdx=0; $('#sn-chartbox').style.display='none'; } else if(!force&&Date.now()-SN.at<30000) return;
   SN.at=Date.now(); let r; try{ r=await api(`/api/snmp?host=${h.id}${SN.ifIdx?'&if='+SN.ifIdx+'&hours='+SN.hours:''}`); }catch(e){ return; }
   $('#sn-sub').textContent=r.err?'Fehler: '+r.err:r.at?'Stand '+fmtTime(r.at,false)+' · '+r.ifs.length+' Schnittstellen':'warte auf erste Abfrage (bis 1 Minute) …';
@@ -3813,6 +3897,7 @@ function openHost(id){
   hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
   hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzFullNums.checked=!!(h&&h.fritzFullNums); hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
   hf.fritzPass.placeholder=h&&h.fritzPassSet?'gespeichert – leer lassen = unverändert':'';
+  hf.mt.checked=!!(h&&h.mt); hf.mtUser.value=h&&h.mtUser||''; hf.mtPass.value=''; hf.mtPort.value=String(h&&h.mtPort===80?80:443); hf.mtPass.placeholder=h&&h.mtPassSet?'gespeichert – leer lassen = unverändert':'';
   syncHostForm(); dlg.showModal();
 }
 function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'||mt==='snmp'?'':'none'; $('#hf-commf').style.display=mt==='snmp'?'':'none';
@@ -3823,11 +3908,14 @@ function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=
   $('#hf-expl').textContent=mt==='dns'?'Erwartete IP-Adresse (optional)':'Erwartet (optional)';
   $('#hf-exph').textContent=mt==='http'?'Statuscode (z. B. 200) oder Text, der auf der Seite stehen muss. Zertifikat wird geprüft, Warnung 14 Tage vor Ablauf.':''; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
   $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)';
-  const agentSite=hf.site.value&&hf.site.value!=='cloud'; $('#hf-fritzf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-fritzb').style.display=hf.fritz.checked?'':'none'; }
-hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm; hf.fritz.onchange=syncHostForm;
+  const agentSite=hf.site.value&&hf.site.value!=='cloud'; $('#hf-fritzf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-fritzb').style.display=hf.fritz.checked?'':'none';
+  $('#hf-mtf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-mtb').style.display=hf.mt.checked?'':'none'; }
+hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm; hf.fritz.onchange=syncHostForm; hf.mt.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,group:hf.group.value==='__new'?'':hf.group.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
   const fz=$('#hf-fritzf').style.display!=='none'&&hf.fritz.checked; Object.assign(body,{fritz:fz,fritzUser:fz?hf.fritzUser.value.trim():'',fritzPass:fz?hf.fritzPass.value:'',fritzPort:+hf.fritzPort.value||49000,fritzNewDev:fz&&hf.fritzNewDev.checked,fritzFullNums:fz&&hf.fritzFullNums.checked});
+  const mk=$('#hf-mtf').style.display!=='none'&&hf.mt.checked; Object.assign(body,{mt:mk,mtUser:mk?hf.mtUser.value.trim():'',mtPass:mk?hf.mtPass.value:'',mtPort:+hf.mtPort.value||443});
+  if(mk&&!hf.mtPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).mtPassSet){ $('#hf-err').textContent='Bitte das Passwort des MikroTik-Benutzers eingeben.'; return; }
   if(fz&&!hf.fritzPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).fritzPassSet){ $('#hf-err').textContent='Bitte das Passwort des Fritzbox-Benutzers eingeben.'; return; }
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });
 $('#hf-del').onclick=async()=>{ const id=hf.dataset.id; if(!id||!await uiConfirm('Host wirklich löschen? Gespeicherte Messwerte bleiben auf dem Server, sind aber nicht mehr sichtbar.')) return; await api('/api/hosts?id='+id,{method:'DELETE'}); dlg.close(); if(S.view==='host') location.hash='#/'; refreshState(); };

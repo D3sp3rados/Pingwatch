@@ -402,6 +402,9 @@ func (a *Agent) worker(ah *agentHost) {
 	if ah.cfg.Fritz {
 		go a.fritzLoop(ah)
 	}
+	if ah.cfg.Mt {
+		go a.mtLoop(ah)
+	}
 	res := &resolver{addr: ah.cfg.Addr}
 	tk := time.NewTicker(time.Duration(ah.cfg.IntervalMs) * time.Millisecond)
 	defer tk.Stop()

@@ -654,7 +654,7 @@ func (s *Server) handleFritz(w http.ResponseWriter, r *http.Request) {
 
 // publicHost entfernt geheime Felder, bevor eine Host-Konfiguration an den Browser geht.
 func publicHost(hc HostCfg) HostCfg {
-	hc.FritzPass = ""
+	hc.FritzPass, hc.MtPass = "", ""
 	return hc
 }
 

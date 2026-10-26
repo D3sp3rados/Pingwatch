@@ -46,6 +46,11 @@ type HostCfg struct {
 	FritzNewDev bool `json:"fritzNewDev,omitempty"`
 	// FritzFullNums: Rufnummern vollständig anzeigen (sonst nur die letzten 4 Ziffern)
 	FritzFullNums bool `json:"fritzFullNums,omitempty"`
+	// MikroTik über die REST-API (RouterOS v7) durch den Agenten auslesen
+	Mt     bool   `json:"mt,omitempty"`
+	MtUser string `json:"mtUser,omitempty"`
+	MtPass string `json:"mtPass,omitempty"` // nur an den Agenten, nie an den Browser
+	MtPort int    `json:"mtPort,omitempty"` // 443 (https, Standard) oder 80 (http)
 }
 
 type SiteCfg struct {
@@ -179,8 +184,16 @@ func (h *HostCfg) normalize() {
 	if h.Method != "http" && h.Method != "dns" {
 		h.Expect, h.DNSServer = "", ""
 	}
+	if !h.Mt || h.Site == "cloud" || h.Site == "" {
+		h.Mt, h.MtUser, h.MtPass, h.MtPort = false, "", "", 0
+	} else if h.MtPort != 80 {
+		h.MtPort = 443
+	}
 	if h.Method != "snmp" {
-		h.Community, h.Watch = "", ""
+		h.Community = ""
+		if !h.Mt {
+			h.Watch = ""
+		}
 	}
 	if h.Site == "" {
 		h.Site = "cloud"
