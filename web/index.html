@@ -1878,7 +1878,9 @@ function renderOverview(){
   root.dataset.thtml=''; const avm=ovModesAvail(st0); $('#ovmode').style.display=Object.values(avm).filter(Boolean).length>1?'':'none'; $$('#ovmode button').forEach(b=>{ b.classList.toggle('on',b.dataset.m===mode); b.style.display=avm[b.dataset.m]?'':'none'; });
   const secs=[], ms=st.machines||[];
   const sq=(OVF.sq||'').trim();
-  if(sq||OVF.os){ const hs=ovSortHosts(st.hosts); secs.push({key:'flat',kind:'group',group:{name:(sq?`🔍 ${hs.length} Treffer für „${sq}“`:'Alle Hosts')+(OVF.os?' · sortiert: '+OSORT[OVF.os]:'')},hosts:hs,machines:OVF.os?[]:ms}); }
+  if(sq||OVF.os){ const hs=ovSortHosts(st.hosts); secs.push({key:'flat',kind:'group',group:{name:(sq?`🔍 ${hs.length} Treffer für „${sq}“`:'Alle Hosts')+(OVF.os?' · sortiert: '+OSORT[OVF.os]:'')},hosts:hs,machines:OVF.os?[]:ms});
+    // auch sortiert: UniFi-Geräte des gewählten Standorts darunter zeigen
+    const fs=OVF.s&&st.sites.find(x=>x.id===OVF.s); if(fs&&fs.unifi&&fs.unifi.on&&!sq) secs[secs.length-1].site=fs; }
   else if(mode==='agent'){ for(const s of st.sites.filter(s=>s.id!=='cloud'&&s.kind!=='unifi')){ const hs=st.hosts.filter(h=>h.site===s.id), mm=ms.filter(m=>m.site===s.id); secs.push({key:'a'+s.id,kind:'site',site:s,hosts:hs,machines:mm}); } }
   else if(mode==='unifi'){ for(const s of st.sites.filter(s=>s.unifi&&s.unifi.on)) secs.push({key:'uu'+s.id,kind:'site',site:s,hosts:st.hosts.filter(h=>h.site===s.id&&h.method==='unifiwan'),machines:[]}); }
   else if(mode==='mt'){ secs.push({key:'mt',kind:'group',group:{name:'MikroTik-Geräte'},hosts:st.hosts.filter(h=>h.mt),machines:[]}); }
@@ -2533,7 +2535,7 @@ const UF={open:{}}; try{ UF.open=JSON.parse(localStorage.getItem('pw_ufopen')||'
 const UCAT={gateway:'Gateway',switch:'Switches',ap:'Access Points',other:'Sonstige'};
 const fmtUp=s=>{ if(!s) return '–'; const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60); return d?`${d} T ${h} h`:h?`${h} h ${m} min`:`${m} min`; };
 function renderUniFi(el,s){ const u=s.unifi||{}; const devs=u.devices||[];
-  const bad=(u.offline||0)+(u.wanDown||0); const forced=bad>0; const open=UF.open[s.id]??forced;
+  const bad=(u.offline||0)+(u.wanDown||0); const forced=bad>0; const open=UF.open[s.id]??(forced||OVF.s===s.id||ovMode()==='unifi'); // Ubiquiti-Reiter bzw. gewählter Standort: Geräte gleich offen
   el.classList.toggle('open',!!open);
   const gw=devs.find(d=>d.cat==='gateway'&&d.wan&&d.wan.length);
   const wans=gw?gw.wan.map(w=>`<span class="wanp" title="${esc(w.ip||'')}${w.lat24?' · Ø 24 h '+w.lat24.toFixed(1)+' ms':''}"><span class="dot" style="background:var(${w.up?'--ok':'--bad'})"></span>${esc(w.name)}${w.up?(w.latency?' '+Math.round(w.latency)+' ms':''):' getrennt'}${w.active?' ★':''}</span>`).join(' '):'';
