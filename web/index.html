@@ -1531,7 +1531,7 @@ function uiDialog({title='',text='',html='',input=null,ok='OK',cancel=null,dange
   okb.onclick=e=>{ e.preventDefault(); done(input===null?true:inp.value); };
   cb.onclick=e=>{ e.preventDefault(); done(input===null?false:null); };
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); okb.click(); } };
-  d.onclose=()=>res(input===null?false:null);
+  d.onclose=()=>{ if(d.open) return; res(input===null?false:null); }; // verspätetes close-Event des vorigen Dialogs ignorieren
   d.showModal(); setTimeout(()=>{ (input===null?okb:inp).focus(); if(input!==null) inp.select(); },30); }); }
 function uiAlert(text){ return uiDialog({text:String(text),ok:'OK'}); }
 function uiConfirm(text){ const dz=/(löschen|entfernen|entziehen|zurücksetzen|nicht mehr|sperren)/i.test(text); return uiDialog({title:'Bitte bestätigen',text,ok:dz?'Ja, fortfahren':'OK',cancel:'Abbrechen',danger:dz}); }
