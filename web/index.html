@@ -458,6 +458,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <h1 id="d-name" title="Klicken zum Umbenennen" spellcheck="false"></h1>
     <span class="muted" id="d-sub"></span>
     <select class="ed" id="d-group" title="Gruppe" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></select>
+    <button class="btn sm ed" id="d-edit" title="Einstellungen dieses Hosts">⚙ Einstellungen</button>
+    <a class="btn sm" id="d-open" target="_blank" rel="noopener" style="display:none" title="Weboberfläche des Geräts öffnen">🌐 Öffnen</a>
     <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
     <span class="pill num" id="d-now"></span>
   </div>
@@ -2196,6 +2198,8 @@ function renderDetailHead(){
   const [lbl,col]=STATUS[h.status]||STATUS.unknown;
   $('#d-dot').style.background=`var(${col})`; { const dn=$('#d-name'); if(document.activeElement!==dn){ dn.textContent=h.name; dn.dataset.id=h.id; } }
   $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
+  $('#d-edit').onclick=()=>openHost(h.id);
+  { const o=$('#d-open'), url=h.nx?'https://'+h.addr+(h.nxPort&&h.nxPort!==443?':'+h.nxPort:''):h.mt?'https://'+h.addr+(h.mtPort&&h.mtPort!==443&&h.mtPort!==80?':'+h.mtPort:''):(h.method==='http'&&/^https?:/.test(h.addr)?h.addr:''); o.style.display=url?'':'none'; if(url) o.href=url; }
   const site=S.state.sites.find(s=>s.id===h.site);
   $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
   { const gs=S.state.groups||[], sel=$('#d-group'); const sig=gs.map(g=>g.id+g.name).join()+'|'+(h.group||'');
