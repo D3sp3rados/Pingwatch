@@ -430,6 +430,7 @@ type radiusView struct {
 	Users   []RadiusUser `json:"users"`
 	Log     []Event      `json:"log"`
 	Running bool         `json:"running"`
+	Owner   bool         `json:"owner"` // Secret, Ein/Aus und Dienst-Benutzer nur für Inhaber
 }
 
 // GET/POST /api/radius
@@ -460,6 +461,10 @@ func (s *Server) handleRadius(w http.ResponseWriter, r *http.Request) {
 		fail := func(msg string, code int) { m.mu.Unlock(); http.Error(w, msg, code) }
 		switch req.Action {
 		case "save":
+			if !p.isOwner() {
+				fail("Nur der Inhaber kann RADIUS ein-/ausschalten und das Secret ändern", 403)
+				return
+			}
 			if req.On {
 				sc, ok := m.siteByIDLocked(req.Site)
 				if !ok || sc.Org != p.Org || sc.Kind == siteKindUniFi || sc.ID == "cloud" {
@@ -510,6 +515,10 @@ func (s *Server) handleRadius(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			u := &rc.Users[idx]
+			if u.Service && !p.isOwner() {
+				fail("Den Dienst-Benutzer kann nur der Inhaber ändern", 403)
+				return
+			}
 			switch req.Action {
 			case "setpw":
 				if len(req.Password) < 8 {
@@ -548,7 +557,8 @@ func (s *Server) handleRadius(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	m.mu.RUnlock()
-	if !p.canEdit() {
+	v.Owner = p.isOwner()
+	if !v.Owner {
 		v.Secret = ""
 	}
 	sort.SliceStable(v.Users, func(i, j int) bool { return v.Users[i].Service && !v.Users[j].Service })
