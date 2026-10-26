@@ -987,6 +987,10 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Keine Berechtigung für diesen Host", 403)
 			return
 		}
+		if hc.ID == "" && isUniFiWanHost(hc) {
+			http.Error(w, "Internet-Leitungen aus UniFi werden automatisch angelegt", 400)
+			return
+		}
 		if hc.ID != "" {
 			if s.hostFor(r, hc.ID) == nil {
 				http.Error(w, "unbekannter Host", 404)
@@ -1002,7 +1006,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "unbekannter Standort", 400)
 				return
 			}
-			if st.Kind == siteKindUniFi {
+			if st.Kind == siteKindUniFi && !isUniFiWanHost(hc) {
 				http.Error(w, "Dieser Standort hat keinen Agenten (nur UniFi über die Cloud) – Hosts bitte über „Cloud“ oder einen Standort mit Agent prüfen", 400)
 				return
 			}
@@ -1020,6 +1024,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 			if hc.FritzPass == "" {
 				hc.FritzPass = old.cfg.FritzPass // leer = unverändert
+			}
+			if isUniFiWanHost(old.cfg) { // Internet-Leitung aus UniFi: Quelle bleibt fest
+				hc.Method, hc.Addr, hc.Site = old.cfg.Method, old.cfg.Addr, old.cfg.Site
 			}
 			old.mu.Unlock()
 		}
@@ -1316,7 +1323,7 @@ func (s *Server) handleAgentConfig(w http.ResponseWriter, r *http.Request) {
 	s.m.mu.RLock()
 	hosts := []HostCfg{}
 	for _, hc := range s.m.cfg.Hosts {
-		if hc.Site == site.ID && !hc.Paused {
+		if hc.Site == site.ID && !hc.Paused && !isUniFiWanHost(hc) {
 			hosts = append(hosts, hc)
 		}
 	}

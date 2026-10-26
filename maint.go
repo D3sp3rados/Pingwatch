@@ -175,6 +175,11 @@ func (m *Monitor) eventStarted(e *Event, h *Host) {
 	if hasParent {
 		cause = m.parentDown(h)
 	}
+	h.mu.Lock()
+	if isUniFiWanHost(h.cfg) {
+		cause = "Leitungsausfall wird über UniFi gemeldet"
+	}
+	h.mu.Unlock()
 	m.evMu.Lock()
 	e.Cause = cause
 	e.Notified = !maint && cause == "" && !e.Late

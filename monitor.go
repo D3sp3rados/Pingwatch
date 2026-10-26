@@ -162,6 +162,8 @@ func (h *HostCfg) normalize() {
 		if h.TimeoutMs < 1000 {
 			h.TimeoutMs = 2000
 		}
+	case methodUniFiWAN:
+		h.Port, h.IntervalMs, h.TimeoutMs = 0, 60000, 1000
 	case "dns":
 		h.Port = 0
 		if h.IntervalMs < 10000 {
@@ -647,7 +649,7 @@ func (m *Monitor) housekeeping() {
 			st := m.sites[s.ID]
 			hasHosts := false
 			for _, hc := range m.cfg.Hosts {
-				if hc.Site == s.ID && !hc.Paused {
+				if hc.Site == s.ID && !hc.Paused && !isUniFiWanHost(hc) {
 					hasHosts = true
 				}
 			}

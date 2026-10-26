@@ -38,6 +38,10 @@ func (s *Server) handleHostProbe(w http.ResponseWriter, r *http.Request) {
 		s.m.mu.RLock()
 		c := h.cfg
 		s.m.mu.RUnlock()
+		if isUniFiWanHost(c) {
+			out = append(out, res{ID: id, Skip: "Messwert kommt aus UniFi (jede Minute)"})
+			continue
+		}
 		if c.Site != "" && c.Site != "cloud" {
 			out = append(out, res{ID: id, Skip: "Agent-Standort – nur Cloud-Hosts testbar"})
 			continue

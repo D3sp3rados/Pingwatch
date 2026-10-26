@@ -478,7 +478,7 @@ func (m *Monitor) usage(org string) (sites, hosts int) {
 		}
 	}
 	for _, h := range m.cfg.Hosts {
-		if h.Org == org {
+		if h.Org == org && !isUniFiWanHost(h) { // Internet-Leitungen aus UniFi zählen nicht
 			hosts++
 		}
 	}

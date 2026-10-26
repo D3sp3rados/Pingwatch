@@ -37,6 +37,8 @@ type UniFiCfg struct {
 	// Ausnahmen je Gerät (Schlüssel wie bei Ignore): melden trotz Standard / nicht melden
 	AlertOn  []string `json:"alertOn,omitempty"`
 	AlertOff []string `json:"alertOff,omitempty"`
+	// Internet-Leitungen, für die schon einmal ein Host („unifiwan“) angelegt wurde
+	WanHosts []string `json:"wanHosts,omitempty"`
 }
 
 // alerts: Soll für dieses Gerät bei „offline“ gemeldet werden? cat: gateway, switch, ap, other bzw. Protect-Art.
@@ -340,6 +342,7 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 	}
 	unifiLiveState.Unlock()
 	m.unifiNotify(site, starts, ends, "")
+	m.unifiWanSamples(site, devs, nowMs)
 	for _, n := range notes {
 		m.notify(n)
 	}
