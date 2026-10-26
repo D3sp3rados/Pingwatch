@@ -48,7 +48,7 @@ type RadiusCfg struct {
 	ServicePass string       `json:"servicePass,omitempty"` // Klartext nur für den Dienst-Benutzer
 }
 
-const radiusServiceUser = "pingwacht"
+const radiusServiceUser = "PingWacht"
 
 func radiusHash(pw, salt string) string {
 	k, _ := pbkdf2.Key(sha256.New, pw, []byte(salt), 20000, 32)
@@ -512,16 +512,15 @@ func (s *Server) handleRadius(w http.ResponseWriter, r *http.Request) {
 			u := &rc.Users[idx]
 			switch req.Action {
 			case "setpw":
-				if u.Service {
-					fail("Das Passwort des Dienst-Benutzers verwaltet PingWacht selbst", 400)
-					return
-				}
 				if len(req.Password) < 8 {
 					fail("Passwort mindestens 8 Zeichen", 400)
 					return
 				}
 				u.Salt = randHex(8)
 				u.Hash = radiusHash(req.Password, u.Salt)
+				if u.Service { // Dienst-Benutzer: Passwort braucht der Agent im Klartext für die Netonix-Abfrage
+					rc.ServicePass = req.Password
+				}
 			case "toggle":
 				u.Disabled = req.Disabled
 			case "del":
