@@ -313,6 +313,8 @@ func (a *Agent) runJob(j agentJob) {
 		}
 	case "ping": // Erreichbarkeit einer Liste von Adressen (Netzkarte), ohne Namensauflösung
 		res = pingList(strings.Split(j.Params["ips"], ","))
+	case "mtaction":
+		res, err = a.mtActionJob(j)
 	case "snmpif": // Schnittstellenzähler mehrerer Geräte (Netzkarte); Communities der Reihe nach probieren
 		res = snmpIfList(strings.Split(j.Params["ips"], ","), strings.Split(j.Params["communities"], ","))
 	case "unifi":

@@ -359,6 +359,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
 	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
 	mux.HandleFunc("/api/mikrotik", protect(s.handleMikrotik))
+	mux.HandleFunc("/api/mikrotik/action", protect(s.handleMikrotikAction))
 	mux.HandleFunc("/api/machine", protect(s.handleMachine))
 	mux.HandleFunc("/api/machine/inventory", protect(s.handleMachineInventory))
 	mux.HandleFunc("/api/export/inventory.csv", protect(s.exportInventory))
@@ -451,6 +452,7 @@ type HostView struct {
 	// Fritzbox: Passwort hinterlegt (das Passwort selbst geht nie an den Browser)
 	FritzPassSet bool `json:"fritzPassSet,omitempty"`
 	MtPassSet    bool `json:"mtPassSet,omitempty"`
+	MtActPassSet bool `json:"mtActPassSet,omitempty"`
 }
 
 type SiteView struct {
@@ -539,7 +541,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		siteOn, _ := m.siteOnline(h.cfg.Site)
 		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
-		v := HostView{HostCfg: publicHost(h.cfg), FritzPassSet: h.cfg.FritzPass != "", MtPassSet: h.cfg.MtPass != "", IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
+		v := HostView{HostCfg: publicHost(h.cfg), FritzPassSet: h.cfg.FritzPass != "", MtPassSet: h.cfg.MtPass != "", MtActPassSet: h.cfg.MtActPass != "", IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
 			Threshold: h.effThreshold(), Maint: inM, CertExp: certExpiry(h.cfg.ID), Avail7: 1 - float64(down7[h.cfg.ID])/float64(7*86400_000)}
 		if h.baseN >= 30 {
 			v.Baseline = h.baseMed
@@ -1030,6 +1032,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 			if hc.MtPass == "" {
 				hc.MtPass = old.cfg.MtPass
+			}
+			if hc.MtActPass == "" && hc.MtActUser != "" {
+				hc.MtActPass = old.cfg.MtActPass
 			}
 			if isUniFiWanHost(old.cfg) { // Internet-Leitung aus UniFi: Quelle bleibt fest
 				hc.Method, hc.Addr, hc.Site = old.cfg.Method, old.cfg.Addr, old.cfg.Site

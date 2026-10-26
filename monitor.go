@@ -53,6 +53,11 @@ type HostCfg struct {
 	MtPort int    `json:"mtPort,omitempty"` // 443 (https, Standard) oder 80 (http)
 	// Temperatur-Alarm (CPU) ab °C: 0 = Standard (75), -1 = aus
 	MtTempMax int `json:"mtTempMax,omitempty"`
+	// Aktionen (eigener Benutzer mit Schreibrechten): Neustart, PoE-Neustart / Port aus-an für freigegebene Ports
+	MtActUser   string `json:"mtActUser,omitempty"`
+	MtActPass   string `json:"mtActPass,omitempty"`   // nur an den Agenten
+	MtActPorts  string `json:"mtActPorts,omitempty"`  // Komma-Liste, „*“ = alle
+	MtActReboot bool   `json:"mtActReboot,omitempty"` // Neustart des Geräts erlaubt
 	// Alarm, wenn ein überwachter Port langsamer verbindet (z. B. 1 G → 100 M); Standard an
 	NoSpeedAlarm bool `json:"noSpeedAlarm,omitempty"`
 }
@@ -190,6 +195,7 @@ func (h *HostCfg) normalize() {
 	}
 	if !h.Mt || h.Site == "cloud" || h.Site == "" {
 		h.Mt, h.MtUser, h.MtPass, h.MtPort, h.MtTempMax = false, "", "", 0, 0
+		h.MtActUser, h.MtActPass, h.MtActPorts, h.MtActReboot = "", "", "", false
 	} else if h.MtPort <= 0 || h.MtPort > 65535 {
 		h.MtPort = 443
 	}
