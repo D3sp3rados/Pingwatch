@@ -488,7 +488,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b id="sn-ctitle"></b><div class="seg" id="sn-range"><button data-h="0.25">15 min</button><button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="168">7 Tage</button><button data-h="720">30 Tage</button></div>
         <span class="muted" style="font-size:12.5px"><i style="display:inline-block;width:10px;height:3px;background:var(--acc);vertical-align:middle"></i> Eingang · <i style="display:inline-block;width:10px;height:3px;background:#6366f1;vertical-align:middle"></i> Ausgang</span></div>
       <canvas id="sn-chart" style="width:100%;height:200px;display:block;margin-top:8px"></canvas></div>
-    <p class="muted" style="font-size:12.5px">Haken bei „Alarm“ = Meldung, wenn der Port auf „down“ geht (z. B. Uplink, Kamera, AP).</p>
+    <p class="muted" style="font-size:12.5px">Haken bei „Alarm“ = Meldung, wenn der Port auf „down“ geht (z. B. Uplink, Kamera, AP). <label class="ed" style="display:inline-flex;gap:6px;align-items:center;margin-left:8px;color:var(--fg)"><input type="checkbox" id="sn-speed"> und wenn er langsamer verbindet (z. B. 10 G → 1 G, 1 G → 100 M)</label></p>
   </div>
   <div id="d-mt" style="display:none">
     <h2>MikroTik <span class="sub muted" id="mt-sub" style="font-weight:400;font-size:12.5px"></span></h2>
@@ -1437,6 +1437,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
             <label class="field">Benutzer<input name="mtUser" autocomplete="off" placeholder="z. B. pingwacht"></label>
             <label class="field">Passwort<input name="mtPass" type="password" autocomplete="new-password"></label>
+            <label class="field" style="max-width:190px">CPU-Temperatur-Alarm ab<select name="mtTempMax"><option value="0">75 °C (Standard)</option><option value="55">55 °C</option><option value="60">60 °C</option><option value="65">65 °C</option><option value="70">70 °C</option><option value="80">80 °C</option><option value="85">85 °C</option><option value="90">90 °C</option><option value="-1">aus</option></select></label>
             <label class="field" style="max-width:170px">Zugang<select name="mtPort"><option value="443">https (www-ssl, 443)</option><option value="8443">https (www-ssl, 8443)</option><option value="80">http (www, 80)</option></select></label>
           </div>
           <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">Auf dem MikroTik (RouterOS 7): Gruppe nur mit <b>read, api, rest-api</b> und einen Benutzer dazu anlegen, Dienst <b>www-ssl</b> aktivieren und auf die Adresse des Agenten beschränken. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
@@ -2385,7 +2386,7 @@ function enableOvDrag(root,secs){ const me=(S.state&&S.state.me)||{}; if(me.role
   for(const [k,c] of Object.entries(cards)){ if(c.dataset.dragset) continue; c.dataset.dragset='1'; c.draggable=true;
     c.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/pw-item',k); e.dataTransfer.effectAllowed='move'; c.classList.add('dragging'); setTimeout(()=>document.body.classList.add('pw-dragging'),0); });
     c.addEventListener('dragend',()=>{ c.classList.remove('dragging'); document.body.classList.remove('pw-dragging'); }); } }
-function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev,fritzFullNums:!!h.fritzFullNums,mt:!!h.mt,mtUser:h.mtUser||'',mtPort:h.mtPort||0}; }
+function hostCfg(h){ return {id:h.id,name:h.name,addr:h.addr,site:h.site,method:h.method,port:h.port,intervalMs:h.intervalMs,timeoutMs:h.timeoutMs,thresholdMs:h.thresholdMs,outageCount:h.outageCount,paused:h.paused,parent:h.parent||'',expect:h.expect||'',dnsServer:h.dnsServer||'',community:h.community||'',watch:h.watch||'',group:h.group||'',pauseUntil:h.pauseUntil||0,fritz:!!h.fritz,fritzUser:h.fritzUser||'',fritzPort:h.fritzPort||0,fritzNewDev:!!h.fritzNewDev,fritzFullNums:!!h.fritzFullNums,mt:!!h.mt,mtUser:h.mtUser||'',mtPort:h.mtPort||0,mtTempMax:h.mtTempMax||0,noSpeedAlarm:!!h.noSpeedAlarm}; }
 /* UniFi-Cloud-Key des Kunden */
 const UC={keySet:false,loaded:false};
 async function ucLoad(){ try{ const r=await api('/api/unifi/cloud'); UC.keySet=!!r.keySet; }catch(e){} UC.loaded=true; ucRender(); }
@@ -2653,6 +2654,7 @@ async function loadSNMP(force){ const h=S.state&&S.state.hosts.find(x=>x.id===S.
     <td class="hide-m num">${fmtBit(Math.max(i.maxIn,i.maxOut))}</td><td class="hide-m num"${i.err24?' style="color:var(--bad);font-weight:600"':''}>${i.err24}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Daten.</td></tr>';
   $$('#sn-tbl [data-w]').forEach(cb=>{ cb.onclick=e=>e.stopPropagation(); cb.onchange=async()=>{ const w=$$('#sn-tbl [data-w]:checked').map(x=>+x.dataset.w); try{ await api('/api/snmp/watch',{method:'POST',body:JSON.stringify({host:h.id,watch:w})}); toast('Port-Alarm gespeichert'); }catch(e){ uiAlert(e.message); } }; });
   $$('#sn-tbl [data-if]').forEach(tr=>tr.onclick=()=>{ SN.ifIdx=+tr.dataset.if; loadSNMP(true); });
+  const spd=$('#sn-speed'); spd.checked=!h.noSpeedAlarm; spd.disabled=!canEd; spd.onchange=async()=>{ try{ await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),noSpeedAlarm:!spd.checked})}); h.noSpeedAlarm=!spd.checked; toast(spd.checked?'Geschwindigkeits-Alarm an':'Geschwindigkeits-Alarm aus'); }catch(e){ uiAlert(e.message); spd.checked=!spd.checked; } };
   if(SN.ifIdx&&r.series){ const i=ifs.find(x=>x.idx===SN.ifIdx); $('#sn-chartbox').style.display=''; $('#sn-ctitle').textContent=i?i.name+(i.alias?' · '+i.alias:''):''; drawIfChart(r.series); }
 }
 $$('#sn-range button').forEach(b=>b.onclick=()=>{ SN.hours=+b.dataset.h; $$('#sn-range button').forEach(x=>x.classList.toggle('on',x===b)); loadSNMP(true); });
@@ -3919,7 +3921,7 @@ function openHost(id){
   hf.parent.value=h&&h.parent||''; hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
   hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzFullNums.checked=!!(h&&h.fritzFullNums); hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
   hf.fritzPass.placeholder=h&&h.fritzPassSet?'gespeichert – leer lassen = unverändert':'';
-  hf.mt.checked=!!(h&&h.mt); hf.mtUser.value=h&&h.mtUser||''; hf.mtPass.value=''; hf.mtPort.value=String(h&&[80,8443].includes(h.mtPort)?h.mtPort:443); hf.mtPass.placeholder=h&&h.mtPassSet?'gespeichert – leer lassen = unverändert':'';
+  hf.mt.checked=!!(h&&h.mt); hf.mtUser.value=h&&h.mtUser||''; hf.mtPass.value=''; hf.mtPort.value=String(h&&[80,8443].includes(h.mtPort)?h.mtPort:443); hf.mtTempMax.value=String(h&&h.mtTempMax||0); if(!hf.mtTempMax.value) hf.mtTempMax.value='0'; hf.mtPass.placeholder=h&&h.mtPassSet?'gespeichert – leer lassen = unverändert':'';
   syncHostForm(); dlg.showModal();
 }
 function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=mt==='tcp'||mt==='snmp'?'':'none'; $('#hf-commf').style.display=mt==='snmp'?'':'none';
@@ -3936,7 +3938,8 @@ hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:hf.dataset.id||'',name:hf.name.value.trim(),addr:hf.addr.value.trim(),site:hf.site.value,method:hf.method.value,port:+hf.port.value||0,intervalMs:+hf.interval.value,timeoutMs:+hf.timeoutMs.value||1000,thresholdMs:+hf.thresholdMs.value||0,outageCount:+hf.outageCount.value||3,paused:hf.paused.checked,parent:hf.parent.value,group:hf.group.value==='__new'?'':hf.group.value,expect:hf.expect.value.trim(),dnsServer:hf.dnsServer.value.trim(),community:hf.community.value.trim()};
   const fz=$('#hf-fritzf').style.display!=='none'&&hf.fritz.checked; Object.assign(body,{fritz:fz,fritzUser:fz?hf.fritzUser.value.trim():'',fritzPass:fz?hf.fritzPass.value:'',fritzPort:+hf.fritzPort.value||49000,fritzNewDev:fz&&hf.fritzNewDev.checked,fritzFullNums:fz&&hf.fritzFullNums.checked});
-  const mk=$('#hf-mtf').style.display!=='none'&&hf.mt.checked; Object.assign(body,{mt:mk,mtUser:mk?hf.mtUser.value.trim():'',mtPass:mk?hf.mtPass.value:'',mtPort:+hf.mtPort.value||443});
+  body.noSpeedAlarm=!!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).noSpeedAlarm;
+  const mk=$('#hf-mtf').style.display!=='none'&&hf.mt.checked; Object.assign(body,{mt:mk,mtUser:mk?hf.mtUser.value.trim():'',mtPass:mk?hf.mtPass.value:'',mtPort:+hf.mtPort.value||443,mtTempMax:+hf.mtTempMax.value||0});
   if(mk&&!hf.mtPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).mtPassSet){ $('#hf-err').textContent='Bitte das Passwort des MikroTik-Benutzers eingeben.'; return; }
   if(fz&&!hf.fritzPass.value&&!(S.state.hosts.find(x=>x.id===hf.dataset.id)||{}).fritzPassSet){ $('#hf-err').textContent='Bitte das Passwort des Fritzbox-Benutzers eingeben.'; return; }
   try{ await api('/api/hosts',{method:'POST',body:JSON.stringify(body)}); dlg.close(); toast('Gespeichert'); $('#ov').dataset.sig=''; refreshState(); refreshOverview(); }catch(err){ $('#hf-err').textContent=err.message; } });

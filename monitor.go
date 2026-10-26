@@ -51,6 +51,10 @@ type HostCfg struct {
 	MtUser string `json:"mtUser,omitempty"`
 	MtPass string `json:"mtPass,omitempty"` // nur an den Agenten, nie an den Browser
 	MtPort int    `json:"mtPort,omitempty"` // 443 (https, Standard) oder 80 (http)
+	// Temperatur-Alarm (CPU) ab °C: 0 = Standard (75), -1 = aus
+	MtTempMax int `json:"mtTempMax,omitempty"`
+	// Alarm, wenn ein überwachter Port langsamer verbindet (z. B. 1 G → 100 M); Standard an
+	NoSpeedAlarm bool `json:"noSpeedAlarm,omitempty"`
 }
 
 type SiteCfg struct {
@@ -185,7 +189,7 @@ func (h *HostCfg) normalize() {
 		h.Expect, h.DNSServer = "", ""
 	}
 	if !h.Mt || h.Site == "cloud" || h.Site == "" {
-		h.Mt, h.MtUser, h.MtPass, h.MtPort = false, "", "", 0
+		h.Mt, h.MtUser, h.MtPass, h.MtPort, h.MtTempMax = false, "", "", 0, 0
 	} else if h.MtPort <= 0 || h.MtPort > 65535 {
 		h.MtPort = 443
 	}

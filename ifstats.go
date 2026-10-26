@@ -40,6 +40,8 @@ type ifHost struct {
 	series map[int][]ifPoint
 	since  map[int]int64 // Status seit
 	open   map[int]*Event
+	slow   map[int]*Event // Port langsamer als üblich
+	norm   map[int]int64  // übliche Geschwindigkeit (Mbit/s, höchster Wert mit Link)
 	loaded bool
 	err    string
 	at     int64
@@ -57,7 +59,7 @@ func getIfHost(id string) *ifHost {
 	defer ifData.Unlock()
 	h := ifData.m[id]
 	if h == nil {
-		h = &ifHost{prev: map[int]ifSample{}, info: map[int]ifInfo{}, series: map[int][]ifPoint{}, since: map[int]int64{}, open: map[int]*Event{}}
+		h = &ifHost{prev: map[int]ifSample{}, info: map[int]ifInfo{}, series: map[int][]ifPoint{}, since: map[int]int64{}, open: map[int]*Event{}, slow: map[int]*Event{}, norm: map[int]int64{}}
 		ifData.m[id] = h
 	}
 	return h
@@ -106,7 +108,7 @@ func (m *Monitor) ingestIfs(h *Host, t int64, ifs []ifSample, errText string) {
 	watch := watchSet(cfg.Watch)
 	dt := float64(t-ih.prevT) / 1000
 	pts := map[int]ifPoint{}
-	var starts, ends []Event
+	var starts, ends, slowStarts, slowEnds []Event
 	inMaint := m.inMaint(cfg.Org, cfg.ID, time.UnixMilli(t))
 	for _, s := range ifs {
 		name := s.Name
@@ -148,6 +150,26 @@ func (m *Monitor) ingestIfs(h *Host, t int64, ifs []ifSample, errText string) {
 				delete(ih.open, s.Idx)
 			}
 		}
+		// Geschwindigkeit gesunken (z. B. 10 G → 1 G, 1 G → 100 M) – nur bei Link und bekannter Speed
+		if s.Up && s.Speed > 0 {
+			nrm := ih.norm[s.Idx]
+			if s.Speed > nrm {
+				ih.norm[s.Idx], nrm = s.Speed, s.Speed
+			}
+			label := cfg.Name + " · " + name
+			if s.Alias != "" {
+				label += " (" + s.Alias + ")"
+			}
+			switch {
+			case watch[s.Idx] && !cfg.NoSpeedAlarm && s.Speed < nrm && ih.slow[s.Idx] == nil:
+				e := m.newHostEvent(cfg, "port", label+" · "+fmtMbit(nrm)+" → "+fmtMbit(s.Speed), t, inMaint)
+				ih.slow[s.Idx] = e
+				slowStarts = append(slowStarts, *e)
+			case s.Speed >= nrm && ih.slow[s.Idx] != nil:
+				slowEnds = append(slowEnds, m.closeSiteEvent(ih.slow[s.Idx], t))
+				delete(ih.slow, s.Idx)
+			}
+		}
 	}
 	ih.prevT = t
 	cut := t - ifMemWindow.Milliseconds()
@@ -173,6 +195,16 @@ func (m *Monitor) ingestIfs(h *Host, t int64, ifs []ifSample, errText string) {
 	for _, e := range ends {
 		if e.Notified {
 			m.notify(notice{"portup", cfg.ID, "🟢 Port wieder up: " + e.HostName, "War " + fmtDurShort(e.End-e.Start) + " down", cfg.Org, ""})
+		}
+	}
+	for _, e := range slowStarts {
+		if !e.Maint {
+			m.notify(notice{"portdown", cfg.ID, "🟠 Port langsamer: " + e.HostName, "Verbindet seit " + time.UnixMilli(e.Start).Format("15:04") + " mit geringerer Geschwindigkeit (Kabel, Gegenstelle oder SFP prüfen)", cfg.Org, ""})
+		}
+	}
+	for _, e := range slowEnds {
+		if e.Notified {
+			m.notify(notice{"portup", cfg.ID, "🟢 Port wieder volle Geschwindigkeit: " + e.HostName, "War " + fmtDurShort(e.End-e.Start) + " langsamer", cfg.Org, ""})
 		}
 	}
 }
@@ -439,4 +471,14 @@ func fmtBits(v float64) string {
 		return fmt.Sprintf("%.1f Mbit/s", v/1e6)
 	}
 	return fmt.Sprintf("%.0f kbit/s", v/1e3)
+}
+
+func fmtMbit(v int64) string {
+	if v >= 1000 && v%1000 == 0 {
+		return strconv.FormatInt(v/1000, 10) + " G"
+	}
+	if v >= 1000 {
+		return strconv.FormatFloat(float64(v)/1000, 'f', 1, 64) + " G"
+	}
+	return strconv.FormatInt(v, 10) + " M"
 }

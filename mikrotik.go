@@ -508,7 +508,15 @@ const (
 	mtTempHigh = 75
 )
 
+// mtTemp: CPU-Temperatur (falls vorhanden), sonst der höchste Temperatursensor.
 func mtTemp(hs []mtKV) (float64, bool) {
+	for _, h := range hs {
+		if h.Name == "cpu-temperature" {
+			if f, err := strconv.ParseFloat(h.Value, 64); err == nil {
+				return f, true
+			}
+		}
+	}
 	best, ok := 0.0, false
 	for _, h := range hs {
 		if strings.Contains(h.Name, "temperature") {
@@ -634,14 +642,21 @@ func (m *Monitor) ingestMikrotik(hc HostCfg, snaps []mtSnap) {
 		}
 		// Temperatur
 		temp, hasT := mtTemp(s.Health)
-		if hasT && temp >= mtTempHigh {
-			mh.tempN++
-		} else if hasT && temp < mtTempHigh-5 {
-			mh.tempN = 0
-			closeEv("temp", "🟢 Temperatur wieder normal: "+name)
+		tmax := hc.MtTempMax
+		if tmax == 0 {
+			tmax = mtTempHigh
 		}
-		if mh.tempN >= 3 {
-			open("temp", "hw", name+" · Temperatur", "🔴 Temperatur zu hoch: "+name, fmt.Sprintf("%.0f °C (Grenze %d °C)", temp, mtTempHigh))
+		if tmax < 0 { // Alarm aus
+			mh.tempN = 0
+			closeEv("temp", "🟢 Temperatur-Alarm ausgeschaltet: "+name)
+		} else if hasT && temp >= float64(tmax) {
+			mh.tempN++
+		} else if hasT && temp < float64(tmax)-5 {
+			mh.tempN = 0
+			closeEv("temp", "🟢 CPU-Temperatur wieder normal: "+name)
+		}
+		if tmax > 0 && mh.tempN >= 3 {
+			open("temp", "hw", name+" · CPU-Temperatur", "🔴 CPU-Temperatur zu hoch: "+name, fmt.Sprintf("%.0f °C seit 3 Minuten (Grenze %d °C)", temp, tmax))
 		}
 		// BGP
 		for _, b := range s.BGP {
