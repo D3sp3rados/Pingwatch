@@ -69,9 +69,22 @@ func newNxClient(addr string, port int, user, pass string) *nxClient {
 	}
 	return &nxClient{base: "https://" + host, user: user, pass: pass, hc: &http.Client{
 		Timeout: 20 * time.Second, Jar: jar,
-		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Transport:     &http.Transport{TLSClientConfig: nxTLS()},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
+}
+
+// nxTLS: ältere Netonix-Firmware spricht nur TLS 1.0/1.1 bzw. alte Verfahren (RSA-Schlüsseltausch, 3DES) –
+// die Geräte stehen im eigenen Netz, also alle Verfahren zulassen.
+func nxTLS() *tls.Config {
+	var cs []uint16
+	for _, c := range tls.CipherSuites() {
+		cs = append(cs, c.ID)
+	}
+	for _, c := range tls.InsecureCipherSuites() {
+		cs = append(cs, c.ID)
+	}
+	return &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS10, CipherSuites: cs}
 }
 
 func (c *nxClient) login() error {
@@ -244,10 +257,14 @@ func (a *Agent) nxLoop(ah *agentHost) {
 		} else {
 			log.Printf("Netonix %s senden: %v", ah.cfg.Name, e)
 		}
+		wait := 60 * time.Second
+		if strings.Contains(s.Err, "abgelehnt") {
+			wait = 10 * time.Minute // falsche Zugangsdaten: Gerät nicht mit Fehlversuchen fluten
+		}
 		select {
 		case <-ah.stop:
 			return
-		case <-time.After(60 * time.Second):
+		case <-time.After(wait):
 		}
 	}
 }

@@ -1,3 +1,6 @@
+// Netonix u. a. liefern Zertifikate mit negativer Seriennummer (Go lehnt die sonst ab)
+//
+//go:debug x509negativeserial=1
 package main
 
 import (
@@ -6,7 +9,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "1.7.0"
+var version = "1.7.1"
 
 func main() {
 	mode := defaultMode
