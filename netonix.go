@@ -69,7 +69,7 @@ func newNxClient(addr string, port int, user, pass string) *nxClient {
 	}
 	return &nxClient{base: "https://" + host, user: user, pass: pass, hc: &http.Client{
 		Timeout: 20 * time.Second, Jar: jar,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
 }

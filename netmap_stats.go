@@ -47,7 +47,7 @@ var mapStats = struct {
 	cur      map[string]map[string][3]float64 // Karte → IP|Schnittstelle → [Zeit ms, In, Out] (Bit/s, letzte Messung)
 	norm     map[string]map[string]int64      // Karte → IP|Schnittstelle → übliche Geschwindigkeit (Mbit/s)
 	slow     map[string]map[string]*Event     // Karte → IP|Schnittstelle → offenes „langsamer“-Ereignis
-}{norm: map[string]map[string]int64{}, slow: map[string]map[string]*Event{},cur: map[string]map[string][3]float64{}, days: map[string]*mapDay{}, dirty: map[string]bool{}, down: map[string]map[string]int64{},
+}{norm: map[string]map[string]int64{}, slow: map[string]map[string]*Event{}, cur: map[string]map[string][3]float64{}, days: map[string]*mapDay{}, dirty: map[string]bool{}, down: map[string]map[string]int64{},
 	prev: map[string]map[string]ifPrev{}, snmp: map[string]time.Time{}, sjobs: map[string]string{},
 	snmpLast: map[string]int64{}, snmpOK: map[string]int{}}
 
