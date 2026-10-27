@@ -54,33 +54,51 @@ chpasswd:
   users:
   - {name: pingwacht, password: "` + o.Pass + `", type: text}
 ssh_pwauth: true
-write_files:
-- path: /etc/systemd/system/pingwacht-agent.service
-  content: |
-    [Unit]
-    Description=PingWacht-Agent
-    After=network-online.target
-    Wants=network-online.target
-
-    [Service]
-    ExecStart=/opt/pingwacht/pingwacht-agent agent -config /var/lib/pingwacht/agent.json -data /var/lib/pingwacht
-    Restart=always
-    RestartSec=10
-    AmbientCapabilities=CAP_NET_RAW
-
-    [Install]
-    WantedBy=multi-user.target
+# bootcmd läuft bei JEDEM Start: ist der Agent noch nicht eingerichtet (z. B. weil der Pi
+# vorher schon einmal ohne diese Dateien gestartet wurde), wird er jetzt nachinstalliert.
+bootcmd:
+- [sh, -c, "[ -f /boot/firmware/pingwacht/install.sh ] && sh /boot/firmware/pingwacht/install.sh auto >> /var/log/pingwacht-install.log 2>&1 || true"]
 runcmd:
-- [mkdir, -p, /opt/pingwacht, /var/lib/pingwacht]
-- [install, -m, '0755', /boot/firmware/pingwacht/pingwacht-agent, /opt/pingwacht/pingwacht-agent]
-- [install, -m, '0600', /boot/firmware/pingwacht/agent.json, /var/lib/pingwacht/agent.json]
-- [rm, -f, /boot/firmware/pingwacht/agent.json]
-- [systemctl, daemon-reload]
-- [systemctl, enable, --now, pingwacht-agent.service]
+- [sh, -c, "sh /boot/firmware/pingwacht/install.sh auto >> /var/log/pingwacht-install.log 2>&1 || true"]
 - [systemctl, enable, --now, ssh]
 - [sed, -i, 's/password: ".*"/password: "(entfernt)"/', /boot/firmware/user-data]
 `
 }
+
+// piInstallScript: richtet den Agenten offline vom Stick aus ein (Binary + agent.json im Ordner „pingwacht“).
+// „auto“ (beim Start): nichts tun, wenn der Agent schon eingerichtet ist – sonst würde ein inzwischen
+// selbst aktualisierter Agent durch die ältere Version vom Stick ersetzt.
+const piInstallScript = `#!/bin/sh
+# PingWacht-Agent einrichten – Notfall von Hand:  sudo sh /boot/firmware/pingwacht/install.sh
+S=/boot/firmware/pingwacht
+if [ "$1" = "auto" ] && [ -f /etc/systemd/system/pingwacht-agent.service ]; then exit 0; fi
+if [ ! -f "$S/pingwacht-agent" ]; then echo "Agent fehlt in $S"; exit 1; fi
+if [ ! -f /var/lib/pingwacht/agent.json ] && [ ! -f "$S/agent.json" ]; then echo "agent.json fehlt in $S"; exit 1; fi
+mkdir -p /opt/pingwacht /var/lib/pingwacht
+install -m 0755 "$S/pingwacht-agent" /opt/pingwacht/pingwacht-agent
+[ -f /var/lib/pingwacht/agent.json ] || install -m 0600 "$S/agent.json" /var/lib/pingwacht/agent.json
+cat > /etc/systemd/system/pingwacht-agent.service <<'UNIT'
+[Unit]
+Description=PingWacht-Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/pingwacht/pingwacht-agent agent -config /var/lib/pingwacht/agent.json -data /var/lib/pingwacht
+Restart=always
+RestartSec=10
+AmbientCapabilities=CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable pingwacht-agent.service
+systemctl start --no-block pingwacht-agent.service
+systemctl enable ssh >/dev/null 2>&1; systemctl start --no-block ssh >/dev/null 2>&1
+rm -f "$S/agent.json"
+echo "$(date) PingWacht-Agent eingerichtet"
+`
 
 // piNetworkConfig nur bei fester IP – sonst bleibt die Vorgabe des Images (DHCP).
 func piNetworkConfig(o piOpts) string {
@@ -112,17 +130,18 @@ func piReadme(o piOpts) string {
 
 Geeignet: Raspberry Pi 3, 4, 5, 400, 500, Zero 2 W (64-bit).
 
+WICHTIG: Der Pi darf erst eingeschaltet werden, wenn die Dateien unten kopiert sind.
+
 1. Raspberry Pi Imager installieren: https://www.raspberrypi.com/software/
 2. Imager: Gerät wählen → Betriebssystem „Raspberry Pi OS (other)“ →
-   „Raspberry Pi OS Lite (64-bit)“ → Speicher = USB-Stick (oder SD-Karte).
-   Die Frage nach „Anpassungen / OS customisation“ mit NEIN beantworten.
-3. Nach dem Schreiben den Stick einmal ab- und wieder anstecken.
+   „Raspberry Pi OS Lite (64-bit)“ → Speicher = USB-Stick oder SD-Karte.
+   Die Frage nach „Anpassungen / OS customisation“ mit NEIN beantworten!
+3. Nach dem Schreiben den Stick/die Karte einmal ab- und wieder anstecken.
    Es erscheint ein Laufwerk „bootfs“.
 4. ALLES aus diesem ZIP (user-data, meta-data, Ordner „pingwacht“`+map[bool]string{true: ", network-config", false: ""}[o.IP != ""]+`)
-   auf „bootfs“ kopieren und die vorhandenen ERSETZEN.
-5. Stick sicher auswerfen, in den Pi stecken, Netzwerkkabel dran, Strom dran.
-   (Pi 4/5 starten direkt vom USB-Stick; beim Pi 3 einmal USB-Boot aktivieren
-   oder eine SD-Karte verwenden.)
+   auf „bootfs“ kopieren und die vorhandenen Dateien ERSETZEN.
+5. Sicher auswerfen, in den Pi stecken, Netzwerkkabel dran, ERST JETZT Strom dran.
+   (Pi 4/5 starten direkt vom USB-Stick, wenn keine SD-Karte steckt.)
 
 Nach ca. 3–5 Minuten meldet sich der Pi in PingWacht am Standort „`+o.Site+`“.
 Er wird automatisch Haupt-Agent; ein bisheriger Agent (z. B. Büro-PC) bleibt als
@@ -138,6 +157,14 @@ Das Passwort wird nach dem ersten Start aus der Datei auf dem Stick entfernt –
 bitte hier notieren bzw. diese Datei sicher aufbewahren und dann löschen.
 
 Agent-Protokoll auf dem Pi:  journalctl -u pingwacht-agent -f
+
+Meldet sich der Pi nach 10 Minuten nicht in PingWacht:
+  - Pi einmal neu starten (Strom kurz ab) – beim Start wird der Agent nachinstalliert.
+  - Hilft das nicht: per SSH anmelden und von Hand einrichten:
+      sudo sh /boot/firmware/pingwacht/install.sh
+    Protokoll der Einrichtung:  cat /var/log/pingwacht-install.log
+  - Ohne SSH-Zugang (Pi wurde z. B. mit Imager-Anpassungen geschrieben):
+    Stick neu schreiben (Schritt 2–5).
 `, "\n", "\r\n")
 }
 
@@ -190,6 +217,7 @@ func (s *Server) handlePiSetup(w http.ResponseWriter, r *http.Request) {
 	add("meta-data", fmt.Sprintf("instance-id: pingwacht-%s\n", randHex(6)))
 	add("LIES-MICH.txt", piReadme(o))
 	add("pingwacht/agent.json", string(aj))
+	add("pingwacht/install.sh", piInstallScript)
 	if f, err := zw.CreateHeader(&zip.FileHeader{Name: "pingwacht/pingwacht-agent", Method: zip.Deflate}); err == nil {
 		f.Write(exe)
 	}
