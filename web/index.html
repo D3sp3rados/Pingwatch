@@ -639,7 +639,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/radius" data-cat="radius">RADIUS</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">TR-069</a></div>
+  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/radius" data-cat="radius">RADIUS</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">TR-069</a><a href="#/settings/audit" data-cat="audit" id="set-tab-audit" style="display:none">📜 Protokoll</a></div>
   <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
@@ -798,6 +798,12 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <h2>Passkeys</h2>
   <div class="panel" style="padding:14px" id="pk-box"></div>
   <p style="margin-top:16px"><a class="btn sm" href="/logout">Abmelden</a></p>
+  </div>
+  <div class="setcat" data-cat="audit">
+    <h2 style="margin-top:0">Änderungsprotokoll <span class="muted" style="font-size:13px;font-weight:400">– wer hat wann Hosts, Standorte und Gruppen angelegt, geändert, pausiert oder gelöscht (nur für dich als Betreiber, alle Konten)</span></h2>
+    <div class="row" style="margin:8px 0;gap:8px;flex-wrap:wrap"><input id="au-q" type="search" placeholder="🔍 Suche – Name, Adresse, Person" style="flex:1 1 240px;min-width:200px"><select id="au-act"><option value="">Alle Aktionen</option><option>angelegt</option><option>geändert</option><option>gelöscht</option><option>pausiert</option><option>fortgesetzt</option></select><select id="au-org"><option value="">Alle Konten</option></select></div>
+    <div class="panel" style="overflow-x:auto"><table class="tbl" id="au-tbl"></table></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Aufgezeichnet ab dem 28.10.2026 · die letzten 3000 Einträge</div>
   </div>
   <div class="setcat" data-cat="radius">
   <h2>RADIUS für Netonix &amp; Co. <span class="sub muted" style="font-weight:400;font-size:12.5px">– eigene Logins je Techniker, jede Anmeldung protokolliert, Benutzer zentral sperrbar</span></h2>
@@ -2374,17 +2380,26 @@ $('#s-days').onchange=loadStats;
 function verNewer(a,b){ if(!a||!b) return false; const pa=a.split('.').map(Number), pb=b.split('.').map(Number); for(let i=0;i<3;i++){ const x=pa[i]||0, y=pb[i]||0; if(x!==y) return x>y; } return false; }
 $('#hosts-q').addEventListener('input',()=>renderSettings());
 /* Einstellungen in Reitern: #/settings/<kategorie>, zuletzt gewählte wird gemerkt */
-const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','radius','system','acs'];
+const SET_CATS=['hosts','sites','alerts','updates','team','status','konto','radius','system','acs','audit'];
 function setCat(c){ if(document.body.classList.contains('scoped')) c='konto'; if(!SET_CATS.includes(c)){ c=null; try{ c=localStorage.getItem('pw_setcat'); }catch(e){} if(!SET_CATS.includes(c)) c='hosts'; }
   try{ localStorage.setItem('pw_setcat',c); }catch(e){}
-  if(c==='updates') loadUpdates(); if(c==='konto'){ renderTF(); renderPK(); } if(c==='acs') loadACS(); if(c==='radius') loadRadius();
+  if(c==='updates') loadUpdates(); if(c==='konto'){ renderTF(); renderPK(); } if(c==='acs') loadACS(); if(c==='radius') loadRadius(); if(c==='audit') loadAudit();
   $$('#v-settings .setcat').forEach(d=>d.style.display=d.dataset.cat===c?'':'none');
   $$('#set-tabs a').forEach(a=>a.classList.toggle('on',a.dataset.cat===c));
   const on=$('#set-tabs a.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'}); }
+const AU={rows:[]};
+async function loadAudit(){ try{ AU.rows=await api('/api/audit'); }catch(e){ $('#au-tbl').innerHTML=`<tr><td class="empty">${esc(e.message)}</td></tr>`; return; }
+  const orgs=[...new Map(AU.rows.map(r=>[r.org,r.orgName||r.org])).entries()]; const so=$('#au-org'), cur=so.value;
+  so.innerHTML='<option value="">Alle Konten</option>'+orgs.map(([id,n])=>`<option value="${esc(id)}"${id===cur?' selected':''}>${esc(n)}</option>`).join('');
+  $('#au-q').oninput=renderAudit; $('#au-act').onchange=renderAudit; so.onchange=renderAudit; renderAudit(); }
+function renderAudit(){ const q=($('#au-q').value||'').toLowerCase(), a=$('#au-act').value, o=$('#au-org').value;
+  const col={angelegt:'--ok',gelöscht:'--bad',pausiert:'--warn',fortgesetzt:'--ok',geändert:'--acc'};
+  const rs=AU.rows.filter(r=>(!a||r.act===a)&&(!o||r.org===o)&&(!q||(r.name+' '+r.detail+' '+r.who+' '+r.orgName).toLowerCase().includes(q))).slice(0,500);
+  $('#au-tbl').innerHTML=rs.length?'<tr><th>Zeit</th><th>Aktion</th><th>Was</th><th class="hide-m">Details</th><th>Wer</th><th class="hide-m">Konto</th></tr>'+rs.map(r=>`<tr><td class="num" style="white-space:nowrap">${fmtDT(r.t,false)}</td><td><b style="color:var(${col[r.act]||'--fg'})">${esc(r.act)}</b></td><td>${esc(r.kind)}: <b>${esc(r.name)}</b></td><td class="hide-m muted" style="font-size:12.5px">${esc(r.detail||'')}</td><td style="font-size:12.5px">${esc(r.who)}</td><td class="hide-m" style="font-size:12.5px">${esc(r.orgName||r.org)}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Einträge – das Protokoll zeichnet ab jetzt auf.</td></tr>'; }
 function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
 function renderSettings(){
   const st=S.state; if(!st) return;
-  $('#set-tab-acs').style.display=st.me&&st.me.super?'':'none';
+  $('#set-tab-acs').style.display=st.me&&st.me.super?'':'none'; $('#set-tab-audit').style.display=st.me&&st.me.super?'':'none';
   const q=($('#hosts-q').value||'').toLowerCase().trim(); const gname=h=>(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'');
   const hs=q?st.hosts.filter(h=>(h.name+' '+h.addr+' '+gname(h)).toLowerCase().includes(q)):st.hosts;
   const np=st.hosts.filter(h=>h.paused).length, nd=st.hosts.filter(h=>!h.paused&&h.status==='down').length;

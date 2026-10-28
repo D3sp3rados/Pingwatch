@@ -136,6 +136,7 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 		if g.ID == "" {
 			g.ID, g.Org, g.Created = randHex(5), p.Org, time.Now().UnixMilli()
 			m.cfg.Groups = append(m.cfg.Groups, g)
+			m.auditLocked(p.Org, whoOf(p), "angelegt", "Gruppe", g.Name, "")
 		} else {
 			found := false
 			for i := range m.cfg.Groups {
@@ -164,6 +165,12 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 			}
 			m.mu.RUnlock()
 			for _, hid := range del {
+				if h := m.host(hid); h != nil {
+					h.mu.Lock()
+					c := h.cfg
+					h.mu.Unlock()
+					m.audit(c.Org, whoOf(p), "gelöscht", "Host", c.Name, m.hostWhere(c)+" · mit Gruppe gelöscht")
+				}
 				m.DeleteHost(hid)
 			}
 		}
@@ -172,6 +179,8 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 		for _, g := range m.cfg.Groups {
 			if !(g.ID == id && g.Org == p.Org) {
 				out = append(out, g)
+			} else {
+				m.auditLocked(p.Org, whoOf(p), "gelöscht", "Gruppe", g.Name, "")
 			}
 		}
 		m.cfg.Groups = out

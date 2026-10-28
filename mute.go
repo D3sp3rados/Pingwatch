@@ -186,6 +186,11 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 		m.mu.RUnlock()
 		for _, h := range upd {
 			m.UpsertHost(h)
+			det := h.Addr + " · dauerhaft"
+			if until > 0 {
+				det = h.Addr + " · bis " + time.UnixMilli(until).Format("02.01.2006 15:04")
+			}
+			m.audit(h.Org, whoOf(p), "pausiert", "Host", h.Name, det)
 		}
 		writeJSON(w, map[string]any{"ok": true, "paused": len(upd)})
 	default:
@@ -206,6 +211,7 @@ func (m *Monitor) resumePaused(nowMs int64) {
 	m.mu.RUnlock()
 	for _, h := range upd {
 		m.UpsertHost(h)
+		m.audit(h.Org, "System (Pause abgelaufen)", "fortgesetzt", "Host", h.Name, h.Addr)
 	}
 }
 

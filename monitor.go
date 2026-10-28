@@ -106,6 +106,7 @@ type Config struct {
 	PassHash      string       `json:"passHash"`
 	Devices       []Device     `json:"devices"`
 	Orgs          []Org        `json:"orgs"`
+	Audit         []AuditEntry `json:"audit,omitempty"` // Änderungsprotokoll (nur Betreiber)
 	Users         []User       `json:"users"`
 	Channels      []Channel    `json:"channels"`
 	Maints        []Maint      `json:"maints"`

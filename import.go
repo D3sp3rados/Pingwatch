@@ -175,6 +175,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 					hc.IntervalMs = minIv
 				}
 				hc = m.UpsertHost(hc)
+				m.auditHostSave(p, nil, hc, "Import")
 				if cid := chans[strings.ToLower(strings.TrimSpace(row.Channel))]; cid != "" {
 					chanHosts[cid] = append(chanHosts[cid], hc.ID)
 				}

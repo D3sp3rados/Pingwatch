@@ -325,6 +325,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/stats", protect(s.handleStats))
 	mux.HandleFunc("/api/events", protect(s.handleEvents))
 	mux.HandleFunc("/api/hosts", protect(s.handleHosts))
+	mux.HandleFunc("/api/audit", protect(s.handleAudit))
 	mux.HandleFunc("/api/hosts/probe", protect(s.handleHostProbe))
 	mux.HandleFunc("/api/import", protect(s.handleImport))
 	mux.HandleFunc("/api/mute", protect(s.handleMute))
@@ -1065,7 +1066,16 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		writeJSON(w, publicHost(s.m.UpsertHost(hc)))
+		var oldCfg *HostCfg
+		if old := s.m.host(hc.ID); old != nil {
+			old.mu.Lock()
+			c := old.cfg
+			old.mu.Unlock()
+			oldCfg = &c
+		}
+		saved := s.m.UpsertHost(hc)
+		s.m.auditHostSave(p, oldCfg, saved, "")
+		writeJSON(w, publicHost(saved))
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		if s.hostFor(r, id) == nil {
@@ -1075,6 +1085,12 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		if !p.canHost(id, true) {
 			http.Error(w, "Keine Berechtigung für diesen Host", 403)
 			return
+		}
+		if h := s.m.host(id); h != nil {
+			h.mu.Lock()
+			c := h.cfg
+			h.mu.Unlock()
+			s.m.audit(c.Org, whoOf(p), "gelöscht", "Host", c.Name, s.m.hostWhere(c))
 		}
 		s.m.DeleteHost(id)
 		writeJSON(w, map[string]bool{"ok": true})
@@ -1135,12 +1151,20 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unbekannter Standort", 404)
 			return
 		}
-		writeJSON(w, sanitizeSite(s.m.UpsertSite(sc)))
+		isNew := sc.ID == ""
+		saved := s.m.UpsertSite(sc)
+		if isNew {
+			s.m.audit(saved.Org, whoOf(p), "angelegt", "Standort", saved.Name, "")
+		}
+		writeJSON(w, sanitizeSite(saved))
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		if s.siteFor(r, id) == nil {
 			http.Error(w, "unbekannter Standort", 404)
 			return
+		}
+		if sc, ok := s.m.siteByID(id); ok {
+			s.m.audit(sc.Org, whoOf(p), "gelöscht", "Standort", sc.Name, "")
 		}
 		s.m.DeleteSite(id)
 		writeJSON(w, map[string]bool{"ok": true})

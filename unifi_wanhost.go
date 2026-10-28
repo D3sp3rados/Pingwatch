@@ -95,6 +95,7 @@ func (m *Monitor) unifiWanHost(site SiteCfg, d unifiDevice, w unifiWAN, addr str
 		name += " (" + strings.TrimSpace(d.Name) + ")"
 	}
 	hc := m.UpsertHost(HostCfg{Name: name, Addr: addr, Site: site.ID, Method: methodUniFiWAN, IntervalMs: 60000, OutageCount: 2, Org: site.Org, Group: m.siteMainGroup(site.ID)})
+	m.auditHostSave(nil, nil, hc, "automatisch aus UniFi")
 	return m.host(hc.ID)
 }
 
