@@ -548,6 +548,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		siteOn, _ := m.siteOnline(h.cfg.Site)
+		if isUniFiWanHost(h.cfg) {
+			siteOn = true // Werte kommen von UniFi (oft über die Cloud), nicht vom Agenten – fehlen sie, zeigt „stale“ das an
+		}
 		inM := m.inMaint(p.Org, h.cfg.ID, tnow)
 		h.mu.Lock()
 		v := HostView{HostCfg: publicHost(h.cfg), FritzPassSet: h.cfg.FritzPass != "", MtPassSet: h.cfg.MtPass != "", MtActPassSet: h.cfg.MtActPass != "", NxPassSet: h.cfg.NxPass != "", IP: h.ip, LastR: h.lastR, LastT: h.lastT, LastErr: h.lastErr, Consec: h.consec,
