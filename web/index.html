@@ -2929,7 +2929,7 @@ function geoInit(){ if(GEO.map){ GEO.map.invalidateSize(); return; }
   sat.addTo(m); let roadsOn=true; try{ roadsOn=localStorage.getItem('pw_geo_roads')!=='0'; }catch(e){} if(roadsOn) roads.addTo(m);
   L.control.layers({'Satellit':sat,'Straßenkarte':osm},{'Straßen und Namen':roads},{position:'topleft'}).addTo(m);
   m.on('overlayadd overlayremove',e=>{ if(e.layer===roads) try{ localStorage.setItem('pw_geo_roads',e.type==='overlayadd'?'1':'0'); }catch(x){} });
-  GEO.map=m; GEO.lines=L.layerGroup().addTo(m); GEO.dots=L.layerGroup().addTo(m); GEO.rend=L.canvas({tolerance:7,padding:.5});
+  GEO.map=m; GEO.lines=L.layerGroup().addTo(m); GEO.dots=L.layerGroup().addTo(m); m.createPane('pwDots').style.zIndex=450; GEO.rend=L.canvas({pane:'pwDots',tolerance:7,padding:.5}); // Punkte-Ebene über den Linien (sonst fängt die Linien-Ebene alle Klicks ab)
   m.on('zoomend',()=>{ if(GEO.stack) geoRender(); });
   m.on('click',e=>{ if(GEO.place){ const id=GEO.place; GEO.place=null; m.getContainer().style.cursor=''; geoSet(id,e.latlng); return; } geoAddrPopup(e.latlng); });
   const el=m.getContainer(); el.addEventListener('dragover',e=>{ if(MP.edit) e.preventDefault(); }); el.addEventListener('drop',e=>{ e.preventDefault(); const id=e.dataTransfer.getData('text/plain'); if(!id||!MP.idx[id]&&MP.idx[id]!==0) return; const r=el.getBoundingClientRect(); geoSet(id,m.containerPointToLatLng([e.clientX-r.left,e.clientY-r.top])); });
@@ -3988,7 +3988,7 @@ async function mpAddNode(){ const name=await uiPrompt('Name des Geräts:',''); i
   mpEdit({add:[{name:name.trim(),addr:addr.trim(),x:(r.width/2-MP.tx)/MP.sc,y:(r.height/2-MP.ty)/MP.sc}]}); }
 (function(){ const c=$('#map-cv'); let down=null, moved=false;
   const pos=e=>{ const r=c.getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top]; };
-  c.addEventListener('pointerdown',e=>{ if(!MP.data||e.button===2) return; mpCtxClose(); c.setPointerCapture(e.pointerId); MP.ptrs.set(e.pointerId,pos(e)); moved=false;
+  c.addEventListener('pointerdown',e=>{ if(!MP.data||e.button===2) return; mpCtxClose(); if(e.pointerType==='mouse') MP.ptrs.clear(); /* Maus = nur ein Zeiger; hängengebliebene (Fenster gewechselt beim Ziehen) verwerfen */ try{ c.setPointerCapture(e.pointerId); }catch(err){} MP.ptrs.set(e.pointerId,pos(e)); moved=false;
     if(MP.ptrs.size===2){ const [a,b]=[...MP.ptrs.values()]; down={pinch:Math.hypot(a[0]-b[0],a[1]-b[1]),sc:MP.sc,mid:[(a[0]+b[0])/2,(a[1]+b[1])/2],tx:MP.tx,ty:MP.ty}; return; }
     const [x,y]=pos(e); const canEd=!document.body.classList.contains('viewer'); const hit=mpHit(x,y);
     if(canEd&&!hit&&(MP.selMode||e.shiftKey||e.ctrlKey||e.metaKey)){ down={x,y,rect:true,add:e.shiftKey||e.metaKey||e.ctrlKey}; MP.rect=[x,y,x,y]; return; }
@@ -4020,7 +4020,7 @@ async function mpAddNode(){ const name=await uiPrompt('Name des Geräts:',''); i
   c.addEventListener('pointerup',up); c.addEventListener('contextmenu',e=>{ e.preventDefault(); if(!MP.data||(e.ctrlKey&&e.button!==2)) return; const [x,y]=pos(e); mpCtx(x,y,e.clientX,e.clientY); }); c.addEventListener('pointercancel',e=>{ MP.ptrs.delete(e.pointerId); down=null; MP.rect=null; });
   c.addEventListener('wheel',e=>{ if(!MP.data) return; e.preventDefault(); const [x,y]=pos(e); const f=Math.exp(-e.deltaY*0.0015); const s=Math.min(6,Math.max(0.02,MP.sc*f));
     MP.tx=x-(x-MP.tx)*s/MP.sc; MP.ty=y-(y-MP.ty)*s/MP.sc; MP.sc=s; drawMap(); },{passive:false});
-  addEventListener('resize',()=>{ if(S.view==='map') drawMap(); });
+  addEventListener('resize',()=>{ if(S.view==='map') drawMap(); }); addEventListener('blur',()=>{ MP.ptrs.clear(); down=null; MP.rect=null; });
 })();
 $('#map-sel').onchange=e=>mpOpen(e.target.value);
 function mpQ(){ return ($('#map-q').value||'').toLowerCase().trim(); }
