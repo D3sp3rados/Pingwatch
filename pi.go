@@ -190,7 +190,7 @@ func (s *Server) handlePiSetup(w http.ResponseWriter, r *http.Request) {
 		}
 		gw, dns := strings.TrimSpace(q.Get("gw")), strings.TrimSpace(q.Get("dns"))
 		if _, _, err := net.ParseCIDR(ip); err != nil || net.ParseIP(gw) == nil || (dns != "" && net.ParseIP(dns) == nil) {
-			http.Error(w, "Feste IP: Adresse (z. B. 192.168.215.20/24) und Gateway angeben", 400)
+			http.Error(w, "Feste IP: Adresse (z. B. 192.168.1.20/24) und Gateway angeben", 400)
 			return
 		}
 		o.IP, o.GW, o.DNS = ip, gw, dns

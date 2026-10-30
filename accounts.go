@@ -409,7 +409,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == "" {
 			now := time.Now()
-			o := Org{ID: randHex(5), Name: org, Plan: "pro", Sites: 1, Created: now.UnixMilli(), Email: email, Status: "active", ModulesSet: true,
+			o := Org{ID: randHex(5), Name: org, Plan: "pro", Sites: 1, Created: now.UnixMilli(), Email: email, Status: "active", ModulesSet: true, Modules: defaultModules(),
 				TrialUntil: now.Add(time.Duration(days) * 24 * time.Hour).UnixMilli()}
 			u := User{ID: randHex(6), Email: email, Name: name, Org: o.ID, Role: "owner", PassHash: hashPassword(pw), Created: o.Created,
 				Terms: &Consent{Ver: termsVersion, At: o.Created, By: email, IP: clientIP(r)}}
@@ -529,7 +529,7 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			o := Org{ID: randHex(5), Name: strings.TrimSpace(req.Name), Plan: req.Plan, Sites: req.Sites, Billing: req.Billing,
-				Created: time.Now().UnixMilli(), Status: "active", Email: strings.TrimSpace(req.Email), ModulesSet: true}
+				Created: time.Now().UnixMilli(), Status: "active", Email: strings.TrimSpace(req.Email), ModulesSet: true, Modules: defaultModules()}
 			if req.Expires != nil {
 				o.Expires = *req.Expires
 			}

@@ -1554,9 +1554,9 @@ function agentsDl(s){
 }
 async function piSetup(site){
   const host=await uiPrompt('Gerätename für den Raspberry Pi:','pingwacht-pi'); if(!host) return;
-  const ip=await uiPrompt('Feste IP-Adresse (z. B. 192.168.215.20/24) – leer lassen für DHCP:',''); if(ip==null) return;
+  const ip=await uiPrompt('Feste IP-Adresse (z. B. 192.168.1.20/24) – leer lassen für DHCP:',''); if(ip==null) return;
   let gw='';
-  if(ip.trim()){ gw=await uiPrompt('Gateway (Router), z. B. 192.168.215.1:',''); if(!gw) return; }
+  if(ip.trim()){ gw=await uiPrompt('Gateway (Router), z. B. 192.168.1.1:',''); if(!gw) return; }
   const q=new URLSearchParams({site,host:host.trim()}); if(ip.trim()){ q.set('ip',ip.trim()); q.set('gw',gw.trim()); }
   toast('ZIP wird erstellt …');
   try{
@@ -2685,7 +2685,7 @@ async function loadRadius(){ let r; try{ r=await api('/api/radius'); }catch(e){ 
     <label class="field" style="min-width:220px">läuft auf dem Agenten<select id="rad-site"${own?'':' disabled'}>${sites.map(x=>`<option value="${x.id}"${x.id===r.site?' selected':''}>${esc(x.name)}</option>`).join('')}</select></label>
     ${own?'<button class="btn sm pri" id="rad-save">Speichern</button>':'<span class="muted" style="font-size:12.5px">Ein/Aus, Secret und Dienst-Benutzer ändert nur der Inhaber.</span>'}</div>
     ${r.on?`<div style="margin-top:12px;font-size:13px;line-height:1.7">Status: ${r.running?'<b style="color:var(--ok)">Agent verbunden – RADIUS aktiv (UDP 1812)</b>':'<b style="color:var(--bad)">Agent nicht verbunden</b>'}<br>
-    <b>In jede Netonix eintragen</b> (Device → RADIUS): Server = <b>IP des Agenten-Rechners im Netz</b> (z. B. 192.168.215.148), Port <b>1812</b>, Secret: ${own?`<code id="rad-sec" style="user-select:all">${esc(r.secret||'')}</code> <button class="btn sm danger" id="rad-newsec" title="Neues Secret – muss dann in allen Geräten geändert werden">neu erzeugen</button>`:'<span class="muted">nur für den Inhaber sichtbar</span>'}</div>`:''}`;
+    <b>In jede Netonix eintragen</b> (Device → RADIUS): Server = <b>IP des Agenten-Rechners im Netz</b> (z. B. 192.168.1.10), Port <b>1812</b>, Secret: ${own?`<code id="rad-sec" style="user-select:all">${esc(r.secret||'')}</code> <button class="btn sm danger" id="rad-newsec" title="Neues Secret – muss dann in allen Geräten geändert werden">neu erzeugen</button>`:'<span class="muted">nur für den Inhaber sichtbar</span>'}</div>`:''}`;
   if($('#rad-save')) $('#rad-save').onclick=async()=>{ try{ await api('/api/radius',{method:'POST',body:JSON.stringify({action:'save',on:$('#rad-on').checked,site:$('#rad-site').value})}); toast('Gespeichert'); loadRadius(); }catch(e){ uiAlert(e.message); } };
   const ns=$('#rad-newsec'); if(ns) ns.onclick=async()=>{ const c=await uiDialog({title:'⚠️ Neues RADIUS-Secret',text:'Achtung: Mit einem neuen Secret funktioniert die Anmeldung an ALLEN Netonix sofort nicht mehr – auch PingWacht kann sie dann nicht mehr auslesen –, bis das neue Secret in jedem Gerät eingetragen ist.\n\nZum Bestätigen NEU eintippen:',input:'',ok:'Secret neu erzeugen',cancel:'Abbrechen',danger:true}); if((c||'').trim().toUpperCase()!=='NEU'){ if(c!=null) uiAlert('Nicht bestätigt – Secret bleibt unverändert.'); return; } try{ await api('/api/radius',{method:'POST',body:JSON.stringify({action:'save',on:true,site:r.site,newSecret:true})}); loadRadius(); }catch(e){ uiAlert(e.message); } };
   $('#rad-users').innerHTML='<tr><th>Benutzer</th><th>Status</th><th>Letzte Anmeldung</th><th></th></tr>'+(r.users.length?r.users.map(u=>`<tr><td><b>${esc(u.name)}</b>${u.service?' <span class="muted">(Dienst-Benutzer – PingWacht liest damit die Netonix aus; Passwort hier setzen)</span>':''}</td><td>${u.disabled?'<b style="color:var(--bad)">gesperrt</b>':'<span style="color:var(--ok)">aktiv</span>'}</td><td>${u.lastLogin?fmtDT(u.lastLogin,false)+(u.lastFrom?' · '+esc(u.lastFrom):''):'–'}</td><td class="act">${canEd&&(own||!u.service)?`<button class="btn sm" data-rpw="${u.id}">Passwort</button> <button class="btn sm" data-rtg="${u.id}" data-d="${u.disabled?0:1}">${u.disabled?'Entsperren':'Sperren'}</button>${u.service?'':` <button class="btn sm" data-rdel="${u.id}">Löschen</button>`}`:''}</td></tr>`).join(''):'<tr><td class="empty" colspan="4">Noch keine Benutzer – erst RADIUS einschalten.</td></tr>');
@@ -3680,7 +3680,7 @@ function openOrg(id){ const o=id&&ORGS.find(x=>x.id===id);
   const tu=o&&o.trialUntil&&!o.trialEnded?o.trialUntil:0; of.trial.value=tu?new Date(tu-new Date(tu).getTimezoneOffset()*6e4).toISOString().slice(0,10):''; of.dataset.trial=of.trial.value;
   $('#of-ownerf').style.display=$('#of-ownernf').style.display=o?'none':''; $('#of-disf').style.display=o&&o.id!=='default'?'':'none';
   const MODS=[['netmap','Netzkarte'],['radius','RADIUS (Netonix-Logins)'],['mtnx','MikroTik/Netonix-Abfrage'],['sysact','Rechner-Updates, Neustarts und Scripts'],['pi','Raspberry-Pi-Einrichtung']];
-  const on=o?(o.modulesSet?(o.modules||[]):MODS.map(m=>m[0])):[];
+  const on=o?(o.modulesSet?(o.modules||[]):MODS.map(m=>m[0])):['pi'];
   $('#of-modl').innerHTML=MODS.map(([k,t])=>`<label class="check"><input type="checkbox" data-mod="${k}"${on.includes(k)?' checked':''}> ${t}</label>`).join('');
   $('#of-del').style.display=o&&o.id!=='default'?'':'none'; odlg.showModal(); }
 of.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();

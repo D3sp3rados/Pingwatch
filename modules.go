@@ -91,3 +91,6 @@ func cleanModules(in []string) []string {
 	}
 	return out
 }
+
+// defaultModules: für neue Konten ohne Zutun freigeschaltet.
+func defaultModules() []string { return []string{"pi"} }
