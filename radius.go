@@ -312,6 +312,9 @@ func (a *Agent) radiusFlush() {
 
 // radiusForSite: Konfiguration für den Agenten dieses Standorts (nil = kein RADIUS dort).
 func (m *Monitor) radiusForSite(site SiteCfg) *radiusAgentCfg {
+	if !m.orgHas(site.Org, "radius") {
+		return nil
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	rc := m.cfg.Radius[site.Org]

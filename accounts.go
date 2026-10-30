@@ -101,7 +101,7 @@ func (s *Server) accountInfo(r *http.Request) map[string]any {
 			"status": o.Status, "billing": o.Billing, "retention": o.retention(s.m.cfg.RetentionDays),
 			"features": pl.Features, "minInterval": pl.MinInterval, "paidUntil": o.PaidUntil,
 			"hasStripe": o.StripeCustomer != "", "email": o.Email, "trialUntil": o.TrialUntil, "trialEnded": o.TrialEnded,
-			"actionsConsent": o.ActionsConsent != nil,
+			"actionsConsent": o.ActionsConsent != nil, "modules": o.modules(),
 		}
 	}
 	s.aiAccountInfo(p, s.m.orgByID(p.Org), out)
@@ -409,7 +409,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == "" {
 			now := time.Now()
-			o := Org{ID: randHex(5), Name: org, Plan: "pro", Sites: 1, Created: now.UnixMilli(), Email: email, Status: "active",
+			o := Org{ID: randHex(5), Name: org, Plan: "pro", Sites: 1, Created: now.UnixMilli(), Email: email, Status: "active", ModulesSet: true,
 				TrialUntil: now.Add(time.Duration(days) * 24 * time.Hour).UnixMilli()}
 			u := User{ID: randHex(6), Email: email, Name: name, Org: o.ID, Role: "owner", PassHash: hashPassword(pw), Created: o.Created,
 				Terms: &Consent{Ver: termsVersion, At: o.Created, By: email, IP: clientIP(r)}}
@@ -511,6 +511,7 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			Disabled                                              *bool
 			Expires                                               *int64 // Testzugang bis (ms), 0 = unbegrenzt
 			TrialUntil                                            *int64 // Testphase (Pro) bis (ms), 0 = keine bzw. beenden
+			Modules                                               *[]string
 		}
 		if !readJSON(w, r, &req) {
 			return
@@ -528,12 +529,15 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			o := Org{ID: randHex(5), Name: strings.TrimSpace(req.Name), Plan: req.Plan, Sites: req.Sites, Billing: req.Billing,
-				Created: time.Now().UnixMilli(), Status: "active", Email: strings.TrimSpace(req.Email)}
+				Created: time.Now().UnixMilli(), Status: "active", Email: strings.TrimSpace(req.Email), ModulesSet: true}
 			if req.Expires != nil {
 				o.Expires = *req.Expires
 			}
 			if o.Plan == "" {
 				o.Plan = "free"
+			}
+			if req.Modules != nil {
+				o.Modules = cleanModules(*req.Modules)
 			}
 			if e := strings.ToLower(strings.TrimSpace(req.OwnerEmail)); e != "" {
 				if !validEmail(e) {
@@ -578,6 +582,9 @@ func (s *Server) handleAdminOrgs(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Billing != "" {
 				o.Billing = req.Billing
+			}
+			if req.Modules != nil {
+				o.Modules, o.ModulesSet = cleanModules(*req.Modules), true
 			}
 			if req.Disabled != nil && o.ID != defaultOrgID {
 				o.Disabled = *req.Disabled

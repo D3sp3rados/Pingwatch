@@ -436,7 +436,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <a href="#/" data-v="overview">Übersicht</a>
     <a href="#/events" data-v="events">Ereignisse</a>
     <a href="#/stats" data-v="stats">Statistik</a>
-    <a href="#/map" data-v="map">Netzkarte</a>
+    <a href="#/map" data-v="map" id="nav-map">Netzkarte</a>
     <a href="#/settings" data-v="settings">Einstellungen</a>
     <a href="#/install" data-v="install">⬇︎ Installieren</a>
     <a href="#/billing" data-v="billing" id="tab-billing" style="display:none">Abo</a>
@@ -639,7 +639,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/radius" data-cat="radius">RADIUS</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">TR-069</a><a href="#/settings/audit" data-cat="audit" id="set-tab-audit" style="display:none">📜 Protokoll</a></div>
+  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates" id="set-tab-updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/radius" data-cat="radius" id="set-tab-radius">RADIUS</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">TR-069</a><a href="#/settings/audit" data-cat="audit" id="set-tab-audit" style="display:none">📜 Protokoll</a></div>
   <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
@@ -939,6 +939,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <label class="field" id="of-ownernf">Name des Inhabers<input name="ownerName" maxlength="60"></label>
       <label class="field">Testphase (Pro) bis<input type="date" name="trial"><small>Selbst registrierte Kunden testen Pro bis zu diesem Datum und werden danach automatisch auf Free gestuft. Datum ändern = verlängern; leer = Testphase beenden (Paket oben gilt regulär).</small></label>
       <label class="field">Zugang befristet bis (nur für Tester)<input type="date" name="expires"><small>Für normale, zahlende Kunden leer lassen. Mit Datum ist danach keine Anmeldung mehr möglich, die Überwachung läuft weiter.</small></label>
+      <div class="field full" id="of-mods"><span>Freigeschaltete Bereiche <small class="muted">(nur für dich als Betreiber einstellbar)</small></span><div id="of-modl" style="display:flex;flex-direction:column;gap:4px;margin-top:4px"></div></div>
       <label class="check" id="of-disf"><input type="checkbox" name="disabled"> Zugang gesperrt</label>
       <div class="err" id="of-err" style="color:var(--bad);font-size:13px"></div>
     </div>
@@ -2396,6 +2397,8 @@ function renderAudit(){ const q=($('#au-q').value||'').toLowerCase(), a=$('#au-a
   const col={angelegt:'--ok',gelöscht:'--bad',pausiert:'--warn',fortgesetzt:'--ok',geändert:'--acc'};
   const rs=AU.rows.filter(r=>(!a||r.act===a)&&(!o||r.org===o)&&(!q||(r.name+' '+r.detail+' '+r.who+' '+r.orgName).toLowerCase().includes(q))).slice(0,500);
   $('#au-tbl').innerHTML=rs.length?'<tr><th>Zeit</th><th>Aktion</th><th>Was</th><th class="hide-m">Details</th><th>Wer</th><th class="hide-m">Konto</th></tr>'+rs.map(r=>`<tr><td class="num" style="white-space:nowrap">${fmtDT(r.t,false)}</td><td><b style="color:var(${col[r.act]||'--fg'})">${esc(r.act)}</b></td><td>${esc(r.kind)}: <b>${esc(r.name)}</b></td><td class="hide-m muted" style="font-size:12.5px">${esc(r.detail||'')}</td><td style="font-size:12.5px">${esc(r.who)}</td><td class="hide-m" style="font-size:12.5px">${esc(r.orgName||r.org)}</td></tr>`).join(''):'<tr><td class="empty">Noch keine Einträge – das Protokoll zeichnet ab jetzt auf.</td></tr>'; }
+function hasMod(m){ const o=S.state&&S.state.org; return !o||!o.modules||o.modules.includes(m); }
+function applyMods(){ const sh=(sel,m)=>{ const e=$(sel); if(e) e.style.display=hasMod(m)?'':'none'; }; sh('#nav-map','netmap'); sh('#set-tab-radius','radius'); sh('#set-tab-updates','sysact'); sh('#hf-mt','mtnx'); const a=$('#hf-mt'), b=$('#hf-nx'); [a,b].forEach(x=>{ if(x){ const l=x.closest('label'); if(l) l.style.display=hasMod('mtnx')?'':'none'; } }); if(!hasMod('netmap')&&location.hash.startsWith('#/map')) location.hash='#/'; }
 function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
 function renderSettings(){
   const st=S.state; if(!st) return;
@@ -2421,7 +2424,7 @@ function renderSettings(){
     <dl>${custDl(s)}<dt>Status</dt><dd>${s.online?'verbunden':s.lastSeen?'offline seit '+fmtDT(s.lastSeen,false):'noch nie verbunden'}</dd><dt>Hosts</dt><dd>${s.hosts}</dd>${agentsDl(s)}${s.unifi&&s.unifi.on?`<dt>UniFi</dt><dd><a href="#" data-ulist="${s.id}">${uSt(s.unifi)}</a>${s.unifi.mode==='cloud'?' <span class="tag">über UniFi-Cloud</span>':''}</dd>`:''}${s.ip?`<dt>Öffentliche IP</dt><dd class="num">${esc(s.ip)}</dd>`:''}${s.version?`<dt>Agent-Version</dt><dd>${esc(s.version)} ${verNewer(st.version,s.version)?`<span class="tag warn">Update auf ${esc(st.version)} verfügbar</span>`:'<span class="tag ok">aktuell</span>'}</dd>`:''}<dt>Rechner</dt><dd>${(()=>{ const mm=(st.machines||[]).filter(m=>m.site===s.id), bad=mm.filter(MBAD).length; return s.sys&&s.sys.on?`<a href="#" data-sys="${s.id}">${mm.length?mm.length+' überwacht'+(bad?` · <b style="color:var(--bad)">${bad} auffällig</b>`:' · alles OK'):'eingeschaltet, warte auf Agent …'}</a>`:`<a href="#" class="ed" data-sys="${s.id}">einrichten</a>`; })()}</dd><dt>Agent-Updates</dt><dd>${s.noAutoUpdate?'<b style="color:var(--warn)">automatisch aus</b>':'automatisch · prüft stündlich'} <button class="btn sm ed" data-autoupd="${s.id}" data-on="${s.noAutoUpdate?'1':''}" style="margin-left:4px">${s.noAutoUpdate?'Einschalten':'Ausschalten'}</button>${s.online&&s.version&&verNewer(st.version,s.version)?` <button class="btn sm pri ed" data-updnow="${s.id}">Jetzt aktualisieren</button>`:` <button class="btn sm ed" data-updchk="${s.id}" title="Alle Agenten dieses Standorts (auch „nur Rechner“) prüfen innerhalb einer Minute auf Updates">Jetzt prüfen</button>`}<div class="muted" style="font-size:12.5px;margin-top:3px">${s.agentUpdated?`Zuletzt aktualisiert: ${fmtDT(s.agentUpdated,false)} (${esc(s.agentPrev)} → ${esc(s.version||'?')})`:'Noch kein Update seit der Einrichtung'}</div></dd></dl>
     <div class="row"><a class="btn sm pri ed" href="/download/agent.json?site=${s.id}">agent.json</a>${agentDlLinks(['win','linux','mac'])}</div>
     <div class="row ed" style="margin-top:8px"><button class="btn sm" data-scan="${s.id}">Netzwerk scannen</button><button class="btn sm" data-unifi="${s.id}">UniFi-Import</button><button class="btn sm" data-ulive="${s.id}">UniFi-Livestatus</button><button class="btn sm" data-sysb="${s.id}">💻 Rechner-Überwachung</button>${BK.ok&&st.org&&st.org.id==='default'?`<button class="btn sm" data-bksite="${s.id}">💾 Sicherungen${bkTarget(s.id)&&bkTarget(s.id).on?' · an':''}</button>`:''}</div>
-    <div class="row ed" style="margin-top:8px"><button class="btn sm" data-pi="${s.id}">🍓 Raspberry Pi einrichten</button><button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-snum="${s.id}">Kunde / Nr.</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
+    <div class="row ed" style="margin-top:8px">${hasMod('pi')?`<button class="btn sm" data-pi="${s.id}">🍓 Raspberry Pi einrichten</button>`:''}<button class="btn sm" data-ren="${s.id}">Umbenennen</button><button class="btn sm" data-snum="${s.id}">Kunde / Nr.</button><button class="btn sm" data-tok="${s.id}">Token erneuern</button><button class="btn sm danger" data-del="${s.id}">Löschen</button></div></div>`).join('') : '<div class="panel empty">Noch kein Standort. Für lokale IPs (z. B. 192.168.x.x) einen Standort anlegen und dort den Agent starten.</div>';
   $$('#sites [data-scan]').forEach(b=>b.onclick=()=>openImport(b.dataset.scan,'scan'));
   $$('#sites [data-pi]').forEach(b=>b.onclick=()=>piSetup(b.dataset.pi));
   $$('#sites [data-prim]').forEach(b=>b.onclick=async()=>{ try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id:b.dataset.site,setPrimaryAgent:b.dataset.prim})}); toast(b.dataset.prim?'Haupt-Agent festgelegt – Wechsel innerhalb einer Minute':'Automatisch: Raspberry Pi/Linux vor Windows'); refreshState(); }catch(e){ uiAlert(e.message); } });
@@ -3676,10 +3679,14 @@ function openOrg(id){ const o=id&&ORGS.find(x=>x.id===id);
   of.expires.value=o&&o.expires?new Date(o.expires-new Date(o.expires).getTimezoneOffset()*6e4).toISOString().slice(0,10):'';
   const tu=o&&o.trialUntil&&!o.trialEnded?o.trialUntil:0; of.trial.value=tu?new Date(tu-new Date(tu).getTimezoneOffset()*6e4).toISOString().slice(0,10):''; of.dataset.trial=of.trial.value;
   $('#of-ownerf').style.display=$('#of-ownernf').style.display=o?'none':''; $('#of-disf').style.display=o&&o.id!=='default'?'':'none';
+  const MODS=[['netmap','Netzkarte'],['radius','RADIUS (Netonix-Logins)'],['mtnx','MikroTik/Netonix-Abfrage'],['sysact','Rechner-Updates, Neustarts und Scripts'],['pi','Raspberry-Pi-Einrichtung']];
+  const on=o?(o.modulesSet?(o.modules||[]):MODS.map(m=>m[0])):[];
+  $('#of-modl').innerHTML=MODS.map(([k,t])=>`<label class="check"><input type="checkbox" data-mod="${k}"${on.includes(k)?' checked':''}> ${t}</label>`).join('');
   $('#of-del').style.display=o&&o.id!=='default'?'':'none'; odlg.showModal(); }
 of.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
   const body={id:of.dataset.id,name:of.name.value.trim(),plan:of.plan.value,sites:+of.sites.value||0,billing:of.billing.value||'free',ownerEmail:of.ownerEmail.value.trim(),ownerName:of.ownerName.value.trim()};
   if(of.dataset.id) body.disabled=of.disabled.checked;
+  body.modules=$$('#of-modl [data-mod]').filter(x=>x.checked).map(x=>x.dataset.mod);
   body.expires=of.expires.value?new Date(of.expires.value+'T23:59:59').getTime():0;
   if(of.dataset.id&&of.trial.value!==(of.dataset.trial||'')) body.trialUntil=of.trial.value?new Date(of.trial.value+'T23:59:59').getTime():0;
   try{ const r=await api('/api/admin/orgs',{method:'POST',body:JSON.stringify(body)}); odlg.close(); toast('Gespeichert'); if(r.tempPassword) showTemp(body.ownerEmail,r.tempPassword); loadAdmin(); refreshState(); }catch(err){ $('#of-err').textContent=err.message; } });
@@ -4179,7 +4186,7 @@ function route(){
 }
 async function refreshState(){
   try{ S.state=await api('/api/state'); S.state.hosts=S.state.hosts||[]; S.state.sites=S.state.sites||[]; $('#conn').classList.remove('on'); }catch(e){ if(e.message!=='401') $('#conn').classList.add('on'); return; }
-  renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderLogout(); renderTrial(); renderAI(); askTerms();
+  applyMods(); renderSummary(); fillHostSelects(); renderOrgBox(); renderMutes(); renderTempPw(); renderLogout(); renderTrial(); renderAI(); askTerms();
   if(S.view==='billing') renderBilling();
   if(S.view==='install') renderInstall();
   if(S.view==='overview') renderOverview();

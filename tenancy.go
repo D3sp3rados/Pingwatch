@@ -50,6 +50,9 @@ type Org struct {
 	SignKeys []SignKey `json:"signKeys,omitempty"`
 	// Sammelmeldung ab so vielen Ausfällen pro Minute (nil = Standard 3, 0 = aus)
 	BatchMin *int `json:"batchMin,omitempty"`
+	// freigeschaltete Bereiche (modules.go); ModulesSet=false: Konto von vorher, alles frei
+	Modules    []string `json:"modules,omitempty"`
+	ModulesSet bool     `json:"modulesSet,omitempty"`
 }
 
 type User struct {

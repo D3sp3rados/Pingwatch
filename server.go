@@ -331,24 +331,24 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/mute", protect(s.handleMute))
 	mux.HandleFunc("/api/maint", protect(s.handleMaint))
 	mux.HandleFunc("/api/groups", protect(s.handleGroups))
-	mux.HandleFunc("/api/maps", protect(s.handleMaps))
+	mux.HandleFunc("/api/maps", protect(s.needMod("netmap", s.handleMaps)))
 	mux.HandleFunc("/api/teams", protect(s.handleTeams))
-	mux.HandleFunc("/api/maps/edit", protect(s.handleMapEdit))
-	mux.HandleFunc("/api/maps/rules", protect(s.handleMapRules))
-	mux.HandleFunc("/api/maps/tree", protect(s.handleMapTree))
-	mux.HandleFunc("/api/maps/stats", protect(s.handleMapStats))
-	mux.HandleFunc("/api/maps/deps", protect(s.handleMapDeps))
-	mux.HandleFunc("/api/maps/geocode", protect(s.handleMapGeocode))
+	mux.HandleFunc("/api/maps/edit", protect(s.needMod("netmap", s.handleMapEdit)))
+	mux.HandleFunc("/api/maps/rules", protect(s.needMod("netmap", s.handleMapRules)))
+	mux.HandleFunc("/api/maps/tree", protect(s.needMod("netmap", s.handleMapTree)))
+	mux.HandleFunc("/api/maps/stats", protect(s.needMod("netmap", s.handleMapStats)))
+	mux.HandleFunc("/api/maps/deps", protect(s.needMod("netmap", s.handleMapDeps)))
+	mux.HandleFunc("/api/maps/geocode", protect(s.needMod("netmap", s.handleMapGeocode)))
 	mux.HandleFunc("/api/customers", protect(s.handleCustomers))
 	mux.HandleFunc("/api/org/name", protect(s.handleOrgName))
 	mux.HandleFunc("/api/org/batch", protect(s.handleOrgBatch))
 	mux.HandleFunc("/api/totp", protect(s.handleTOTP))
 	mux.HandleFunc("/api/terms/accept", protect(s.handleTermsAccept))
-	mux.HandleFunc("/api/actions/consent", protect(s.handleActionsConsent))
+	mux.HandleFunc("/api/actions/consent", protect(s.needMod("sysact", s.handleActionsConsent)))
 	mux.HandleFunc("/api/signkeys", protect(s.handleSignKeys))
-	mux.HandleFunc("/api/actions", protect(s.handleActions))
-	mux.HandleFunc("/api/updateplans", protect(s.handleUpdatePlans))
-	mux.HandleFunc("/api/scripts", protect(s.handleScripts))
+	mux.HandleFunc("/api/actions", protect(s.needMod("sysact", s.handleActions)))
+	mux.HandleFunc("/api/updateplans", protect(s.needMod("sysact", s.handleUpdatePlans)))
+	mux.HandleFunc("/api/scripts", protect(s.needMod("sysact", s.handleScripts)))
 	mux.HandleFunc("/api/groups/members", protect(s.handleGroupMembers))
 	mux.HandleFunc("/api/events/ack", protect(s.handleAck))
 	mux.HandleFunc("/api/jobs", protect(s.handleJobs))
@@ -362,11 +362,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/unifi/test", protect(s.handleUniFiCloudTest))
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
 	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
-	mux.HandleFunc("/api/mikrotik", protect(s.handleMikrotik))
-	mux.HandleFunc("/api/mikrotik/action", protect(s.handleMikrotikAction))
-	mux.HandleFunc("/api/netonix", protect(s.handleNetonix))
-	mux.HandleFunc("/api/radius", protect(s.handleRadius))
-	mux.HandleFunc("/api/netonix/action", protect(s.handleNetonixAction))
+	mux.HandleFunc("/api/mikrotik", protect(s.needMod("mtnx", s.handleMikrotik)))
+	mux.HandleFunc("/api/mikrotik/action", protect(s.needMod("mtnx", s.handleMikrotikAction)))
+	mux.HandleFunc("/api/netonix", protect(s.needMod("mtnx", s.handleNetonix)))
+	mux.HandleFunc("/api/radius", protect(s.needMod("radius", s.handleRadius)))
+	mux.HandleFunc("/api/netonix/action", protect(s.needMod("mtnx", s.handleNetonixAction)))
 	mux.HandleFunc("/api/machine", protect(s.handleMachine))
 	mux.HandleFunc("/api/machine/inventory", protect(s.handleMachineInventory))
 	mux.HandleFunc("/api/export/inventory.csv", protect(s.exportInventory))
@@ -1065,6 +1065,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		if !s.m.groupOK(p.Org, hc.Group) {
 			hc.Group = ""
 		}
+		if !s.m.orgHas(p.Org, "mtnx") { // MikroTik/Netonix nicht freigeschaltet
+			hc.Mt, hc.Nx = false, false
+		}
 		if err := s.m.validParent(p.Org, hc.ID, hc.Parent); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -1256,7 +1259,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/download/")
 	if name == "pi-setup.zip" {
-		s.handlePiSetup(w, r)
+		s.needMod("pi", s.handlePiSetup)(w, r)
 		return
 	}
 	if name == "agent.json" {
