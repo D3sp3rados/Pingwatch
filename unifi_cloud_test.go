@@ -168,6 +168,26 @@ func TestUniFiCloudSiteFlow(t *testing.T) {
 	if !sc.UniFi.isCloud() || sc.UniFi.Console != "c1" {
 		t.Fatalf("Konfiguration: %+v", sc.UniFi)
 	}
+	// doppelt: gleicher Name bzw. gleiche Konsole → 409
+	if code, _ := c.do("POST", "/api/sites", map[string]any{"name": "kunde cloud", "kind": "unifi"}); code != 409 {
+		t.Fatal("gleicher Name", code)
+	}
+	if code, body := c.do("POST", "/api/sites", map[string]any{"name": "Anderer Name", "kind": "unifi", "unifi": map[string]any{"on": true, "mode": "cloud", "console": "c1"}}); code != 409 || !strings.Contains(body, "schon als Standort") {
+		t.Fatal("gleiche Konsole", code, body)
+	}
+	// Konsole ohne UniFi Network (Proxy 404): Status der Konsole aus dem Site Manager
+	code, body = c.do("POST", "/api/sites", map[string]any{"name": "UNVR", "kind": "unifi"})
+	var s404 SiteCfg
+	json.Unmarshal([]byte(body), &s404)
+	if code, body := c.do("POST", "/api/unifi", map[string]any{"site": s404.ID, "on": true, "console": "c404"}); code != 200 {
+		t.Fatal(code, body)
+	}
+	sc404, _ := s.m.siteByID(s404.ID)
+	s.m.unifiCloudPollSite(sc404)
+	if _, b := c.do("GET", "/api/unifi?site="+s404.ID, nil); !strings.Contains(b, "Alte UDM") || !strings.Contains(b, `"total":1`) || strings.Contains(b, "HTTP 404") {
+		t.Fatal("Konsolenstatus ohne Network:", b)
+	}
+	c.do("DELETE", "/api/sites?id="+s404.ID, nil)
 	// Hosts an einem Standort ohne Agent werden abgelehnt
 	if code, _ := c.do("POST", "/api/hosts", map[string]any{"name": "x", "addr": "192.168.1.5", "site": site.ID}); code != 400 {
 		t.Fatal("Host an Cloud-Standort", code)

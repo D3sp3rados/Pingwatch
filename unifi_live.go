@@ -509,6 +509,12 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bitte eine Konsole auswählen („Konsolen laden“)", 400)
 		return
 	}
+	if req.On && cloud {
+		if d := s.m.duplicateSite(site.Org, SiteCfg{ID: site.ID, UniFi: &UniFiCfg{On: true, Mode: unifiModeCloud, Console: strings.TrimSpace(req.Console), Site: strings.TrimSpace(req.USite)}}); d != "" {
+			http.Error(w, d, 409)
+			return
+		}
+	}
 	m := s.m
 	m.mu.Lock()
 	for i := range m.cfg.Sites {

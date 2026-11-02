@@ -49,7 +49,9 @@ type unifiConsole struct {
 	Type     string `json:"type,omitempty"`
 	Firmware string `json:"fw,omitempty"`
 	IP       string `json:"ip,omitempty"`
+	MAC      string `json:"mac,omitempty"`
 	Online   bool   `json:"online"`
+	Update   string `json:"update,omitempty"` // verfügbare neuere Firmware
 }
 
 func unifiConsoles(key string) ([]unifiConsole, error) {
@@ -114,6 +116,15 @@ func parseUniFiHost(h map[string]any) unifiConsole {
 			c.Model = anyStr(hw["name"])
 			if c.Model == "" {
 				c.Model = anyStr(hw["shortname"])
+			}
+			c.MAC = strings.ToLower(anyStr(hw["mac"]))
+		}
+		if c.MAC == "" {
+			c.MAC = strings.ToLower(anyStr(rs["mac"]))
+		}
+		if fu, ok := rs["firmwareUpdate"].(map[string]any); ok {
+			if v := anyStr(fu["latestAvailableVersion"]); v != "" && v != c.Firmware {
+				c.Update = v
 			}
 		}
 		if c.IP == "" {
@@ -210,6 +221,22 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 		log.Printf("UniFi-Cloud %s: gedrosselt, Pause %s", s.Name, wait)
 		return // Drosselung ist kein Ausfall der Konsole
 	}
+	if err != nil && strings.Contains(err.Error(), "HTTP 404") {
+		// Konsole ohne UniFi Network (z. B. UNVR nur mit Protect) bzw. zu alte Firmware für den Proxy:
+		// wenigstens den Status der Konsole selbst aus dem Site Manager anzeigen und melden.
+		if c, cerr := m.unifiConsoleStatus(key, s.UniFi.Console); cerr == nil && c != nil {
+			st := "OFFLINE"
+			if c.Online {
+				st = "ONLINE"
+			}
+			fw := c.Firmware
+			if c.Update != "" {
+				fw += " (Update " + c.Update + " verfügbar)"
+			}
+			m.ingestUniFi(s, []unifiDevice{{ID: c.ID, Name: c.Name, IP: c.IP, MAC: c.MAC, Model: c.Model, State: st, Firmware: fw, Features: []string{"console"}}}, "")
+			return
+		}
+	}
 	if err != nil {
 		m.ingestUniFi(s, nil, err.Error())
 		return
@@ -230,6 +257,41 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 			m.ingestProtect(s, p)
 		}
 	}
+}
+
+// unifiConsoleStatus: eine Konsole aus der Site-Manager-Liste (je Key höchstens einmal pro Minute abgefragt).
+var unifiConsCache = struct {
+	sync.Mutex
+	m map[string]struct {
+		at   time.Time
+		list []unifiConsole
+	}
+}{m: map[string]struct {
+	at   time.Time
+	list []unifiConsole
+}{}}
+
+func (m *Monitor) unifiConsoleStatus(key, id string) (*unifiConsole, error) {
+	unifiConsCache.Lock()
+	e, ok := unifiConsCache.m[key]
+	unifiConsCache.Unlock()
+	if !ok || time.Since(e.at) > 50*time.Second {
+		list, err := unifiConsoles(key)
+		if err != nil {
+			return nil, err
+		}
+		e.at, e.list = time.Now(), list
+		unifiConsCache.Lock()
+		unifiConsCache.m[key] = e
+		unifiConsCache.Unlock()
+	}
+	for i := range e.list {
+		if e.list[i].ID == id {
+			c := e.list[i]
+			return &c, nil
+		}
+	}
+	return nil, errors.New("Konsole nicht im Konto")
 }
 
 // ---------- Diagnose ----------

@@ -1034,6 +1034,17 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		hc.Org = p.Org
+		changed := true
+		if old := s.m.host(hc.ID); old != nil {
+			old.mu.Lock()
+			o := old.cfg
+			old.mu.Unlock()
+			changed = dupAddr(o.Addr) != dupAddr(hc.Addr) || o.Method != hc.Method || o.Site != hc.Site || o.Port != hc.Port
+		}
+		if d := s.m.duplicateHost(hc); changed && d != "" {
+			http.Error(w, "„"+d+"“ mit dieser Adresse ist an diesem Prüfort schon angelegt", 409)
+			return
+		}
 		if old := s.m.host(hc.ID); old != nil {
 			old.mu.Lock()
 			if hc.Watch == "" {
@@ -1143,6 +1154,11 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 		}
 		sc.Customer, sc.Number = "", "" // nur über setCustomer/setNumber
 		sc.AgentVer, sc.AgentPrev, sc.AgentUpdated = "", "", 0
+		if d := s.m.duplicateSite(p.Org, sc); d != "" {
+			http.Error(w, d, 409)
+			return
+		}
+		sc.UniFi = nil // UniFi wird über /api/unifi eingerichtet (hier nur für die Doppelt-Prüfung)
 		if sc.ID == "" {
 			if sc.Name == "" {
 				http.Error(w, "Name fehlt", 400)

@@ -106,6 +106,12 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .tr-i .dot{flex:none}
 .tr-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tr-n{font-size:12px;color:var(--mut)}
+.tr-more{margin-left:auto;padding:0 7px;border-radius:6px;color:var(--mut);font-weight:700;letter-spacing:1px;opacity:0;transition:opacity .12s}
+.tr-i:hover .tr-more,.tr-i.on .tr-more{opacity:1}.tr-more:hover{background:var(--line);color:var(--fg)}
+@media(hover:none){.tr-more{opacity:.8}}
+#tr-menu{position:fixed;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:4px;min-width:170px}
+#tr-menu button{display:block;width:100%;text-align:left;background:none;border:0;font:inherit;font-size:13.5px;color:var(--fg);padding:7px 10px;border-radius:7px;cursor:pointer}
+#tr-menu button:hover{background:var(--line)}#tr-menu .danger{color:var(--bad)}
 .tr-x{width:12px;flex:none;color:var(--mut);font-size:11px}
 .tr-s{padding-left:30px}
 .tr-h{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);padding:10px 8px 4px}
@@ -1687,7 +1693,7 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
     const open=g.flat||(q&&ss.length)||exp[g.id]||OVF.c===g.id||g.sites.some(s=>s.id===OVF.s), gb=g.sites.filter(s=>H[s.id]==='bad').length;
     if(g.flat) html+=g.cat?`<div class="tr-h tr-cat${OVF.cat===g.cat?' on':''}" data-tcat="${g.cat}" title="Alle als Kacheln anzeigen">${esc(g.name)} <span class="tr-n">${g.sites.length}</span></div>`:`<div class="tr-h">${esc(g.name)}</div>`;
     else html+=`<div class="tr-i${OVF.c===g.id&&!OVF.s?' on':''}" data-tc="${g.id}"><span class="tr-x" data-tx="${g.id}">${g.sites.length?(open?'▾':'▸'):''}</span><span class="dot" style="background:var(${HCOL[g.sites.length?worstH(g.sites.map(s=>H[s.id])):'off']})"></span><span class="tr-t" title="${esc(g.name)}">${esc(g.name)}${g.number?` <span class="muted">${esc(g.number)}</span>`:''}</span><span class="tr-n">${gb?`<b style="color:var(--bad)">${gb}</b>/`:''}${g.sites.length}</span></div>`;
-    if(open) for(const s of ss) html+=`<div class="tr-i tr-s${OVF.s===s.id?' on':''}" data-ts="${s.id}" data-tcs="${g.id}"${g.flat?' style="padding-left:8px"':''}><span class="dot" style="background:var(${HCOL[H[s.id]]})"></span><span class="tr-t" title="${esc(s.name)}">${esc(s.name)}${s.number?` <span class="muted">${esc(s.number)}</span>`:''}</span></div>`; }
+    if(open) for(const s of ss) html+=`<div class="tr-i tr-s${OVF.s===s.id?' on':''}" data-ts="${s.id}" data-tcs="${g.id}"${g.flat?' style="padding-left:8px"':''}><span class="dot" style="background:var(${HCOL[H[s.id]]})"></span><span class="tr-t" title="${esc(s.name)}">${esc(s.name)}${s.number?` <span class="muted">${esc(s.number)}</span>`:''}</span>${s.id!=='cloud'?`<span class="tr-more ed" data-tmore="${s.id}" title="Umbenennen oder löschen">⋯</span>`:''}</div>`; }
   const nxh=st0.hosts.filter(h=>h.nx).sort((a,b)=>a.name.localeCompare(b.name,'de')); if(nxh.length){ const hcol=h=>h.status==='down'?'--bad':['loss','spike'].includes(h.status)?'--warn':h.status==='ok'?'--ok':'--off';
     html+=`<div class="tr-h tr-cat${OVF.cat==='nx'?' on':''}" data-tcat="nx" title="Alle als Kacheln anzeigen">🔌 Netonix <span class="tr-n">${nxh.length}</span></div>`+nxh.filter(h=>match(h.name+' '+h.addr)).map(h=>`<div class="tr-i tr-s" data-th="${h.id}" style="padding-left:8px"><span class="dot" style="background:var(${hcol(h)})"></span><span class="tr-t" title="${esc(h.name)} · ${esc(h.addr)}">${esc(h.name)}</span></div>`).join(''); }
   const mth=st0.hosts.filter(h=>h.mt).sort((a,b)=>a.name.localeCompare(b.name,'de')); if(mth.length){ const hcol=h=>h.status==='down'?'--bad':['loss','spike'].includes(h.status)?'--warn':h.status==='ok'?'--ok':'--off';
@@ -1707,6 +1713,7 @@ function renderTree(st0){ const el=$('#ov-tree'), on=useTree(st0); $('#ov-wrap')
   $('#tr-mob').innerHTML=`<span>☰ ${lbl?lbl.replace(/<[^>]+>/g,''):'Alle Kunden & Standorte'}</span><span>${nb?`<b style="color:var(--bad)">${nb} gestört</b>`:''} ▾</span>`; }
 (()=>{ const el=$('#ov-tree');
   el.addEventListener('click',e=>{ if(e.target.closest('#tr-mob')){ el.classList.toggle('open'); return; }
+    const mo=e.target.closest('[data-tmore]'); if(mo){ e.stopPropagation(); siteMenu(mo.dataset.tmore,mo); return; }
     const x=e.target.closest('[data-tx]'); if(x){ e.stopPropagation(); OVF.x=OVF.x||{}; const id=x.dataset.tx; const open=x.textContent==='▾'; if(open){ delete OVF.x[id]; if(OVF.c===id&&!OVF.s){} } else OVF.x[id]=1; ovfSave(); renderTree(S.state); return; }
     const th=e.target.closest('[data-th]'); if(th){ el.classList.remove('open'); location.hash='#/host/'+th.dataset.th; return; }
     const tc=e.target.closest('[data-tcat]'); if(tc){ OVF.cat=OVF.cat===tc.dataset.tcat?'':tc.dataset.tcat; OVF.c=''; OVF.s=''; ovfSave(); el.classList.remove('open'); ovRerender(); return; }
@@ -2546,7 +2553,7 @@ uaf.name.oninput=()=>{ UA.named=true; };
 uaf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault(); $('#ua-err').textContent='';
   const n=uaf.name.value.trim(), con=uaf.console.value, cname=(uaf.console.options[uaf.console.selectedIndex].textContent||'').split(' · ')[0];
   if(!n||!con){ $('#ua-err').textContent='Bitte Konsole und Name angeben.'; return; }
-  try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi',setCustomer:uaf.cust.value||undefined})});
+  try{ const sc=await api('/api/sites',{method:'POST',body:JSON.stringify({name:n,kind:'unifi',setCustomer:uaf.cust.value||undefined,unifi:{on:true,mode:'cloud',console:con,site:uaf.usite.value||''}})});
     await api('/api/unifi',{method:'POST',body:JSON.stringify({site:sc.id,on:true,mode:'cloud',console:con,consoleName:cname,usite:uaf.usite.value||''})});
     $('#dlg-ucadd').close(); toast('UniFi-Standort „'+n+'“ angelegt – erste Werte gleich'); refreshState(); }catch(err){ $('#ua-err').textContent=err.message; } });
 $('#org-ren').onclick=async()=>{ const n=await uiPrompt('Name Ihrer Firma bzw. Ihres Kontos:',(S.state.org&&S.state.org.name)||''); if(!n) return; try{ await api('/api/org/name',{method:'POST',body:JSON.stringify({name:n})}); toast('Name geändert'); refreshState(); }catch(e){ uiAlert(e.message); } };
@@ -3214,6 +3221,18 @@ $$('#mu-dur [data-d]').forEach(b=>b.onclick=()=>{ const d=new Date(), k=b.datase
   else if(k==='morn'){ d.setDate(d.getDate()+1); d.setHours(7,0,0,0); u=d.getTime(); } else if(k==='1w') u=Date.now()+7*864e5; else u=-1; muApply(u); });
 $('#mu-set').onclick=()=>{ const v=$('#mu-until').value; if(!v){ $('#mu-err').textContent='Bitte Datum und Uhrzeit wählen'; return; } muApply(new Date(v).getTime()); };
 $('#mute-btn').onclick=()=>openMute('all','','');
+/* ⋯-Menü an einem Standort in der Seitenleiste: umbenennen, löschen */
+function siteMenu(id,anchor){ const old=$('#tr-menu'); if(old){ const same=old.dataset.id===id; old.remove(); if(same) return; }
+  const so=S.state.sites.find(x=>x.id===id); if(!so) return;
+  const m=document.createElement('div'); m.id='tr-menu'; m.dataset.id=id; m.innerHTML='<button data-a="ren">✏️ Umbenennen</button><button data-a="del" class="danger">🗑 Standort löschen</button>';
+  document.body.appendChild(m); const r=anchor.getBoundingClientRect(); m.style.top=Math.min(r.bottom+4,innerHeight-m.offsetHeight-8)+'px'; m.style.left=Math.max(8,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-8))+'px';
+  const close=ev=>{ if(!m.contains(ev.target)){ m.remove(); document.removeEventListener('click',close,true); } }; setTimeout(()=>document.addEventListener('click',close,true));
+  m.onclick=async ev=>{ const a=ev.target.closest('[data-a]'); if(!a) return; m.remove(); document.removeEventListener('click',close,true);
+    if(a.dataset.a==='ren'){ const n=await uiPrompt('Neuer Name für den Standort:',so.name); if(!n||n.trim()===so.name) return;
+      try{ await api('/api/sites',{method:'POST',body:JSON.stringify({id,name:n.trim()})}); toast('Umbenannt'); refreshState(); }catch(e){ uiAlert(e.message); } }
+    else { const nh=S.state.hosts.filter(h=>h.site===id&&h.method!=='unifiwan').length;
+      if(!await uiConfirm(`Standort „${so.name}“ löschen?`+(nh?` Die ${nh} Host${nh>1?'s':''} dieses Standorts werden pausiert.`:''))) return;
+      try{ await api('/api/sites?id='+id,{method:'DELETE'}); if(OVF.s===id){ OVF.s=''; ovfSave(); } toast('Standort gelöscht'); refreshState(); }catch(e){ uiAlert(e.message); } } }; }
 /* MikroTik-Befehl: Fritzbox-Fernzugriff nur für die Agenten des Standorts weiterleiten */
 function fzmtRender(){ const out=$('#fzmt-out'); if(!out) return;
   const site=(S.state&&S.state.sites||[]).find(x=>x.id===hf.site.value), ext=+hf.fritzPort.value||52443, ext2=(ext===49000||ext===49443)?52443:ext;
