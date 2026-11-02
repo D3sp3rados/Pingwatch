@@ -50,6 +50,20 @@ a{color:var(--acc)}
 .tabs{display:flex;gap:2px;margin-left:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;overflow-x:auto;max-width:100%}
 .tabs a{padding:6px 12px;border-radius:7px;color:var(--mut);text-decoration:none;font-weight:500;white-space:nowrap}
 .tabs a.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
+.umenu{position:relative}.dsec-off{display:none!important}
+#d-more .um-pop a{cursor:pointer}
+.ovf{position:relative}.ovf-pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:min(420px,90vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px 12px 12px}
+.ovf.open .ovf-pop{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.ovf-l{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
+#ovf-btn.act{border-color:var(--acc);color:var(--acc)}
+@media(max-width:900px){#ovview .ovl{display:none}}
+#um-btn{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.umenu:has(#req-badge:not([style*="none"])) #um-btn::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-left:6px;vertical-align:1px}
+.um-pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:230px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:6px}
+.umenu.open .um-pop{display:block}
+.um-pop a,.um-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;color:var(--fg);text-decoration:none;font-size:14px}
+.um-pop a:hover{background:var(--line)}.um-pop a.on{background:var(--bg);font-weight:600}
+.um-row{color:var(--mut)}
+@media(max-width:820px){#umenu{order:1;margin-left:auto}#tabs{order:2}#um-btn{max-width:130px}}
 main{max-width:1400px;margin:0 auto;padding:16px}
 body.viewer .ed{display:none!important}
 .orgsw{font-size:12.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);max-width:200px}
@@ -78,7 +92,13 @@ h2 .sub{font-weight:400;color:var(--mut);font-size:13px}
 .seg button{border:0;background:none;padding:5px 10px;border-radius:7px;cursor:pointer;color:var(--mut);font-size:13px;font-weight:500}
 .seg a{padding:5px 10px;border-radius:7px;color:var(--mut);font-size:13px;font-weight:500;text-decoration:none}.seg a:hover{color:var(--fg)}
 .seg a.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
-.settabs{display:flex;flex-wrap:nowrap;overflow-x:auto;max-width:100%;margin:4px 0 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.settabs::-webkit-scrollbar{display:none}.settabs a{white-space:nowrap;flex:0 0 auto;padding:7px 12px}
+#v-settings.on{display:grid;grid-template-columns:210px minmax(0,1fr);column-gap:22px;align-items:start}
+#v-settings>*:not(.setnav){grid-column:2}
+.setnav{grid-column:1;grid-row:1/span 40;position:sticky;top:76px;display:flex;flex-direction:column;gap:1px;margin-top:8px}
+.setnav .sn-h{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin:12px 8px 4px}.setnav .sn-h:first-child{margin-top:0}
+.setnav a{padding:7px 10px;border-radius:8px;color:var(--fg);text-decoration:none;font-size:14px;white-space:nowrap}
+.setnav a:hover{background:var(--panel)}.setnav a.on{background:var(--panel);font-weight:600;box-shadow:var(--shadow)}
+@media(max-width:820px){#v-settings.on{display:block}.setnav{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none;margin:4px 0 6px;gap:4px}.setnav::-webkit-scrollbar{display:none}.setnav .sn-h{display:none}.setnav a{flex:0 0 auto;background:var(--panel);border:1px solid var(--line)}}
 #hosts-box[open] #hosts-tog::after{content:''}
 .seg button.on{background:var(--bg);color:var(--fg);box-shadow:var(--shadow)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
@@ -430,7 +450,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 .invch:first-child{border-top:0}
 .heal-list{display:grid;gap:4px;margin:6px 0 0 26px}
 .trial-banner{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}.trial-banner a{font-weight:700;margin-left:6px;color:var(--acc)}
-#logout-btn{text-decoration:none;white-space:nowrap}@media (max-width:640px){#logout-btn .lo-t{display:none}}
+
 </style>
 </head>
 <body>
@@ -440,26 +460,37 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
   <div class="summary" id="summary"></div>
   <div id="orgbox" style="display:flex;gap:6px;align-items:center"></div>
   <button class="btn sm ed" id="mute-btn" title="Meldungen pausieren">🔔 Meldungen</button>
-  <button class="btn sm" id="theme-btn" type="button" title="Darstellung: automatisch / hell / dunkel"></button>
-  <a class="btn sm" id="logout-btn" href="/logout" title="Abmelden"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="lo-t"> Abmelden</span></a>
   <nav class="tabs" id="tabs">
     <a href="#/" data-v="overview">Übersicht</a>
     <a href="#/events" data-v="events">Ereignisse</a>
     <a href="#/stats" data-v="stats">Statistik</a>
     <a href="#/map" data-v="map" id="nav-map">Netzkarte</a>
     <a href="#/settings" data-v="settings">Einstellungen</a>
-    <a href="#/install" data-v="install">⬇︎ Installieren</a>
-    <a href="#/billing" data-v="billing" id="tab-billing" style="display:none">Abo</a>
-    <a href="#/admin" data-v="admin" id="tab-admin" style="display:none">Kunden</a>
-    <a href="#/requests" data-v="requests" id="tab-req" style="display:none">Anfragen<span class="badge" id="req-badge" style="display:none"></span></a>
   </nav>
+  <div class="umenu" id="umenu">
+    <button class="btn sm" id="um-btn" type="button" aria-haspopup="true" title="Konto, Installieren, Abo, Kunden …"><span id="um-name">Menü</span> ▾</button>
+    <div class="um-pop" id="um-pop">
+      <a href="#/install" data-v="install">⬇︎ Agent &amp; App installieren</a>
+      <a href="#/billing" data-v="billing" id="tab-billing" style="display:none">💳 Abo</a>
+      <a href="#/admin" data-v="admin" id="tab-admin" style="display:none">🏢 Kunden</a>
+      <a href="#/requests" data-v="requests" id="tab-req" style="display:none">✉️ Anfragen<span class="badge" id="req-badge" style="display:none"></span></a>
+      <a href="#/settings/konto">👤 Mein Konto</a>
+      <div class="um-row">Darstellung <button class="btn sm" id="theme-btn" type="button" title="Darstellung: automatisch / hell / dunkel"></button></div>
+      <a href="/logout" id="logout-btn">↪ Abmelden</a>
+    </div>
+  </div>
 </div></header>
 
 <main>
 <div id="mute-banner"></div>
 <div id="pw-banner"></div>
 <div id="trial-banner"></div>
-<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:10px"><div class="seg" id="ovmode"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button><button data-m="agent">💻 Agenten</button><button data-m="unifi">📶 Ubiquiti</button><button data-m="mt">🛡 MikroTik</button><button data-m="nx">🔌 Netonix</button></div><div class="seg" id="ovview"><button data-v="tiles">▦ Kacheln</button><button data-v="list">☰ Liste</button><button data-v="table">≣ Tabelle</button><button data-v="rmm">🖥 RMM</button></div><input id="ov-sq" type="search" placeholder="🔍 Host suchen – Name, IP, Gruppe" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" style="min-width:200px;flex:0 1 260px"><select id="ov-sort" class="orgsw" title="Sortierung – zeigt alle Hosts als eine Liste"><option value="">Sortierung: Gruppen</option><option value="name">Name A–Z</option><option value="lat">Höchste Latenz (1 h)</option><option value="loss">Meister Paketverlust (24 h)</option><option value="avail">Schlechteste Verfügbarkeit (7 Tage)</option></select><button class="btn sm" id="ov-bad">⚠️ Nur Störungen</button><button class="btn sm ed" id="ov-group">📁 Hosts zusammenfassen</button></div><div id="ov"></div></div></div></section>
+<section id="v-overview"><div class="ov-wrap" id="ov-wrap"><aside id="ov-tree" style="display:none"><button class="tr-mob" type="button" id="tr-mob"></button><div class="tr-body"></div></aside><div class="ov-main"><div id="ov-crumb"></div><div id="ovbar" style="display:none;margin:4px 0 4px;align-items:center;gap:8px"><input id="ov-sq" type="search" placeholder="🔍 Host suchen – Name, IP, Gruppe" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" style="flex:1 1 260px;min-width:180px"><div class="seg" id="ovview" title="Darstellung"><button data-v="tiles" title="Kacheln">▦<span class="ovl"> Kacheln</span></button><button data-v="list" title="Liste">☰<span class="ovl"> Liste</span></button><button data-v="table" title="Tabelle">≣<span class="ovl"> Tabelle</span></button><button data-v="rmm" title="RMM – Rechner">🖥<span class="ovl"> RMM</span></button></div><div class="ovf" id="ovf"><button class="btn sm" type="button" id="ovf-btn">⚙︎ Filter &amp; Sortierung ▾</button><div class="ovf-pop" id="ovf-pop">
+<div class="ovf-l">Gruppieren nach</div><div class="seg" id="ovmode" style="flex-wrap:wrap"><button data-m="group">📁 Gruppen</button><button data-m="site">Standorte</button><button data-m="agent">💻 Agenten</button><button data-m="unifi">📶 Ubiquiti</button><button data-m="mt">🛡 MikroTik</button><button data-m="nx">🔌 Netonix</button></div>
+<div class="ovf-l">Sortierung</div><select id="ov-sort" class="orgsw" title="Sortierung – zeigt alle Hosts als eine Liste"><option value="">Nach Gruppen</option><option value="name">Name A–Z</option><option value="lat">Höchste Latenz (1 h)</option><option value="loss">Meister Paketverlust (24 h)</option><option value="avail">Schlechteste Verfügbarkeit (7 Tage)</option></select>
+<div class="ovf-l">Filter</div><button class="btn sm" id="ov-bad" type="button">⚠️ Nur Störungen anzeigen</button>
+<div class="ovf-l">Ordnen</div><button class="btn sm ed" id="ov-group" type="button">📁 Hosts zu Gruppe zusammenfassen</button>
+</div></div></div><div id="ov"></div></div></div></section>
 
 <section id="v-host">
   <div class="det-h">
@@ -467,13 +498,15 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="dot" id="d-dot"></span>
     <h1 id="d-name" title="Klicken zum Umbenennen" spellcheck="false"></h1>
     <span class="muted" id="d-sub"></span>
-    <select class="ed" id="d-group" title="Gruppe" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></select>
+    <span class="pill num" id="d-now" style="margin-left:auto"></span>
     <button class="btn sm ed" id="d-edit" title="Einstellungen dieses Hosts">⚙ Einstellungen</button>
     <button class="btn sm ed" id="d-pause" title="Überwachung pausieren oder Meldungen stummschalten">⏸ Pausieren</button>
-    <a class="btn sm" id="d-open" target="_blank" rel="noopener" style="display:none" title="Weboberfläche des Geräts öffnen">🌐 Öffnen</a>
-    <button class="btn sm" id="d-uni" style="display:none" title="Alle UniFi-Geräte dieses Standorts">📶 UniFi-Geräte</button>
-    <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
-    <span class="pill num" id="d-now"></span>
+    <div class="umenu" id="d-more"><button class="btn sm" type="button" id="d-more-btn" title="Weitere Aktionen">⋯</button><div class="um-pop">
+      <div class="um-row ed">Gruppe <select id="d-group" title="Gruppe" style="font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);max-width:150px"></select></div>
+      <a id="d-open" target="_blank" rel="noopener" style="display:none" title="Weboberfläche des Geräts öffnen">🌐 Weboberfläche öffnen</a>
+      <a href="#" id="d-uni" style="display:none" title="Alle UniFi-Geräte dieses Standorts">📶 UniFi-Geräte des Standorts</a>
+      <a href="#" id="d-trace" style="display:none">🧭 Traceroute</a>
+    </div></div>
   </div>
   <div class="det-ctl">
     <div class="seg" id="d-range">
@@ -496,6 +529,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     </div>
   </div>
   <div class="stats" id="d-stats"></div>
+  <div class="seg" id="d-secs" style="margin-top:14px;display:none"></div>
   <div id="d-snmp" style="display:none">
     <h2>Schnittstellen <span class="sub muted" id="sn-sub" style="font-weight:400;font-size:12.5px"></span></h2>
     <div class="panel" style="overflow-x:auto"><table class="tbl" id="sn-tbl"></table></div>
@@ -533,8 +567,8 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
       <div class="panel" style="overflow-x:auto;margin-top:8px" id="fz-xbody"></div>
     </div>
   </div>
-  <h2>Ereignisse im Zeitraum <span class="sub" id="d-evcount"></span></h2>
-  <div class="panel evlist" id="d-events"></div>
+  <div id="d-evwrap"><h2>Ereignisse im Zeitraum <span class="sub" id="d-evcount"></span></h2>
+  <div class="panel evlist" id="d-events"></div></div>
 </section>
 
 <section id="v-udev">
@@ -650,7 +684,12 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
 </section>
 
 <section id="v-settings">
-  <div class="seg settabs" id="set-tabs"><a href="#/settings/hosts" data-cat="hosts">Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">Standorte</a><a href="#/settings/alerts" data-cat="alerts">Alarme &amp; Wartung</a><a href="#/settings/updates" data-cat="updates" id="set-tab-updates">Updates &amp; Scripts</a><a href="#/settings/team" data-cat="team">Team</a><a href="#/settings/status" data-cat="status">Statusseite</a><a href="#/settings/konto" data-cat="konto">Mein Konto</a><a href="#/settings/radius" data-cat="radius" id="set-tab-radius">RADIUS</a><a href="#/settings/system" data-cat="system" id="set-tab-system">System</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">TR-069</a><a href="#/settings/audit" data-cat="audit" id="set-tab-audit" style="display:none">📜 Protokoll</a></div>
+  <nav class="setnav" id="set-tabs">
+    <div class="sn-h">Überwachung</div><a href="#/settings/hosts" data-cat="hosts">🖥 Hosts &amp; Gruppen</a><a href="#/settings/sites" data-cat="sites">📍 Standorte</a><a href="#/settings/alerts" data-cat="alerts">🔔 Alarme &amp; Wartung</a>
+    <div class="sn-h">Team &amp; Konto</div><a href="#/settings/team" data-cat="team">👥 Team</a><a href="#/settings/konto" data-cat="konto">👤 Mein Konto</a><a href="#/settings/status" data-cat="status">🌐 Statusseite</a>
+    <div class="sn-h sn-ext">Erweiterungen</div><a href="#/settings/updates" data-cat="updates" id="set-tab-updates">⬆️ Updates &amp; Scripts</a><a href="#/settings/radius" data-cat="radius" id="set-tab-radius">🔑 RADIUS</a><a href="#/settings/acs" data-cat="acs" id="set-tab-acs" style="display:none">📡 TR-069</a>
+    <div class="sn-h sn-op">Betreiber</div><a href="#/settings/system" data-cat="system" id="set-tab-system">⚙️ System</a><a href="#/settings/audit" data-cat="audit" id="set-tab-audit" style="display:none">📜 Protokoll</a>
+  </nav>
   <div class="setcat" data-cat="hosts">
   <h2>Hosts <button class="btn sm pri ed" id="add-host">+ Host hinzufügen</button> <button class="btn sm ed" id="list-import">Liste importieren</button></h2>
   <div class="panel" id="hosts-box" style="padding:0">
@@ -1884,6 +1923,8 @@ function rmPaneHost(pane,force){ const h=S.state.hosts.find(x=>x.id===RM.sel.id)
     <div><div class="rm-sec" style="margin-top:0">Ereignisse (7 Tage)</div><div class="evlist" id="rm-evs"></div></div></div></div>`;
   if(!force&&RM.paneKey===html+RM.evs.length) return; RM.paneKey=html+RM.evs.length; pane.innerHTML=html; renderEvents($('#rm-evs'),RM.evs,false,30); }
 $('#ov-bad').onclick=()=>{ OVF.bad=!OVF.bad; ovfSave(); ovRerender(); };
+$('#ovf-btn').onclick=e=>{ e.stopPropagation(); $('#ovf').classList.toggle('open'); };
+document.addEventListener('click',e=>{ const f=$('#ovf'); if(f.classList.contains('open')&&!f.contains(e.target)) f.classList.remove('open'); });
 $('#ov-sq').value=OVF.sq||''; $('#ov-sort').value=OVF.os||'';
 $('#ov-sq').oninput=e=>{ OVF.sq=e.target.value; ovfSave(); clearTimeout(ovRerender.t); ovRerender.t=setTimeout(ovRerender,150); };
 $('#ov-sort').onchange=e=>{ OVF.os=e.target.value; ovfSave(); ovRerender(); };
@@ -1895,7 +1936,7 @@ function ovSortHosts(hs){ const k=OVF.os, a=[...hs]; if(!k) return a;
   a.sort(k==='name'?nm:k==='lat'?(x,y)=>lat(y)-lat(x)||nm(x,y):k==='loss'?(x,y)=>loss(y)-loss(x)||nm(x,y):(x,y)=>av(x)-av(y)||nm(x,y)); return a; }
 function renderOverview(){
   const st0=S.state; if(!st0) return;
-  renderTree(st0); $('#ov-bad').classList.toggle('on',!!OVF.bad);
+  renderTree(st0); $('#ov-bad').classList.toggle('on',!!OVF.bad); { const act=!!OVF.bad||!!OVF.os; const fb=$('#ovf-btn'); fb.classList.toggle('act',act); const t='⚙︎ Filter & Sortierung'+(OVF.bad?' · nur Störungen':'')+(OVF.os?' · sortiert':'')+' ▾'; if(fb.textContent!==t) fb.textContent=t; }
   const st=ovFiltered(st0);
   const root=$('#ov');
   if(st!==st0&&!st.hosts.length&&!st.sites.some(s=>s.unifi&&s.unifi.on)&&!(st.machines||[]).length){ $('#ovbar').style.display='flex'; root.dataset.sig=''; root.dataset.thtml=''; root.innerHTML=`<div class="panel empty">${OVF.bad?'Keine Störungen 👍':'Für diese Auswahl gibt es noch keine Hosts, Rechner oder UniFi-Geräte.'}</div>`; cards={}; return; }
@@ -2243,7 +2284,7 @@ function renderDetailHead(){
   $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
   $('#d-edit').onclick=()=>openHost(h.id);
   { const b=$('#d-pause'); b.textContent=h.paused?'▶ Fortsetzen':'⏸ Pausieren'; b.onclick=()=>hostPause(h.id); }
-  { const s0=S.state.sites.find(x=>x.id===h.site), ub=$('#d-uni'); const on=!!(s0&&s0.unifi&&s0.unifi.on); ub.style.display=on?'':'none'; ub.onclick=()=>goUniFi(h.site); }
+  { const s0=S.state.sites.find(x=>x.id===h.site), ub=$('#d-uni'); const on=!!(s0&&s0.unifi&&s0.unifi.on); ub.style.display=on?'':'none'; ub.onclick=e=>{ e.preventDefault(); goUniFi(h.site); }; }
   { const o=$('#d-open'), url=h.nx?'https://'+h.addr+(h.nxPort&&h.nxPort!==443?':'+h.nxPort:''):h.mt?'https://'+h.addr+(h.mtPort&&h.mtPort!==443&&h.mtPort!==80?':'+h.mtPort:''):(h.method==='http'&&/^https?:/.test(h.addr)?h.addr:''); o.style.display=url?'':'none'; if(url) o.href=url; }
   const site=S.state.sites.find(s=>s.id===h.site);
   $('#d-sub').textContent=`${h.addr}${h.method==='tcp'?' · TCP '+h.port:''} · von ${site?site.name:'?'} · alle ${(h.intervalMs/1000).toLocaleString('de-DE')} s`;
@@ -2430,7 +2471,7 @@ function applyMods(){ const sh=(sel,m)=>{ const e=$(sel); if(e) e.style.display=
 function siteName(id){ const s=S.state&&S.state.sites.find(x=>x.id===id); return s?s.name:id; }
 function renderSettings(){
   const st=S.state; if(!st) return;
-  $('#set-tab-acs').style.display=st.me&&st.me.super?'':'none'; $('#set-tab-audit').style.display=st.me&&st.me.super?'':'none';
+  $('#set-tab-acs').style.display=st.me&&st.me.super?'':'none'; $('#set-tab-audit').style.display=st.me&&st.me.super?'':'none'; $$('#set-tabs .sn-h').forEach(h=>{ let n=h.nextElementSibling, any=false; while(n&&!n.classList.contains('sn-h')){ if(n.style.display!=='none') any=true; n=n.nextElementSibling; } h.style.display=any?'':'none'; });
   const q=($('#hosts-q').value||'').toLowerCase().trim(); const gname=h=>(((st.groups||[]).find(g=>g.id===h.group)||{}).name||'');
   const hs=q?st.hosts.filter(h=>(h.name+' '+h.addr+' '+gname(h)).toLowerCase().includes(q)):st.hosts;
   const np=st.hosts.filter(h=>h.paused).length, nd=st.hosts.filter(h=>!h.paused&&h.status==='down').length;
@@ -3302,7 +3343,8 @@ function renderTrial(){ const st=S.state||{}, o=st.org||{}, me=st.me||{}, el=$('
   if(o.trialEnded){ el.innerHTML='<div class="trial-banner">Die Testphase ist beendet – Ihr Konto läuft im kostenlosen Paket Free weiter. <a href="#/billing">Paket wählen →</a></div>'; return; }
   const d=Math.max(0,Math.ceil((o.trialUntil-Date.now())/864e5));
   el.innerHTML=`<div class="trial-banner">🧪 <b>Testphase:</b> noch ${d===1?'1 Tag':d+' Tage'} (bis ${fmtDate(o.trialUntil)}) – alle Funktionen von Pro. <a href="#/billing">Paket wählen →</a></div>`; }
-function renderLogout(){ const me=(S.state&&S.state.me)||{}; const b=$('#logout-btn'); if(b) b.title='Abmelden'+(me.email?' ('+me.email+')':''); }
+function renderLogout(){ const me=(S.state&&S.state.me)||{}; const b=$('#logout-btn'); if(b) b.title='Abmelden'+(me.email?' ('+me.email+')':'');
+  const n=$('#um-name'); if(n){ const t=me.name||me.email||'Menü'; if(n.textContent!==t) n.textContent=t; } }
 function renderTempPw(){ const me=(S.state&&S.state.me)||{}; const el=$('#pw-banner');
   if(!me.tempPw){ el.innerHTML=''; return; }
   el.innerHTML='<div class="pw-banner">⚠️ <b>Achtung:</b> Sie nutzen noch das vorläufige Passwort. <a href="#/settings/konto" id="pw-go">Hier ändern →</a></div>';
@@ -3388,7 +3430,7 @@ $('#wp-off').onclick=async()=>{ try{ if(WP.sub){ await api('/api/webpush?endpoin
 /* Traceroute */
 function showTrace(title,text){ $('#tr-title').textContent=title; $('#tr-text').textContent=text||''; $('#tr-copy').style.display=''; $('#dlg-trace').showModal(); }
 $('#tr-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText($('#tr-text').textContent); toast('Kopiert'); };
-$('#d-trace').onclick=async()=>{ const h=S.state.hosts.find(x=>x.id===S.hostId); if(!h) return; showTrace('Traceroute zu '+h.name,'läuft … (bis zu einer Minute'+(h.site!=='cloud'?', wird vom Agenten ausgeführt':'')+')');
+$('#d-trace').onclick=async ev=>{ ev.preventDefault(); const h=S.state.hosts.find(x=>x.id===S.hostId); if(!h) return; showTrace('Traceroute zu '+h.name,'läuft … (bis zu einer Minute'+(h.site!=='cloud'?', wird vom Agenten ausgeführt':'')+')');
   try{ const r=await api('/api/trace',{method:'POST',body:JSON.stringify({host:h.id})}); $('#tr-text').textContent=r.text; }catch(e){ $('#tr-text').textContent='Fehler: '+e.message; } };
 
 /* Wartungsfenster */
@@ -4270,6 +4312,7 @@ function route(){
   if((v==='admin'||v==='requests')&&!(S.state&&S.state.me&&S.state.me.super)) v='overview';
   S.view=v; $$('section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   $$('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.v===v||((v==='host'||v==='machine'||v==='udev')&&a.dataset.v==='overview')));
+  $$('#um-pop a[data-v]').forEach(a=>a.classList.toggle('on',a.dataset.v===v));
   { const ta=$('#tabs a.on'); const tb=$('#tabs'); if(ta&&tb&&tb.scrollWidth>tb.clientWidth) tb.scrollLeft=Math.max(0,ta.offsetLeft-tb.clientWidth/2+ta.offsetWidth/2); }
   hideTip();
   if(v==='host'){ S.hostId=parts[1]; const r=q.get('r'); if(q.get('from')){ D.preset=null; D.from=+q.get('from'); D.to=+q.get('to')||Date.now(); } else { D.preset=r&&RANGES[r]?r:(D.preset||'1h'); }
@@ -4317,6 +4360,20 @@ function applyTheme(t){ if(t==='light'||t==='dark') document.documentElement.dat
   const b=$('#theme-btn'); if(b){ b.textContent=t==='light'?'☀️':t==='dark'?'🌙':'🌓'; b.title='Darstellung: '+(t==='light'?'hell':t==='dark'?'dunkel':'automatisch (wie das System)')+' – klicken zum Wechseln'; }
   const mt=document.querySelector('meta[name=theme-color]'); if(mt) mt.content=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||mt.content;
   if(S.view==='overview'){ $('#ov').dataset.sig=''; renderOverview(); } if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); if(S.view==='machine') renderMachine(); }
+/* Konto-Menü rechts oben */
+$('#um-btn').onclick=e=>{ e.stopPropagation(); $('#umenu').classList.toggle('open'); };
+document.addEventListener('click',e=>{ $$('.umenu.open').forEach(m=>{ if(!m.contains(e.target)||e.target.closest('.um-pop a')) m.classList.remove('open'); }); });
+window.addEventListener('hashchange',()=>$$('.umenu.open,.ovf.open').forEach(m=>m.classList.remove('open')));
+$('#d-more-btn').onclick=e=>{ e.stopPropagation(); $('#d-more').classList.toggle('open'); };
+/* Host-Detail: Gerätebereiche (Fritzbox, MikroTik, Netonix, SNMP) und Ereignisse als Reiter */
+const DSEC=[['d-fritz','📦 Fritzbox'],['d-mt','🛡 MikroTik'],['d-nx','🔌 Netonix'],['d-snmp','🔀 Schnittstellen'],['d-evwrap','📋 Ereignisse']];
+function dSecSync(){ const avail=DSEC.filter(([id])=>{ const e=document.getElementById(id); return e&&(id==='d-evwrap'||e.style.display!=='none'); });
+  const bar=$('#d-secs'); if(avail.length<2){ bar.style.display='none'; DSEC.forEach(([id])=>{ const e=document.getElementById(id); if(e) e.classList.remove('dsec-off'); }); return; }
+  let cur=null; try{ cur=localStorage.getItem('pw_dsec'); }catch(e){} if(!avail.some(a=>a[0]===cur)) cur=avail[0][0];
+  const h=avail.map(([id,l])=>`<button type="button" data-dsec="${id}" class="${id===cur?'on':''}">${l}</button>`).join(''); if(bar.dataset.h!==h){ bar.innerHTML=h; bar.dataset.h=h; }
+  bar.style.display=''; DSEC.forEach(([id])=>{ const e=document.getElementById(id); if(e) e.classList.toggle('dsec-off',id!==cur); }); }
+$('#d-secs').onclick=e=>{ const b=e.target.closest('[data-dsec]'); if(!b) return; try{ localStorage.setItem('pw_dsec',b.dataset.dsec); }catch(x){} dSecSync(); };
+{ const mo=new MutationObserver(()=>dSecSync()); DSEC.forEach(([id])=>{ const e=document.getElementById(id); if(e) mo.observe(e,{attributes:true,attributeFilter:['style']}); }); }
 $('#theme-btn').onclick=()=>{ const n={auto:'light',light:'dark',dark:'auto'}[themeNow()]; try{ localStorage.setItem('pw_theme',n); }catch(e){} applyTheme(n); toast('Darstellung: '+(n==='light'?'hell':n==='dark'?'dunkel':'automatisch')); };
 applyTheme(themeNow());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(S.view==='overview') renderOverview(); if(S.view==='host') drawChart(); if(S.view==='stats') renderHeatmap(); });
