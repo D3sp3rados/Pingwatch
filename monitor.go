@@ -30,13 +30,16 @@ type HostCfg struct {
 	OutageCount int    `json:"outageCount"`
 	Paused      bool   `json:"paused"`
 	Org         string `json:"org,omitempty"`
-	Parent      string `json:"parent,omitempty"`     // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
-	Expect      string `json:"expect,omitempty"`     // http: Statuscode oder Text; dns: erwartete Adresse
-	DNSServer   string `json:"dnsServer,omitempty"`  // dns: abzufragender Server (leer = System)
-	Community   string `json:"community,omitempty"`  // snmp: Community (v2c)
-	Watch       string `json:"watch,omitempty"`      // snmp: überwachte Ports (ifIndex, Komma-getrennt)
-	Group       string `json:"group,omitempty"`      // Gruppe/Ordner (z. B. Endkunde)
-	PauseUntil  int64  `json:"pauseUntil,omitempty"` // pausiert bis (ms), 0 = unbegrenzt
+	Parent      string `json:"parent,omitempty"`      // hängt ab von (z. B. Router) – keine Alarme, wenn dieser ausgefallen ist
+	Expect      string `json:"expect,omitempty"`      // http: Statuscode oder Text; dns: erwartete Adresse
+	HTTPVerb    string `json:"httpVerb,omitempty"`    // http: GET (Standard), POST, PUT, HEAD
+	HTTPBody    string `json:"httpBody,omitempty"`    // http: Request-Body (z. B. JSON)
+	HTTPHeaders string `json:"httpHeaders,omitempty"` // http: eigene Header, je Zeile „Name: Wert“
+	DNSServer   string `json:"dnsServer,omitempty"`   // dns: abzufragender Server (leer = System)
+	Community   string `json:"community,omitempty"`   // snmp: Community (v2c)
+	Watch       string `json:"watch,omitempty"`       // snmp: überwachte Ports (ifIndex, Komma-getrennt)
+	Group       string `json:"group,omitempty"`       // Gruppe/Ordner (z. B. Endkunde)
+	PauseUntil  int64  `json:"pauseUntil,omitempty"`  // pausiert bis (ms), 0 = unbegrenzt
 	// Fritzbox per TR-064 über den Agenten auslesen (Internet-Status, Sync, Abbrüche)
 	Fritz     bool   `json:"fritz,omitempty"`
 	FritzPort int    `json:"fritzPort,omitempty"` // 49000 (http) oder 49443 (https)
@@ -204,6 +207,25 @@ func (h *HostCfg) normalize() {
 	}
 	if h.Method != "http" && h.Method != "dns" {
 		h.Expect, h.DNSServer = "", ""
+	}
+	if h.Method == "http" {
+		h.HTTPVerb = strings.ToUpper(strings.TrimSpace(h.HTTPVerb))
+		switch h.HTTPVerb {
+		case "POST", "PUT", "HEAD":
+		default:
+			h.HTTPVerb = ""
+		}
+		if h.HTTPVerb == "" || h.HTTPVerb == "HEAD" {
+			h.HTTPBody = ""
+		}
+		if len(h.HTTPBody) > 8192 {
+			h.HTTPBody = h.HTTPBody[:8192]
+		}
+		if len(h.HTTPHeaders) > 4096 {
+			h.HTTPHeaders = h.HTTPHeaders[:4096]
+		}
+	} else {
+		h.HTTPVerb, h.HTTPBody, h.HTTPHeaders = "", "", ""
 	}
 	if !h.Mt || h.Site == "cloud" || h.Site == "" {
 		h.Mt, h.MtUser, h.MtPass, h.MtPort, h.MtTempMax = false, "", "", 0, 0

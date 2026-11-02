@@ -61,8 +61,24 @@ func httpCheck(h HostCfg, timeout time.Duration) (int32, string, string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	verb := h.HTTPVerb
+	if verb == "" {
+		verb = "GET"
+	}
+	var rb io.Reader
+	if h.HTTPBody != "" {
+		rb = strings.NewReader(h.HTTPBody)
+	}
+	req, _ := http.NewRequestWithContext(ctx, verb, u.String(), rb)
 	req.Header.Set("User-Agent", "PingWacht/"+version+" (Verfügbarkeitsprüfung)")
+	if b := strings.TrimSpace(h.HTTPBody); b != "" && (b[0] == '{' || b[0] == '[') {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for _, l := range strings.Split(h.HTTPHeaders, "\n") {
+		if k, v, ok := strings.Cut(l, ":"); ok && strings.TrimSpace(k) != "" {
+			req.Header.Set(strings.TrimSpace(k), strings.TrimSpace(v))
+		}
+	}
 	start := time.Now()
 	resp, err := httpCheckClient.Do(req)
 	if err != nil {
