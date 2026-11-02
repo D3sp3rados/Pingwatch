@@ -326,6 +326,7 @@ func (a *Agent) fritzLoop(ah *agentHost) {
 			if time.Since(lastExtra) >= fritzExtraEvery {
 				lastExtra = time.Now()
 				s.X = fritzExtraQuery(c)
+				s.T = time.Now().UnixMilli() // Zeitstempel nach der (langen) Zusatzabfrage
 			}
 		}
 		select {
@@ -418,6 +419,11 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 	fh.mu.Lock()
 	for _, s := range samples {
 		if s.T <= fh.at || s.T > now+60000 || s.T < now-24*3600*1000 {
+			// Zusatzdaten trotzdem übernehmen, wenn sie neuer sind (die Abfrage dauert, bzw. der
+			// Reserve-Agent hat zwischendurch Messwerte mit späterem Zeitstempel geschickt)
+			if s.X != nil && s.T > now-15*60000 && s.T <= now+60000 && (fh.extra == nil || s.X.At > fh.extra.At) {
+				notes = append(notes, m.fritzExtraIngest(hc, fh, s.X, true)...)
+			}
 			continue
 		}
 		fh.at = s.T
