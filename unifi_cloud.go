@@ -234,6 +234,9 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 				fw += " (Update " + c.Update + " verfügbar)"
 			}
 			m.ingestUniFi(s, []unifiDevice{{ID: c.ID, Name: c.Name, IP: c.IP, MAC: c.MAC, Model: c.Model, State: st, Firmware: fw, Features: []string{"console"}}}, "")
+			if c.Online {
+				m.unifiCloudProtect(s, key, true)
+			}
 			return
 		}
 	}
@@ -242,20 +245,29 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 		return
 	}
 	m.ingestUniFi(s, devs, "")
+	m.unifiCloudProtect(s, key, false)
+}
+
+// unifiCloudProtect: Kameras über Protect (alle protectEvery). nvr = Konsole ohne Network (z. B. UNVR):
+// dort ist Protect die Hauptsache, Fehler werden deshalb immer angezeigt.
+func (m *Monitor) unifiCloudProtect(s SiteCfg, key string, nvr bool) {
 	unifiCloudPoll.Lock()
 	due := time.Since(unifiCloudPoll.protect[s.ID]) >= protectEvery && !s.UniFi.NoProtect
 	if due {
 		unifiCloudPoll.protect[s.ID] = time.Now()
 	}
 	unifiCloudPoll.Unlock()
-	if due {
-		p, err := newUniFiCloudAPI(s.UniFi.Console, key).protect()
-		if err != nil {
-			log.Printf("UniFi-Cloud %s: Protect: %v", s.Name, err)
-			m.ingestProtect(s, &protectSnap{At: time.Now().UnixMilli(), Err: "Protect nicht abfragbar: " + err.Error()})
-		} else if p != nil {
-			m.ingestProtect(s, p)
-		}
+	if !due {
+		return
+	}
+	p, err := newUniFiCloudAPI(s.UniFi.Console, key).protect()
+	if err != nil {
+		log.Printf("UniFi-Cloud %s: Protect: %v", s.Name, err)
+		m.ingestProtect(s, &protectSnap{At: time.Now().UnixMilli(), Err: "Protect nicht abfragbar: " + err.Error()})
+	} else if p != nil {
+		m.ingestProtect(s, p)
+	} else if nvr {
+		m.ingestProtect(s, &protectSnap{At: time.Now().UnixMilli(), Err: "Protect liefert keine Daten"})
 	}
 }
 

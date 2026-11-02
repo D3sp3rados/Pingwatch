@@ -44,6 +44,10 @@ func newFakeUniFiCloud(t *testing.T) (*fakeUniFiCloud, *httptest.Server) {
 		case strings.HasPrefix(p, "/v1/connector/consoles/c429/"):
 			w.Header().Set("Retry-After", "120")
 			w.WriteHeader(429)
+		case p == "/v1/connector/consoles/c404/proxy/protect/integration/v1/meta/info":
+			js(map[string]any{"applicationVersion": "6.1.0"})
+		case p == "/v1/connector/consoles/c404/proxy/protect/integration/v1/cameras":
+			js([]map[string]any{{"id": "cam1", "name": "Kamera Hof", "state": "CONNECTED", "modelKey": "camera", "type": "G5 Bullet", "mac": "AA0000000009"}})
 		case strings.HasPrefix(p, "/v1/connector/consoles/c404/"):
 			w.WriteHeader(404)
 		case strings.HasPrefix(p, "/v1/connector/consoles/c1/"):
@@ -186,6 +190,9 @@ func TestUniFiCloudSiteFlow(t *testing.T) {
 	s.m.unifiCloudPollSite(sc404)
 	if _, b := c.do("GET", "/api/unifi?site="+s404.ID, nil); !strings.Contains(b, "Alte UDM") || !strings.Contains(b, `"total":1`) || strings.Contains(b, "HTTP 404") {
 		t.Fatal("Konsolenstatus ohne Network:", b)
+	}
+	if _, b := c.do("GET", "/api/unifi?site="+s404.ID, nil); !strings.Contains(b, "Kamera Hof") {
+		t.Fatal("Protect an Konsole ohne Network:", b)
 	}
 	c.do("DELETE", "/api/sites?id="+s404.ID, nil)
 	// Hosts an einem Standort ohne Agent werden abgelehnt
