@@ -59,7 +59,7 @@ func TestFritzExtraQuery(t *testing.T) {
 	if len(x.Log) != 1 || !strings.Contains(x.Log[0], "erfolgreich") {
 		t.Fatalf("Protokoll: %v", x.Log)
 	}
-	if len(x.VoIP) != 1 || x.VoIP[0].Status != "Registered" || len(voipArgs) != 1 || !strings.Contains(voipArgs[0], "<NewX_AVM-DE_VoIPAccountIndex>0</NewX_AVM-DE_VoIPAccountIndex>") {
+	if len(x.VoIP) != 1 || x.VoIP[0].Status != "Registered" || len(voipArgs) != 1 || !strings.Contains(voipArgs[0], "VoIPAccountIndex>0<") {
 		t.Fatalf("Telefonie: %+v %v", x.VoIP, voipArgs)
 	}
 	if len(x.Dect) != 1 || x.Dect[0].Name != "Empfang" || !x.Dect[0].Active {

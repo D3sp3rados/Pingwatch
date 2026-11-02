@@ -217,8 +217,13 @@ func atoiI(s string) int { n, _ := strconv.Atoi(strings.TrimSpace(s)); return n 
 
 func fritzExtraQuery(c *tr064Client) *fritzExtra {
 	x := &fritzExtra{At: time.Now().UnixMilli()}
+	remote := strings.HasSuffix(c.base, "/tr064")
 	miss := func(what string, err error) {
-		x.Missing = append(x.Missing, what+": "+shortErr(err))
+		e := shortErr(err)
+		if remote && strings.Contains(e, "HTTP 401") {
+			e = "über den Fernzugriff gesperrt (nur mit Agent im LAN der Fritzbox)"
+		}
+		x.Missing = append(x.Missing, what+": "+e)
 	}
 	// Geräte im Heimnetz
 	if v, err := c.call("/upnp/control/hosts", "urn:dslforum-org:service:Hosts:1", "X_AVM-DE_GetHostListPath"); err == nil && v["NewX_AVM-DE_HostListPath"] != "" {
@@ -257,9 +262,7 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 	if v, err := c.call("/upnp/control/wancommonifconfig1", svcCommonIf, "GetAddonInfos"); err == nil {
 		x.RateSent, x.RateRecv = atoi64(v["NewByteSendRate"]), atoi64(v["NewByteReceiveRate"])
 		x.BytesSent, x.BytesRecv = atoi64(v["NewX_AVM_DE_TotalBytesSent64"]), atoi64(v["NewX_AVM_DE_TotalBytesReceived64"])
-	} else {
-		miss("Datenverkehr", err)
-	}
+	} // GetAddonInfos gibt es bei vielen Boxen nur über UPnP-IGD – dann bleiben die Zähler unten
 	if x.BytesSent == 0 {
 		if v, err := c.call("/upnp/control/wancommonifconfig1", svcCommonIf, "GetTotalBytesSent"); err == nil {
 			x.BytesSent = atoi64(v["NewTotalBytesSent"])
@@ -325,8 +328,12 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 				continue
 			}
 			a := map[string]string{"NewX_AVM-DE_VoIPAccountIndex": strconv.Itoa(i)}
-			if st, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetVoIPStatus", a); err == nil {
-				x.VoIP[k].Status = st["NewX_AVM-DE_VoIPStatus"]
+			st, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetVoIPStatus", map[string]string{"NewVoIPAccountIndex": strconv.Itoa(i)})
+			if err != nil {
+				st, err = c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetVoIPStatus", a)
+			}
+			if err == nil {
+				x.VoIP[k].Status = firstNonEmpty(st["NewX_AVM-DE_VoIPStatus"], st["NewVoIPStatus"])
 			}
 			if ac, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetVoIPAccount", map[string]string{"NewVoIPAccountIndex": strconv.Itoa(i)}); err == nil {
 				x.VoIP[k].Registrar, x.VoIP[k].User = ac["NewVoIPRegistrar"], ac["NewVoIPUsername"]
@@ -614,11 +621,15 @@ func wlanBand(w fritzWLAN, i int) string {
 	default:
 		b = ""
 	}
+	ch := w.Channel
+	if !w.On {
+		ch = 0 // ausgeschaltete Netze melden oft Kanal 1
+	}
 	if b == "" {
 		switch {
-		case w.Channel >= 1 && w.Channel <= 14:
+		case ch >= 1 && ch <= 14:
 			b = "2,4 GHz"
-		case w.Channel >= 36:
+		case ch >= 36:
 			b = "5 GHz"
 		case strings.Contains(w.Standard, "ac") || strings.Contains(w.Standard, "ax"):
 			b = "5 GHz"
