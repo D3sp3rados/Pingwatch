@@ -82,7 +82,11 @@ func fritzBase(addr string, port int) string {
 	if port != 49000 {
 		scheme = "https"
 	}
-	return scheme + "://" + net.JoinHostPort(addr, strconv.Itoa(port))
+	base := scheme + "://" + net.JoinHostPort(addr, strconv.Itoa(port))
+	if port != 49000 && port != 49443 {
+		base += "/tr064" // Zugriff über den Fernzugriffs-Port: TR-064 liegt dort unter /tr064
+	}
+	return base
 }
 
 func newTR064(base, user, pass string) *tr064Client {
