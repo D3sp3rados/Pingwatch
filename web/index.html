@@ -1463,7 +1463,7 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
             <label class="field">Benutzer<input name="fritzUser" autocomplete="off" placeholder="z. B. pingwacht"></label>
             <label class="field">Passwort<input name="fritzPass" type="password" autocomplete="new-password" id="hf-fritzpw"></label>
-            <label class="field" style="max-width:170px">Port<select name="fritzPort"><option value="49000">49000 (http)</option><option value="49443">49443 (https)</option></select></label>
+            <label class="field" style="max-width:220px">Port<input name="fritzPort" type="number" min="1" max="65535" list="fritz-ports" placeholder="49000"><datalist id="fritz-ports"><option value="49000">LAN, http</option><option value="49443">LAN, https</option></datalist><small>LAN: 49000 · von außen: HTTPS-Port des Fernzugriffs (Internet → Freigaben → FRITZ!Box-Dienste)</small></label>
           </div>
           <label class="check" style="margin-top:8px"><input type="checkbox" name="fritzNewDev"> <span>Neue Geräte im Heimnetz melden</span></label>
           <label class="check" style="margin-top:4px"><input type="checkbox" name="fritzFullNums"> <span>Rufnummern vollständig anzeigen <span class="muted">(sonst nur die letzten 4 Ziffern)</span></span></label>
@@ -4126,7 +4126,7 @@ function openHost(id){
   hf.name.value=h?h.name:''; hf.addr.value=h?h.addr:''; hf.site.value=h?h.site:'cloud'; hf.method.value=h?h.method:'icmp'; hf.port.value=h&&h.port?h.port:443;
   hf.interval.value=String(h?h.intervalMs:1000); if(!hf.interval.value) hf.interval.value='1000';
   hf.parent.value=h&&h.parent||''; hf.httpVerb.value=h&&h.httpVerb||''; hf.httpBody.value=h&&h.httpBody||''; hf.httpHeaders.value=h&&h.httpHeaders||''; $('#hf-reqd').open=!!(h&&(h.httpVerb||h.httpHeaders)); hf.expect.value=h&&h.expect||''; hf.community.value=h&&h.community||''; hf.dnsServer.value=h&&h.dnsServer||''; hf.timeoutMs.value=h?h.timeoutMs:1000; hf.thresholdMs.value=h&&h.thresholdMs?h.thresholdMs:''; hf.outageCount.value=h?h.outageCount:3; hf.paused.checked=h?h.paused:false;
-  hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzFullNums.checked=!!(h&&h.fritzFullNums); hf.fritzPort.value=String(h&&h.fritzPort===49443?49443:49000);
+  hf.fritz.checked=!!(h&&h.fritz); hf.fritzUser.value=h&&h.fritzUser||''; hf.fritzPass.value=''; hf.fritzNewDev.checked=!!(h&&h.fritzNewDev); hf.fritzFullNums.checked=!!(h&&h.fritzFullNums); hf.fritzPort.value=String(h&&h.fritzPort||49000);
   hf.fritzPass.placeholder=h&&h.fritzPassSet?'gespeichert – leer lassen = unverändert':'';
   hf.mt.checked=!!(h&&h.mt); hf.mtUser.value=h&&h.mtUser||''; hf.mtPass.value=''; hf.mtPort.value=String(h&&[80,8443].includes(h.mtPort)?h.mtPort:443); hf.mtActUser.value=h&&h.mtActUser||''; hf.mtActPass.value=''; hf.mtActPass.placeholder=h&&h.mtActPassSet?'gespeichert – leer lassen = unverändert':''; hf.mtActPorts.value=h&&h.mtActPorts||''; hf.mtActReboot.checked=!!(h&&h.mtActReboot);
   hf.nx.checked=!!(h&&h.nx); hf.nxUser.value=h&&h.nxUser||''; hf.nxPass.value=''; hf.nxPass.placeholder=h&&h.nxPassSet?'gespeichert – leer lassen = unverändert':''; hf.nxPort.value=h&&h.nxPort&&h.nxPort!==443?h.nxPort:''; hf.nxActPorts.value=h&&h.nxActPorts||''; hf.nxTempMax.value=String(h&&h.nxTempMax||0); if(!hf.nxTempMax.value) hf.nxTempMax.value='0';

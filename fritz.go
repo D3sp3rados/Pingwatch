@@ -78,8 +78,8 @@ func fritzBase(addr string, port int) string {
 	if port == 0 {
 		port = 49000
 	}
-	scheme := "http"
-	if port == 49443 {
+	scheme := "http" // 49000 = TR-064 im LAN; alle anderen Ports (49443, Fernzugriffs-Port) nur per HTTPS
+	if port != 49000 {
 		scheme = "https"
 	}
 	return scheme + "://" + net.JoinHostPort(addr, strconv.Itoa(port))

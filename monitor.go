@@ -42,7 +42,7 @@ type HostCfg struct {
 	PauseUntil  int64  `json:"pauseUntil,omitempty"`  // pausiert bis (ms), 0 = unbegrenzt
 	// Fritzbox per TR-064 über den Agenten auslesen (Internet-Status, Sync, Abbrüche)
 	Fritz     bool   `json:"fritz,omitempty"`
-	FritzPort int    `json:"fritzPort,omitempty"` // 49000 (http) oder 49443 (https)
+	FritzPort int    `json:"fritzPort,omitempty"` // 49000 (http, LAN), sonst https: 49443 oder Fernzugriffs-Port der Box
 	FritzUser string `json:"fritzUser,omitempty"`
 	FritzPass string `json:"fritzPass,omitempty"` // nur an den Agenten, nie an den Browser
 	// FritzNewDev: neue Geräte im Heimnetz der Fritzbox melden
@@ -249,7 +249,7 @@ func (h *HostCfg) normalize() {
 	}
 	if !h.Fritz || h.Site == "cloud" {
 		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev, h.FritzFullNums = false, 0, "", "", false, false
-	} else if h.FritzPort != 49443 {
+	} else if h.FritzPort <= 0 || h.FritzPort > 65535 {
 		h.FritzPort = 49000
 	}
 	if h.ThresholdMs < 0 {
