@@ -68,6 +68,24 @@ func newFakeUniFiCloud(t *testing.T) (*fakeUniFiCloud, *httptest.Server) {
 					{"id": "d1", "name": "UDM", "model": "UDM-Pro-Max", "macAddress": "AA:00:00:00:00:01", "ipAddress": "192.168.1.1", "state": "ONLINE", "features": []string{"gateway"}, "firmwareVersion": "4.3.6"},
 					{"id": "d2", "name": "AP Wohnzimmer", "model": "U7-Pro", "macAddress": "AA:00:00:00:00:02", "ipAddress": "192.168.1.20", "state": ap, "features": []string{"accessPoint"}},
 				}, "totalCount": 2})
+			case rest == "/proxy/network/integration/v1/sites/s1/devices/d2":
+				js(map[string]any{"id": "d2", "name": "AP Wohnzimmer", "model": "U7-Pro", "firmwareUpdatable": true, "uplink": map[string]any{"deviceId": "d1"},
+					"interfaces": map[string]any{"ports": []map[string]any{{"idx": 1, "state": "UP", "connector": "RJ45", "speedMbps": 1000, "maxSpeedMbps": 2500, "poe": map[string]any{"standard": "802.3at", "type": 2, "enabled": true, "state": "UP"}}},
+						"radios": []map[string]any{{"wlanStandard": "802.11be", "frequencyGHz": 5, "channelWidthMHz": 80, "channel": 36}}}})
+			case rest == "/proxy/network/integration/v1/sites/s1/devices/d1":
+				js(map[string]any{"id": "d1", "name": "UDM"})
+			case rest == "/proxy/network/integration/v1/sites/s1/clients":
+				js(map[string]any{"data": []map[string]any{{"type": "WIRELESS", "name": "Handy", "ipAddress": "192.168.1.50", "macAddress": "AA:BB", "uplinkDeviceId": "d2", "connectedAt": "2026-11-02T10:00:00Z"},
+					{"type": "WIRED", "name": "Drucker", "ipAddress": "192.168.1.51", "uplinkDeviceId": "d1"}}, "totalCount": 2})
+			case rest == "/proxy/network/integration/v1/sites/s1/devices/d2/interfaces/ports/1/actions" && r.Method == "POST":
+				f.hits["poe"]++
+				js(map[string]any{})
+			case rest == "/proxy/network/integration/v1/sites/s1/devices/d2/actions" && r.Method == "POST":
+				f.hits["restart"]++
+				js(map[string]any{})
+			case rest == "/proxy/protect/integration/v1/cameras/cam9/snapshot":
+				w.Header().Set("Content-Type", "image/jpeg")
+				w.Write([]byte("\xff\xd8JPEG"))
 			case strings.HasSuffix(rest, "/statistics/latest"):
 				js(map[string]any{"uptimeSec": 3600, "cpuUtilizationPct": 12.5, "memoryUtilizationPct": 40})
 			case strings.HasPrefix(rest, "/proxy/network/api/s/default/stat/device/"):
@@ -219,6 +237,30 @@ func TestUniFiCloudSiteFlow(t *testing.T) {
 	_, body = c.do("GET", "/api/unifi?site="+site.ID, nil)
 	if !strings.Contains(body, `"total":2`) || !strings.Contains(body, `"mode":"cloud"`) || !strings.Contains(body, `"cpu":12.5`) {
 		t.Fatal("Livestatus:", body)
+	}
+	// Details, Clients, Aktionen, Kamerabild
+	if code, b := c.do("GET", "/api/unifi/device?site="+site.ID+"&id=d2&usite=Default", nil); code != 200 || !strings.Contains(b, `"upgrade":"ja"`) || !strings.Contains(b, `"poeOn":true`) || !strings.Contains(b, "Handy") || strings.Contains(b, "Drucker") || !strings.Contains(b, `"uplink":"UDM"`) || !strings.Contains(b, `"channel":36`) {
+		t.Fatal("Gerätedetails:", code, b)
+	}
+	if code, b := c.do("GET", "/api/unifi/clients?site="+site.ID, nil); code != 200 || !strings.Contains(b, "Drucker") || !strings.Contains(b, `"uplink":"AP Wohnzimmer"`) {
+		t.Fatal("Clients:", code, b)
+	}
+	if code, b := c.do("POST", "/api/unifi/devaction", map[string]any{"site": site.ID, "id": "d2", "name": "AP", "action": "poe", "port": 1}); code != 200 {
+		t.Fatal("PoE:", code, b)
+	}
+	if code, b := c.do("POST", "/api/unifi/devaction", map[string]any{"site": site.ID, "id": "d2", "name": "AP", "action": "restart"}); code != 200 {
+		t.Fatal("Neustart:", code, b)
+	}
+	f.mu.Lock()
+	if f.hits["poe"] != 1 || f.hits["restart"] != 1 {
+		t.Fatalf("Aktionen nicht ausgelöst: %v", f.hits)
+	}
+	f.mu.Unlock()
+	if code, b := c.do("GET", "/api/unifi/snapshot?site="+site.ID+"&cam=cam9", nil); code != 200 || !strings.Contains(b, "JPEG") {
+		t.Fatal("Snapshot:", code, b)
+	}
+	if code, _ := c.do("GET", "/api/unifi/snapshot?site="+site.ID+"&cam=../x", nil); code != 400 {
+		t.Fatal("Snapshot-Pfad nicht geprüft", code)
 	}
 	_, st := c.do("GET", "/api/state", nil)
 	if strings.Contains(st, "good-key") {

@@ -16,3 +16,18 @@ func TestDuplicateHost(t *testing.T) {
 		t.Fatal("andere Methode")
 	}
 }
+
+func TestUniFiPathOK(t *testing.T) {
+	ok := [][2]string{{"GET", unifiIntAPI + "/sites"}, {"POST", unifiIntAPI + "/sites/x/devices/y/actions"}, {"GET", protectAPI + "/cameras/c/snapshot"}, {"GET", "/proxy/network/api/s/default/stat/device/aa"}}
+	bad := [][2]string{{"POST", unifiIntAPI + "/sites/x/devices"}, {"DELETE", unifiIntAPI + "/sites"}, {"GET", "/api/users"}, {"GET", unifiIntAPI + "/../../api"}, {"POST", "/proxy/network/api/s/default/cmd/devmgr"}}
+	for _, x := range ok {
+		if !unifiPathOK(x[0], x[1]) {
+			t.Fatal("sollte erlaubt sein:", x)
+		}
+	}
+	for _, x := range bad {
+		if unifiPathOK(x[0], x[1]) {
+			t.Fatal("sollte gesperrt sein:", x)
+		}
+	}
+}

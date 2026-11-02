@@ -628,6 +628,9 @@ type unifiView struct {
 	LANs    []unifiLAN `json:"lans,omitempty"`
 	WANIP   string     `json:"wanIP,omitempty"`
 	Key     string     `json:"key"`             // für „pausieren“
+	ID      string     `json:"id,omitempty"`    // Geräte-ID (Details, Aktionen)
+	USite   string     `json:"usite,omitempty"` // UniFi-Site
+	Upgrade string     `json:"upgrade,omitempty"`
 	Ign     bool       `json:"ign,omitempty"`   // pausiert
 	Quiet   bool       `json:"quiet,omitempty"` // keine Meldung bei offline (zählt nicht als Störung)
 }
@@ -666,7 +669,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	for key, d := range st.Devices {
 		dv := unifiView{Name: devLabel(d.unifiDevice), Model: d.Model, MAC: d.MAC, IP: d.IP, State: d.State, Since: d.Since,
 			Cat: unifiCategory(d.unifiDevice), FW: d.Firmware, Uptime: d.Uptime, CPU: d.CPU, Mem: d.Mem, Tx: d.Tx, Rx: d.Rx,
-			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots), LANs: d.LANs, WANIP: d.WANIP,
+			PingAvg: -1, Avail: -1, Bar: make([]int8, barSlots), LANs: d.LANs, WANIP: d.WANIP, ID: d.ID, USite: d.Site, Upgrade: d.Upgrade,
 			Key: "n:" + key, Ign: site.UniFi.ignores("n:" + key), Quiet: !site.UniFi.alerts("n:"+key, unifiCategory(d.unifiDevice))}
 		if d.Uptime > 0 && d.At > 0 {
 			dv.Uptime = d.Uptime + (now-d.At)/1000

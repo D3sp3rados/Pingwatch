@@ -36,6 +36,8 @@ type protectDev struct {
 	Quiet  bool     `json:"quiet,omitempty"` // keine Meldung bei offline
 	// Vals: weitere Messwerte (z. B. Luftqualität: co2, voc, pm25 …), Name → Wert
 	Vals map[string]float64 `json:"vals,omitempty"`
+	// Info: Kamera-Details (Anzeige), Bezeichnung → Wert
+	Info map[string]string `json:"info,omitempty"`
 }
 
 // protectSkip: Zahlenfelder, die keine Messwerte sind (Zeitpunkte, Zähler, Einstellungen).
@@ -182,6 +184,9 @@ func parseProtectList(kind string, b []byte) ([]protectDev, error) {
 		}
 		if v, ok := m["isOpened"].(bool); ok {
 			d.Open = &v
+		}
+		if kind == "camera" {
+			d.Info = protectCamInfo(m)
 		}
 		d.Motion, _ = m["isMotionDetected"].(bool)
 		d.Leak = m["leakDetectedAt"] != nil && m["leakDetectedAt"] != float64(0)
@@ -408,4 +413,58 @@ func (m *Monitor) loadProtectState() {
 		}
 		protectState.Unlock()
 	}
+}
+
+// protectCamInfo: lesbare Kamera-Details aus der Protect-Schnittstelle.
+func protectCamInfo(m map[string]any) map[string]string {
+	in := map[string]string{}
+	yes := func(b bool) string {
+		if b {
+			return "an"
+		}
+		return "aus"
+	}
+	if v := mStr(m, "mac"); v != "" {
+		in["MAC"] = strings.ToLower(v)
+	}
+	if v := mStr(m, "host", "ipAddress", "connectionHost"); v != "" {
+		in["IP"] = v
+	}
+	if v, ok := m["isMicEnabled"].(bool); ok {
+		in["Mikrofon"] = yes(v)
+		if vol, ok := m["micVolume"].(float64); ok && v {
+			in["Mikrofon"] += fmt.Sprintf(" (%d %%)", int(vol))
+		}
+	}
+	if v := mStr(m, "hdrType"); v != "" {
+		in["HDR"] = map[string]string{"auto": "automatisch", "on": "an", "off": "aus"}[strings.ToLower(v)]
+		if in["HDR"] == "" {
+			in["HDR"] = v
+		}
+	}
+	if v := mStr(m, "videoMode"); v != "" {
+		in["Videomodus"] = v
+	}
+	if ls := mMap(m, "ledSettings"); ls != nil {
+		if v, ok := ls["isEnabled"].(bool); ok {
+			in["Status-LED"] = yes(v)
+		}
+	}
+	if sd := mMap(m, "smartDetectSettings"); sd != nil {
+		if arr, ok := sd["objectTypes"].([]any); ok && len(arr) > 0 {
+			var l []string
+			for _, x := range arr {
+				if s, ok := x.(string); ok {
+					l = append(l, map[string]string{"person": "Person", "vehicle": "Fahrzeug", "animal": "Tier", "package": "Paket", "licensePlate": "Kennzeichen", "face": "Gesicht"}[s])
+				}
+			}
+			if t := strings.Trim(strings.Join(l, ", "), ", "); t != "" {
+				in["Erkennung"] = t
+			}
+		}
+	}
+	if len(in) == 0 {
+		return nil
+	}
+	return in
 }

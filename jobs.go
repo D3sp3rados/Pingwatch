@@ -321,6 +321,8 @@ func (a *Agent) runJob(j agentJob) {
 		res = snmpIfList(strings.Split(j.Params["ips"], ","), strings.Split(j.Params["communities"], ","))
 	case "unifi":
 		res, err = unifiDevices(j.Params["url"], j.Params["key"], j.Params["site"])
+	case "unifiapi":
+		res, err = unifiAPIJob(j.Params)
 	case "unifiprobe":
 		res, err = unifiProbe(j.Params["url"], j.Params["key"], strings.Split(j.Params["paths"], ","))
 	case "winupdate", "reboot", "script":
