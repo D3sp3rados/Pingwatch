@@ -380,7 +380,7 @@ func (a *Agent) fetchConfig() bool {
 			a.lastAutoCheck = time.Now()
 			if newerVersion(cfg.Latest, version) {
 				log.Printf("Update-Prüfung angefordert: %s verfügbar", cfg.Latest)
-				go a.selfUpdate(cfg.Latest, false)
+				go a.selfUpdate(cfg.Latest, true)
 			} else {
 				log.Printf("Update-Prüfung angefordert: Agent ist aktuell (%s)", version)
 			}
