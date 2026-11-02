@@ -114,6 +114,17 @@ func (c *tr064Client) fetchPath(p string) ([]byte, error) {
 		}
 		u = c.base + p
 	}
+	b, err := c.get(u)
+	// Fernzugriff: die Fritzbox liefert Dateipfade teils ohne bzw. mit /tr064 – den jeweils anderen Weg probieren
+	if err != nil && !strings.HasPrefix(p, "http") && strings.HasSuffix(c.base, "/tr064") {
+		if b2, err2 := c.get(strings.TrimSuffix(c.base, "/tr064") + p); err2 == nil {
+			return b2, nil
+		}
+	}
+	return b, err
+}
+
+func (c *tr064Client) get(u string) ([]byte, error) {
 	resp, err := c.hc.Get(u)
 	if err != nil {
 		return nil, err
