@@ -1465,6 +1465,15 @@ rst.de;https://www.rst.de;CONT;;Hochrhein;RST;Nachricht an uns alle"></textarea>
             <label class="field">Passwort<input name="fritzPass" type="password" autocomplete="new-password" id="hf-fritzpw"></label>
             <label class="field" style="max-width:220px">Port<input name="fritzPort" type="number" min="1" max="65535" list="fritz-ports" placeholder="49000"><datalist id="fritz-ports"><option value="49000">LAN, http</option><option value="49443">LAN, https</option></datalist><small>LAN: 49000 · von außen: HTTPS-Port des Fernzugriffs (Internet → Freigaben → FRITZ!Box-Dienste)</small></label>
           </div>
+          <details id="hf-fzmt" style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">🛠 Fritzbox hinter MikroTik-Antenne: Befehl für die Weiterleitung</summary>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+              <label class="field" style="max-width:200px">IP der Fritzbox hinter der Antenne<input id="fzmt-ip" placeholder="z. B. 192.168.88.251" autocomplete="off"></label>
+              <label class="field" style="max-width:150px">HTTPS-Port der Fritzbox<input id="fzmt-fp" type="number" min="1" max="65535" value="4431"></label>
+            </div>
+            <pre id="fzmt-out" style="white-space:pre-wrap;word-break:break-all;font-size:11.5px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0 6px;user-select:all"></pre>
+            <button type="button" class="btn sm" id="fzmt-copy">📋 Befehl kopieren</button>
+            <small class="muted" style="display:block;margin-top:6px;font-size:11.5px">Im Terminal der Antenne einfügen. Port außen = Port oben (TR-064). Erlaubt sind nur die Agenten dieses Standorts. Als Adresse des Hosts die IP der Antenne eintragen.</small>
+          </details>
           <label class="check" style="margin-top:8px"><input type="checkbox" name="fritzNewDev"> <span>Neue Geräte im Heimnetz melden</span></label>
           <label class="check" style="margin-top:4px"><input type="checkbox" name="fritzFullNums"> <span>Rufnummern vollständig anzeigen <span class="muted">(sonst nur die letzten 4 Ziffern)</span></span></label>
           <small class="muted" style="display:block;margin-top:8px;font-size:11.5px;line-height:1.5">In der Fritzbox einrichten: <b>System → FRITZ!Box-Benutzer</b> → Benutzer anlegen mit Recht „FRITZ!Box Einstellungen“ · <b>Heimnetz → Netzwerk → Netzwerkeinstellungen</b> → „Zugriff für Anwendungen zulassen“ aktivieren. Die Abfrage läuft jede Minute über den Agenten; das Passwort wird nur an den Agenten übertragen.</small>
@@ -3197,6 +3206,15 @@ $$('#mu-dur [data-d]').forEach(b=>b.onclick=()=>{ const d=new Date(), k=b.datase
   else if(k==='morn'){ d.setDate(d.getDate()+1); d.setHours(7,0,0,0); u=d.getTime(); } else if(k==='1w') u=Date.now()+7*864e5; else u=-1; muApply(u); });
 $('#mu-set').onclick=()=>{ const v=$('#mu-until').value; if(!v){ $('#mu-err').textContent='Bitte Datum und Uhrzeit wählen'; return; } muApply(new Date(v).getTime()); };
 $('#mute-btn').onclick=()=>openMute('all','','');
+/* MikroTik-Befehl: Fritzbox-Fernzugriff nur für die Agenten des Standorts weiterleiten */
+function fzmtRender(){ const out=$('#fzmt-out'); if(!out) return;
+  const site=(S.state&&S.state.sites||[]).find(x=>x.id===hf.site.value), ext=+hf.fritzPort.value||52443, ext2=(ext===49000||ext===49443)?52443:ext;
+  const ips=[]; for(const a of (site&&site.agents)||[]){ if(a.ip&&!ips.some(x=>x[0]===a.ip)) ips.push([a.ip,'PingWacht '+(a.host||'Agent')+' (oeffentlich)']); if(a.lan&&!ips.some(x=>x[0]===a.lan)) ips.push([a.lan,'PingWacht '+(a.host||'Agent')+' (intern)']); }
+  if(!ips.length&&site&&site.ip) ips.push([site.ip,'PingWacht Agent']);
+  const fip=$('#fzmt-ip').value.trim()||'FRITZBOX-IP', fp=+$('#fzmt-fp').value||4431, cm=t=>t.replace(/[^\w .()\-]/g,'');
+  out.textContent=(ips.length?'/ip firewall address-list\n'+ips.map(([ip,c])=>`add list=PingWacht-Agent address=${ip} comment="${cm(c)}"`).join('\n'):'# Agent des Standorts noch nicht verbunden - IP von Hand eintragen:\n/ip firewall address-list\nadd list=PingWacht-Agent address=AGENT-IP comment="PingWacht Agent"')
+    +`\n\n/ip firewall nat\nadd chain=dstnat protocol=tcp dst-port=${ext2} src-address-list=PingWacht-Agent action=dst-nat to-addresses=${fip} to-ports=${fp} comment="TR-064 Fritzbox nur fuer PingWacht"`; }
+$('#fzmt-copy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText($('#fzmt-out').textContent); toast('Befehl kopiert'); };
 /* Einzelnen Host pausieren (Dialog) bzw. sofort fortsetzen */
 async function hostPause(id){ const h=S.state&&S.state.hosts.find(x=>x.id===id); if(!h) return;
   if(!h.paused){ openMute('host',h.id,h.name,'pause'); return; }
@@ -4116,6 +4134,7 @@ $('#map-rules').onclick=()=>openMapRules();
 
 /* Host-Dialog */
 const dlg=$('#dlg-host'), hf=$('#host-form');
+$('#fzmt-ip').oninput=fzmtRender; $('#fzmt-fp').oninput=fzmtRender; hf.fritzPort.addEventListener('input',fzmtRender); hf.site.addEventListener('change',fzmtRender);
 function openHost(id){
   const h=id&&S.state.hosts.find(x=>x.id===id);
   $('#hf-title').textContent=h?'Host bearbeiten':'Host hinzufügen'; $('#hf-del').style.display=h?'':'none'; $('#hf-err').textContent='';
@@ -4141,7 +4160,7 @@ function syncHostForm(){ const mt=hf.method.value; $('#hf-portf').style.display=
   $('#hf-expl').textContent=mt==='dns'?'Erwartete IP-Adresse (optional)':'Erwartet (optional)';
   $('#hf-exph').textContent=mt==='http'?'Statuscode (z. B. 200) oder Text, der auf der Seite stehen muss. Zertifikat wird geprüft, Warnung 14 Tage vor Ablauf.':''; const priv=/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hf.addr.value.trim());
   $('#hf-sitehint').textContent= hf.site.value==='cloud'&&priv? '⚠ Private IP – aus der Cloud nicht erreichbar, Standort mit Agent wählen' : ''; $('#hf-sitehint').style.color='var(--warn)';
-  const agentSite=hf.site.value&&hf.site.value!=='cloud'; $('#hf-fritzf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-fritzb').style.display=hf.fritz.checked?'':'none';
+  const agentSite=hf.site.value&&hf.site.value!=='cloud'; $('#hf-fritzf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-fritzb').style.display=hf.fritz.checked?'':'none'; fzmtRender();
   $('#hf-mtf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-nxf').style.display=agentSite&&(mt==='icmp'||mt==='tcp')?'':'none'; $('#hf-nxb').style.display=hf.nx.checked?'':'none'; $('#hf-mtb').style.display=hf.mt.checked?'':'none'; }
 hf.method.onchange=syncHostForm; hf.addr.oninput=syncHostForm; hf.site.onchange=syncHostForm; hf.fritz.onchange=syncHostForm; hf.mt.onchange=syncHostForm; hf.nx.onchange=syncHostForm;
 hf.addEventListener('submit',async e=>{ if(e.submitter&&e.submitter.value!=='ok') return; e.preventDefault();
