@@ -215,6 +215,10 @@ body.pw-dragging .gd-move{display:flex}
 .btn.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}
 .mute-banner{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;margin:0 0 12px;border-radius:12px;border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 10%,var(--panel));font-size:13.5px}
 .card{padding:14px 14px 12px;cursor:pointer;position:relative;transition:border-color .15s}
+.card .cpause{position:absolute;right:10px;bottom:8px;font:inherit;font-size:11.5px;padding:2px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--mut);cursor:pointer;opacity:.55;transition:opacity .15s}
+.card:hover .cpause,.card .cpause.on{opacity:1}.card .cpause:hover{color:var(--fg);border-color:var(--mut)}.card .cpause.on{color:var(--warn);border-color:var(--warn)}
+#ov.compact .card .cpause{display:none}
+.card .last{padding-right:96px}
 .card:hover{border-color:var(--line2)}
 .card.down{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
 .card-h{display:flex;align-items:flex-start;gap:10px}
@@ -459,6 +463,7 @@ dialog::backdrop{background:rgba(2,6,23,.55)}
     <span class="muted" id="d-sub"></span>
     <select class="ed" id="d-group" title="Gruppe" style="font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)"></select>
     <button class="btn sm ed" id="d-edit" title="Einstellungen dieses Hosts">⚙ Einstellungen</button>
+    <button class="btn sm ed" id="d-pause" title="Überwachung pausieren oder Meldungen stummschalten">⏸ Pausieren</button>
     <a class="btn sm" id="d-open" target="_blank" rel="noopener" style="display:none" title="Weboberfläche des Geräts öffnen">🌐 Öffnen</a>
     <button class="btn sm" id="d-uni" style="display:none" title="Alle UniFi-Geräte dieses Standorts">📶 UniFi-Geräte</button>
     <button class="btn sm" id="d-trace" style="margin-left:auto;display:none">Traceroute</button>
@@ -1927,7 +1932,8 @@ function renderOverview(){
         mb.onclick=()=>{ const o=ovOpen(); if(o[sec.key]) delete o[sec.key]; else o[sec.key]=1; try{ localStorage.setItem('pw_ovopen',JSON.stringify(o)); }catch(e){} renderOverview(); };
         root.appendChild(mb); }
       if(sec.site&&sec.site.unifi&&sec.site.unifi.on){ const u=document.createElement('div'); u.className='panel uf'; u.dataset.site=sec.site.id; root.appendChild(u); }
-      for(const host of sec.hosts){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div>`;
+      for(const host of sec.hosts){ const c=document.createElement('div'); c.className='panel card'; c.innerHTML=`<div class="card-h"><span class="dot"></span><div class="card-t"><b></b><span></span></div><div class="card-v num"><b></b><span></span></div></div><canvas class="spark"></canvas><div class="kv num"><div>Ø 1 h<b></b></div><div>Max 1 h<b></b></div><div>Verlust 1 h<b></b></div><div>Verlust 24 h<b></b></div></div><canvas class="bar"></canvas><div class="bar-ax"><span>vor 24 h</span><span>vor 12 h</span><span>jetzt</span></div><div class="last"></div><button type="button" class="cpause ed" title="Überwachung pausieren / Meldungen stumm">⏸</button>`;
+        c.querySelector('.cpause').onclick=e=>{ e.stopPropagation(); hostPause(host.id); };
         c.onclick=e=>{ if(e.target.classList.contains('bar')) return; location.hash='#/host/'+host.id; };
         const bar=c.querySelector('.bar'); bar.addEventListener('mousemove',e=>barHover(e,host.id)); bar.addEventListener('mouseleave',hideTip); bar.addEventListener('click',e=>barClick(e,host.id));
         g.appendChild(c); cards[host.id]=c; }
@@ -1957,6 +1963,7 @@ function renderOverview(){
     c.classList.toggle('down',h.status==='down');
     c.querySelector('.dot').style.background=`var(${col})`;
     c.querySelector('.card-t b').textContent=h.name;
+    { const pb=c.querySelector('.cpause'); if(pb){ pb.textContent=h.paused?'▶ Fortsetzen':'⏸ Pausieren'; pb.classList.toggle('on',!!h.paused); } }
     c.querySelector('.card-t span').textContent=h.addr+(h.ip&&h.ip!==h.addr&&h.ip!=='sim'?' ('+h.ip+')':'')+(h.method==='tcp'?' · TCP '+h.port:'')+(h.certExp?' · Zertifikat bis '+fmtDate(h.certExp):'')+((ovMode()==='group'&&!root.querySelector('.ov-site'))||ovMode()==='mt'?' · '+(h.site==='cloud'?'Cloud':siteName(h.site)):'')+(OVF.os==='avail'&&h.avail7!=null?' · 7 Tage: '+(h.avail7*100).toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'');
     c.querySelector('.card-v b').textContent=['down','siteoff','stale','paused','unknown'].includes(h.status)||h.lastR<0?'—':fmtMs(h.lastR);
     const sv=c.querySelector('.card-v span'); sv.textContent=(h.status==='down'?lbl+' ('+h.consec+'×)':lbl)+(h.maint?' · Wartung':''); sv.style.color=`var(${col})`;
@@ -2219,6 +2226,7 @@ function renderDetailHead(){
   $('#d-dot').style.background=`var(${col})`; { const dn=$('#d-name'); if(document.activeElement!==dn){ dn.textContent=h.name; dn.dataset.id=h.id; } }
   $('#d-trace').style.display=S.state.org&&(S.state.org.features||[]).includes('traceroute')?'':'none';
   $('#d-edit').onclick=()=>openHost(h.id);
+  { const b=$('#d-pause'); b.textContent=h.paused?'▶ Fortsetzen':'⏸ Pausieren'; b.onclick=()=>hostPause(h.id); }
   { const s0=S.state.sites.find(x=>x.id===h.site), ub=$('#d-uni'); const on=!!(s0&&s0.unifi&&s0.unifi.on); ub.style.display=on?'':'none'; ub.onclick=()=>goUniFi(h.site); }
   { const o=$('#d-open'), url=h.nx?'https://'+h.addr+(h.nxPort&&h.nxPort!==443?':'+h.nxPort:''):h.mt?'https://'+h.addr+(h.mtPort&&h.mtPort!==443&&h.mtPort!==80?':'+h.mtPort:''):(h.method==='http'&&/^https?:/.test(h.addr)?h.addr:''); o.style.display=url?'':'none'; if(url) o.href=url; }
   const site=S.state.sites.find(s=>s.id===h.site);
@@ -3176,7 +3184,7 @@ async function installApp(){ if(!installEvt) return; installEvt.prompt(); await 
 
 /* Meldungen pausieren / Prüfung pausieren */
 const mudlg=$('#dlg-mute'); const MU={scope:'all',id:'',mode:'mute'};
-function openMute(scope,id,label){ MU.scope=scope; MU.id=id||''; MU.mode='mute';
+function openMute(scope,id,label,mode){ MU.scope=scope; MU.id=id||''; MU.mode=mode||'mute';
   $('#mu-title').textContent=scope==='all'?'Alle Meldungen pausieren':scope==='group'?'Gruppe: '+label:scope==='customer'?'Kunde: '+label:scope==='site'?'Standort: '+label:scope==='machine'?'Rechner: '+label:'Host: '+label; $('#mu-err').textContent='';
   $('#mu-mode [data-m=pause]').style.display=scope==='machine'?'none':''; muSync(); mudlg.showModal(); }
 function muSync(){ $$('#mu-mode button').forEach(b=>b.classList.toggle('on',b.dataset.m===MU.mode));
@@ -3189,6 +3197,10 @@ $$('#mu-dur [data-d]').forEach(b=>b.onclick=()=>{ const d=new Date(), k=b.datase
   else if(k==='morn'){ d.setDate(d.getDate()+1); d.setHours(7,0,0,0); u=d.getTime(); } else if(k==='1w') u=Date.now()+7*864e5; else u=-1; muApply(u); });
 $('#mu-set').onclick=()=>{ const v=$('#mu-until').value; if(!v){ $('#mu-err').textContent='Bitte Datum und Uhrzeit wählen'; return; } muApply(new Date(v).getTime()); };
 $('#mute-btn').onclick=()=>openMute('all','','');
+/* Einzelnen Host pausieren (Dialog) bzw. sofort fortsetzen */
+async function hostPause(id){ const h=S.state&&S.state.hosts.find(x=>x.id===id); if(!h) return;
+  if(!h.paused){ openMute('host',h.id,h.name,'pause'); return; }
+  try{ await api('/api/hosts',{method:'POST',body:JSON.stringify({...hostCfg(h),paused:false,pauseUntil:0})}); toast(h.name+' wird wieder überwacht'); refreshState(); }catch(e){ uiAlert(e.message); } }
 function renderMutes(){ const ms=(S.state&&S.state.mutes)||[]; const el=$('#mute-banner'); const all=ms.find(m=>m.all);
   $('#mute-btn').textContent=all?'🔕 Stumm':'🔔 Meldungen'; $('#mute-btn').classList.toggle('warn',!!all);
   if(!ms.length){ el.innerHTML=''; return; }

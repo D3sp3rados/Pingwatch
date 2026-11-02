@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // runTrace führt eine Routenverfolgung mit den Bordmitteln des Systems aus
 // (Windows: tracert, Linux/macOS: traceroute oder tracepath) und liefert die Ausgabe.
 func runTrace(addr string) string {
-	addr = strings.TrimSpace(addr)
+	addr = traceTarget(addr)
 	if addr == "" || strings.ContainsAny(addr, " ;&|`$<>\"'") || strings.HasPrefix(addr, "-") {
 		return "Adresse ungültig"
 	}
@@ -57,6 +58,17 @@ func runTrace(addr string) string {
 		lastErr = errors.New("kein traceroute verfügbar")
 	}
 	return "Routenverfolgung nicht möglich: " + lastErr.Error()
+}
+
+// traceTarget: aus einer URL (Webseiten-Prüfung) nur den Hostnamen nehmen – tracert/tracepath kennen keine URLs.
+func traceTarget(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if strings.Contains(addr, "://") {
+		if u, err := url.Parse(addr); err == nil && u.Hostname() != "" {
+			return u.Hostname()
+		}
+	}
+	return addr
 }
 
 // decodeConsole wandelt die OEM-Ausgabe von tracert (CP850) in UTF-8, wenn sie kein gültiges UTF-8 ist.
@@ -104,7 +116,7 @@ func (m *Monitor) requestTrace(e Event) {
 		return
 	}
 	h.mu.Lock()
-	addr, site := h.cfg.Addr, h.cfg.Site
+	addr, site := traceTarget(h.cfg.Addr), h.cfg.Site
 	h.mu.Unlock()
 	m.setTrace(e.ID, "läuft …")
 	if site == "cloud" {
@@ -207,7 +219,7 @@ func (s *Server) handleTraceNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
-	addr, site := h.cfg.Addr, h.cfg.Site
+	addr, site := traceTarget(h.cfg.Addr), h.cfg.Site
 	h.mu.Unlock()
 	if site == "cloud" {
 		writeJSON(w, map[string]string{"text": runTrace(addr)})
