@@ -37,6 +37,7 @@ struct HostDetailView: View {
         List {
             if let h = host {
                 Section { header(h) }
+                HostDeviceLinks(host: h)
             }
             Section {
                 Picker("Zeitraum", selection: $range) {
@@ -58,6 +59,9 @@ struct HostDetailView: View {
                 NavigationLink("Statistik nach Tag und Uhrzeit") {
                     StatsView(hostID: hostID)
                 }
+            }
+            if let h = host, model.state?.me?.canEdit ?? true {
+                HostMuteSection(host: h)
             }
         }
         .navigationTitle(host?.name ?? "Host")

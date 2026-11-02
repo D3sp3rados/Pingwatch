@@ -59,7 +59,7 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
-	if req.Until != -1 && req.Until <= now.UnixMilli() {
+	if req.Mode != "resume" && req.Until != -1 && req.Until <= now.UnixMilli() {
 		http.Error(w, "Zeitpunkt liegt in der Vergangenheit", 400)
 		return
 	}
@@ -193,8 +193,27 @@ func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
 			m.audit(h.Org, whoOf(p), "pausiert", "Host", h.Name, det)
 		}
 		writeJSON(w, map[string]any{"ok": true, "paused": len(upd)})
+	case "resume": // Pause aufheben (z. B. aus der App)
+		set := map[string]bool{}
+		for _, id := range hosts {
+			set[id] = true
+		}
+		var upd []HostCfg
+		m.mu.RLock()
+		for _, h := range m.cfg.Hosts {
+			if set[h.ID] && h.Paused {
+				h.Paused, h.PauseUntil = false, 0
+				upd = append(upd, h)
+			}
+		}
+		m.mu.RUnlock()
+		for _, h := range upd {
+			m.UpsertHost(h)
+			m.audit(h.Org, whoOf(p), "fortgesetzt", "Host", h.Name, h.Addr)
+		}
+		writeJSON(w, map[string]any{"ok": true, "resumed": len(upd)})
 	default:
-		http.Error(w, "mode: mute oder pause", 400)
+		http.Error(w, "mode: mute, pause oder resume", 400)
 	}
 }
 

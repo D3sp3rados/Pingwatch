@@ -38,6 +38,11 @@ func TestMute(t *testing.T) {
 	if !strings.Contains(hs, `"paused":true`) || !strings.Contains(hs, "pauseUntil") {
 		t.Fatal(hs)
 	}
+	// Pause von Hand aufheben (App)
+	if code, b := a.do("POST", "/api/mute", map[string]any{"scope": "host", "id": h.ID, "mode": "resume"}); code != 200 || !strings.Contains(b, `"resumed":1`) {
+		t.Fatal("resume:", code, b)
+	}
+	a.do("POST", "/api/mute", map[string]any{"scope": "host", "id": h.ID, "mode": "pause", "until": time.Now().Add(time.Hour).UnixMilli()})
 	srv.m.resumePaused(time.Now().Add(2 * time.Hour).UnixMilli())
 	_, hs = a.do("GET", "/api/hosts", nil)
 	if strings.Contains(hs, `"paused":true`) {

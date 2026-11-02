@@ -135,6 +135,11 @@ struct HostView: Decodable, Identifiable, Hashable {
     let ongoing: [PWEvent]?
     let lastOutage: PWEvent?
     var group: String?
+    var maint: Bool?
+    var fritz: Bool?
+    var mt: Bool?
+    var nx: Bool?
+    var pauseUntil: Int64?
 
     var statusText: String {
         switch status {
@@ -199,8 +204,20 @@ struct UniFiDevice: Decodable, Hashable, Identifiable {
     var wan: [UniFiWAN]?
     var key: String?
     var ign: Bool?
+    /// Geräte-ID der UniFi-Schnittstelle (Details, Neustart, PoE)
+    var devID: String?
+    var usite: String?
+    /// verfügbare Firmware ("ja" = Version unbekannt)
+    var upgrade: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case name, model, mac, ip, state, since, cat, fw, uptime, cpu, mem, tx, rx, pingAvg, pingMax, loss, avail, boots, bar, wan, key, ign, usite, upgrade
+        case devID = "id"
+    }
 
     var id: String { mac.isEmpty ? name : mac }
+    /// Details abrufbar (nicht bei Konsolen ohne UniFi Network)
+    var hasDetails: Bool { !(devID ?? "").isEmpty && !(devID ?? "").contains(":") && !isOffline }
     /// pausiert (keine Meldungen, gelb statt rot)
     var paused: Bool { ign ?? false }
     var isOffline: Bool { ["OFFLINE", "CONNECTION_INTERRUPTED", "ISOLATED", "DISCONNECTED"].contains(state) }
@@ -243,6 +260,8 @@ struct ProtectDev: Decodable, Hashable, Identifiable {
     var vals: [String: Double]?
     var ign: Bool?
     var quiet: Bool?
+    var fw: String?
+    var info: [String: String]?
 
     var online: Bool { (state ?? "").isEmpty || state == "CONNECTED" }
     /// pausiert (keine Meldungen, gelb statt rot)
@@ -310,6 +329,12 @@ struct StateResponse: Decodable {
     var groups: [PWGroup]?
     let version: String
     let push: Bool?
+    var me: MeInfo?
+    var org: OrgInfo?
+    var orgs: [OrgRef]?
+    var myOrgs: [OrgRef]?
+    var machines: [MachineView]?
+    var mutes: [MuteView]?
 }
 
 struct OverviewResponse: Decodable {
@@ -415,7 +440,7 @@ struct API {
         set { UserDefaults.standard.set(newValue, forKey: "pwOrg") }
     }
 
-    private func request(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> Data {
+    func request(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> Data {
         var comps = URLComponents(url: creds.server.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
         var req = URLRequest(url: comps.url!)
@@ -435,7 +460,7 @@ struct API {
         return data
     }
 
-    private func get<T: Decodable>(_ path: String, _ query: [String: String] = [:]) async throws -> T {
+    func get<T: Decodable>(_ path: String, _ query: [String: String] = [:]) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await request(path, query: query))
     }
 

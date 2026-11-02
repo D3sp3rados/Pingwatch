@@ -14,6 +14,18 @@ struct OverviewView: View {
             }
             if let st = model.state {
                 summary(st)
+                if let ms = st.machines, !ms.isEmpty {
+                    Section {
+                        NavigationLink { MachinesView() } label: {
+                            HStack {
+                                Label("Rechner (RMM)", systemImage: "desktopcomputer")
+                                Spacer()
+                                let bad = ms.filter { $0.status == "bad" || $0.status == "off" }.count
+                                Text(bad > 0 ? "\(bad) auffällig" : "\(ms.count) · alles OK").font(.caption).foregroundStyle(bad > 0 ? PW.bad : Color.secondary)
+                            }
+                        }
+                    }
+                }
                 if st.hosts.isEmpty {
                     ContentUnavailableView("Noch keine Hosts", systemImage: "network",
                                            description: Text("Hosts legst du im Dashboard unter Einstellungen an."))
@@ -80,6 +92,7 @@ struct OverviewView: View {
             }
         }
         .navigationTitle("PingWacht")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { OrgSwitcher() } }
         .refreshable { await model.refresh() }
         .navigationDestination(item: $statusList) { k in StatusListView(kind: k) }
     }
@@ -383,6 +396,7 @@ struct UniFiDeviceRow: View {
                 if device.pingAvg >= 0 { Text(String(format: "%.1f ms", device.pingAvg)) }
                 if device.loss > 0 { Text(String(format: "%.0f %% Verlust", device.loss)).foregroundStyle(PW.loss) }
                 if !device.boots.isEmpty { Text("\(device.boots.count)× Neustart").foregroundStyle(PW.warn) }
+                if !(device.upgrade ?? "").isEmpty { Text("⬆ Update").foregroundStyle(PW.warn) }
                 if device.paused { Text("pausiert").foregroundStyle(.yellow) }
                 else if device.isOffline { Text("offline seit \(fmtTime(Date(ms: device.since)))").foregroundStyle(PW.bad) }
             }
@@ -431,7 +445,10 @@ struct UniFiDeviceView: View {
                 row("Modell", device.model)
                 row("IP", device.ip.isEmpty ? "–" : device.ip)
                 row("MAC", device.mac.isEmpty ? "–" : device.mac)
-                if let fw = device.fw, !fw.isEmpty { row("Firmware", fw) }
+                if let fw = device.fw, !fw.isEmpty { row("Firmware", fw + ((device.upgrade ?? "").isEmpty ? "" : " · Update verfügbar")) }
+            }
+            if device.hasDetails && !siteID.isEmpty {
+                UniFiDetailSections(device: device, siteID: siteID)
             }
             Section("Zustand") {
                 if let up = device.uptime, up > 0 { row("Laufzeit", fmtDuration(TimeInterval(up))) }
@@ -703,6 +720,13 @@ struct UniFiSiteView: View {
             if let e = site?.unifi?.err, !e.isEmpty {
                 Section { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(PW.bad) }
             }
+            if devs.contains(where: { $0.hasDetails }) {
+                Section {
+                    NavigationLink { UniFiClientsView(siteID: siteID, title: site?.name ?? "") } label: {
+                        Label("Verbundene Clients", systemImage: "person.2")
+                    }
+                }
+            }
             if !shownDevs.isEmpty {
                 Section("Netzwerk") {
                     ForEach(shownDevs) { d in
@@ -772,6 +796,13 @@ struct ProtectDeviceView: View {
                 row("Art", device.kindName)
                 if let m = device.model, !m.isEmpty { row("Modell", m) }
                 row("Standort", siteName)
+                if let fw = device.fw, !fw.isEmpty { row("Firmware", fw) }
+                ForEach((device.info ?? [:]).sorted(by: { $0.key < $1.key }), id: \.key) { kv in
+                    row(kv.key, kv.value)
+                }
+            }
+            if device.kind == "camera" && device.online && !siteID.isEmpty {
+                CameraSnapshotSection(siteID: siteID, cameraID: device.id)
             }
             Section("Werte") {
                 if let b = device.bat, b >= 0 { row("Akku", "\(b) %" + (device.lowBattery ? " (schwach)" : "")) }
