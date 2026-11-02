@@ -187,6 +187,10 @@ func TestUniFiCloudSiteFlow(t *testing.T) {
 		t.Fatal(code, body)
 	}
 	sc404, _ := s.m.siteByID(s404.ID)
+	time.Sleep(200 * time.Millisecond) // Abfrage direkt nach dem Speichern abwarten
+	unifiCloudPoll.Lock()
+	delete(unifiCloudPoll.protect, s404.ID)
+	unifiCloudPoll.Unlock()
 	s.m.unifiCloudPollSite(sc404)
 	if _, b := c.do("GET", "/api/unifi?site="+s404.ID, nil); !strings.Contains(b, "Alte UDM") || !strings.Contains(b, `"total":1`) || strings.Contains(b, "HTTP 404") {
 		t.Fatal("Konsolenstatus ohne Network:", b)
