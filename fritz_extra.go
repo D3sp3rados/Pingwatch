@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // Erweiterte Fritzbox-Auslesung (alle 5 Minuten): Geräte im Heimnetz, WLAN, Datenverkehr,
 // Firmware-Update, Ereignisprotokoll, Rufnummern/Telefonie-Anmeldung und Smart-Home-Geräte.
 // Jede Abfrage ist für sich optional – was die Box (oder der Benutzer) nicht kann, fehlt einfach.
-// Die Anrufliste wird bewusst nicht übertragen (Rufnummern Dritter).
+// Anrufliste und Rufumleitungen: Rufnummern werden im Browser gekürzt, außer „vollständig anzeigen“ ist gesetzt.
 
 type fritzDev struct {
 	Name   string `json:"name,omitempty"`
@@ -38,9 +39,28 @@ type fritzWLAN struct {
 }
 
 type fritzVoIP struct {
-	Number string `json:"number"`
+	Number    string `json:"number"`
+	Name      string `json:"name,omitempty"`
+	Status    string `json:"status,omitempty"` // Registered / Not registered …
+	Registrar string `json:"registrar,omitempty"`
+	User      string `json:"user,omitempty"` // SIP-Benutzername (kein Passwort)
+}
+
+type fritzCall struct {
+	Type   string `json:"type"` // in, out, missed, rejected, active
+	Date   string `json:"date"`
+	Other  string `json:"other,omitempty"` // Gegenstelle
 	Name   string `json:"name,omitempty"`
-	Status string `json:"status,omitempty"` // Registered / Not registered …
+	Own    string `json:"own,omitempty"` // eigene Rufnummer
+	Device string `json:"device,omitempty"`
+	Dur    string `json:"dur,omitempty"`
+}
+
+type fritzDefl struct {
+	On     bool   `json:"on"`
+	Number string `json:"number,omitempty"` // für welche Rufnummer (leer = alle)
+	To     string `json:"to,omitempty"`
+	Mode   string `json:"mode,omitempty"`
 }
 
 type fritzDect struct {
@@ -49,6 +69,23 @@ type fritzDect struct {
 	Model  string `json:"model,omitempty"`
 	Active bool   `json:"active"`
 	Update bool   `json:"update,omitempty"` // Firmware-Update für das Mobilteil verfügbar
+	UpdOK  string `json:"updOk,omitempty"`  // Ergebnis des letzten Updates
+	Info   string `json:"info,omitempty"`   // Update-Info (Version)
+}
+
+type fritzPhone struct { // IP-Telefon (SIP) an der Box
+	Name     string `json:"name"`
+	User     string `json:"user,omitempty"`
+	Internal string `json:"internal,omitempty"` // interne Nummer, z. B. **620
+	Out      string `json:"out,omitempty"`      // ausgehende Rufnummer
+	External bool   `json:"external,omitempty"` // Anmeldung aus dem Internet erlaubt
+}
+
+type fritzTAM struct {
+	Name  string `json:"name"`
+	On    bool   `json:"on"`
+	New   int    `json:"new"`
+	Total int    `json:"total"`
 }
 
 type fritzSmart struct {
@@ -75,6 +112,11 @@ type fritzExtra struct {
 	Log        []string     `json:"log,omitempty"`
 	VoIP       []fritzVoIP  `json:"voip,omitempty"`
 	Dect       []fritzDect  `json:"dect,omitempty"`
+	Calls      []fritzCall  `json:"calls,omitempty"`
+	Phones     []fritzPhone `json:"phones,omitempty"`
+	TAM        []fritzTAM   `json:"tam,omitempty"`
+	Ports      []string     `json:"ports,omitempty"` // analoge Anschlüsse FON 1–3
+	Defl       []fritzDefl  `json:"defl,omitempty"`
 	Smart      []fritzSmart `json:"smart,omitempty"`
 	Missing    []string     `json:"missing,omitempty"` // was nicht abfragbar war (Rechte, Modell)
 }
@@ -205,6 +247,7 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 			break
 		}
 		w := fritzWLAN{Idx: i, SSID: v["NewSSID"], On: v["NewEnable"] == "1", Channel: atoiI(v["NewChannel"]), Standard: v["NewStandard"], Band: v["NewX_AVM-DE_FrequencyBand"]}
+		w.Band = wlanBand(w, i)
 		if a, err := c.call(ctl, svc, "GetTotalAssociations"); err == nil {
 			w.Clients = atoiI(a["NewTotalAssociations"])
 		}
@@ -263,18 +306,132 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 	}
 	// Telefonie: Rufnummern und Anmeldestatus der Internet-Rufnummern
 	if v, err := c.call("/upnp/control/x_voip", "urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_GetNumbers"); err == nil {
+		var idx []int
 		for _, it := range xmlItems([]byte(v["NewNumberList"]), "Item") {
 			if n := it["Number"]; n != "" {
 				x.VoIP = append(x.VoIP, fritzVoIP{Number: n, Name: it["Name"]})
+				i := len(x.VoIP) - 1
+				if it["Index"] != "" && (it["Type"] == "" || strings.EqualFold(it["Type"], "eVoIP")) {
+					i = atoiI(it["Index"])
+				} else if it["Type"] != "" && !strings.EqualFold(it["Type"], "eVoIP") {
+					i = -1 // Festnetz/ISDN/Mobil: keine SIP-Anmeldung
+				}
+				idx = append(idx, i)
 			}
 		}
-		for i := 0; i < len(x.VoIP) && i < 20; i++ {
-			if st, err := c.callArgs("/upnp/control/x_voip", "urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_GetVoIPStatus", map[string]string{"NewX_AVM-DE_VoIPAccountIndex": strconv.Itoa(i)}); err == nil {
-				x.VoIP[i].Status = st["NewX_AVM-DE_VoIPStatus"]
+		for k := 0; k < len(x.VoIP) && k < 20; k++ {
+			i := idx[k]
+			if i < 0 {
+				continue
+			}
+			a := map[string]string{"NewX_AVM-DE_VoIPAccountIndex": strconv.Itoa(i)}
+			if st, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetVoIPStatus", a); err == nil {
+				x.VoIP[k].Status = st["NewX_AVM-DE_VoIPStatus"]
+			}
+			if ac, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetVoIPAccount", map[string]string{"NewVoIPAccountIndex": strconv.Itoa(i)}); err == nil {
+				x.VoIP[k].Registrar, x.VoIP[k].User = ac["NewVoIPRegistrar"], ac["NewVoIPUsername"]
 			}
 		}
 	} else {
 		miss("Telefonie", err)
+	}
+	// Anrufliste (letzte 14 Tage, höchstens 40) und Rufumleitungen
+	const svcOnTel = "urn:dslforum-org:service:X_AVM-DE_OnTel:1"
+	if v, err := c.call("/upnp/control/x_contact", svcOnTel, "GetCallList"); err == nil && v["NewCallListURL"] != "" {
+		p := v["NewCallListURL"]
+		if u, err := url.Parse(p); err == nil && u.Path != "" {
+			p = u.Path + "?" + u.RawQuery // Host aus der URL (fritz.box) ist von außen nicht erreichbar
+		}
+		if b, err := c.fetchPath(p + "&max=40&days=14"); err == nil {
+			for _, it := range xmlItems(b, "Call") {
+				cl := fritzCall{Date: it["Date"], Name: it["Name"], Device: it["Device"], Dur: it["Duration"]}
+				in := true
+				switch it["Type"] {
+				case "1":
+					cl.Type = "in"
+				case "2":
+					cl.Type = "missed"
+				case "3":
+					cl.Type, in = "out", false
+				case "10":
+					cl.Type = "rejected"
+				case "9":
+					cl.Type = "active"
+				case "11":
+					cl.Type, in = "active", false
+				default:
+					cl.Type = it["Type"]
+				}
+				if in {
+					cl.Other, cl.Own = it["Caller"], firstNonEmpty(it["CalledNumber"], it["Called"])
+				} else {
+					cl.Other, cl.Own = it["Called"], firstNonEmpty(it["CallerNumber"], it["Caller"])
+				}
+				x.Calls = append(x.Calls, cl)
+				if len(x.Calls) >= 40 {
+					break
+				}
+			}
+		} else {
+			miss("Anrufliste", err)
+		}
+	} else if err != nil {
+		miss("Anrufliste", err)
+	}
+	if v, err := c.call("/upnp/control/x_contact", svcOnTel, "GetDeflections"); err == nil {
+		for _, it := range xmlItems([]byte(v["NewDeflectionList"]), "Item") {
+			x.Defl = append(x.Defl, fritzDefl{On: it["Enable"] == "1", Number: it["Number"], To: it["DeflectionToNumber"], Mode: it["Mode"]})
+		}
+	} else {
+		miss("Rufumleitungen", err)
+	}
+	// IP-Telefone und analoge Anschlüsse
+	if v, err := c.call("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetNumberOfClients"); err == nil {
+		n := atoiI(v["NewX_AVM-DE_NumberOfClients"])
+		for i := 0; i < n && i < 30; i++ {
+			e, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetClient2", map[string]string{"NewX_AVM-DE_ClientIndex": strconv.Itoa(i)})
+			if err != nil {
+				break
+			}
+			x.Phones = append(x.Phones, fritzPhone{Name: e["NewX_AVM-DE_PhoneName"], User: e["NewX_AVM-DE_ClientUsername"], Internal: e["NewX_AVM-DE_InternalNumber"],
+				Out: e["NewX_AVM-DE_OutGoingNumber"], External: e["NewX_AVM-DE_ExternalRegistration"] == "1"})
+		}
+	}
+	for i := 1; i <= 3; i++ {
+		e, err := c.callArgs("/upnp/control/x_voip", svcVoIPx, "X_AVM-DE_GetPhonePort", map[string]string{"NewIndex": strconv.Itoa(i)})
+		if err != nil {
+			break
+		}
+		if n := strings.TrimSpace(e["NewX_AVM-DE_PhoneName"]); n != "" {
+			x.Ports = append(x.Ports, "FON "+strconv.Itoa(i)+": "+n)
+		}
+	}
+	// Anrufbeantworter
+	const svcTAM = "urn:dslforum-org:service:X_AVM-DE_TAM:1"
+	for i := 0; i < 5; i++ {
+		e, err := c.callArgs("/upnp/control/x_tam", svcTAM, "GetInfo", map[string]string{"NewIndex": strconv.Itoa(i)})
+		if err != nil {
+			break
+		}
+		if e["NewName"] == "" && e["NewEnable"] != "1" {
+			continue // nicht eingerichtet
+		}
+		t := fritzTAM{Name: e["NewName"], On: e["NewEnable"] == "1"}
+		if m, err := c.callArgs("/upnp/control/x_tam", svcTAM, "GetMessageList", map[string]string{"NewIndex": strconv.Itoa(i)}); err == nil && m["NewURL"] != "" {
+			p := m["NewURL"]
+			if u, err := url.Parse(p); err == nil && u.Path != "" {
+				p = u.Path + "?" + u.RawQuery
+			}
+			if b, err := c.fetchPath(p); err == nil {
+				for _, it := range xmlItems(b, "Message") {
+					t.Total++
+					if it["New"] == "1" {
+						t.New++
+					}
+				}
+			}
+		}
+		x.TAM = append(x.TAM, t)
 	}
 	// DECT-Mobilteile
 	const svcDect = "urn:dslforum-org:service:X_AVM-DE_Dect:1"
@@ -285,7 +442,8 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 			if err != nil {
 				break
 			}
-			x.Dect = append(x.Dect, fritzDect{ID: e["NewID"], Name: e["NewName"], Model: e["NewModel"], Active: e["NewActive"] == "1", Update: e["NewUpdateAvailable"] == "1"})
+			x.Dect = append(x.Dect, fritzDect{ID: e["NewID"], Name: e["NewName"], Model: e["NewModel"], Active: e["NewActive"] == "1", Update: e["NewUpdateAvailable"] == "1",
+				UpdOK: e["NewUpdateSuccessful"], Info: e["NewUpdateInfo"]})
 		}
 	} else {
 		miss("DECT", err)
@@ -405,14 +563,76 @@ func maskNumber(n string) string {
 
 // view: Kopie für den Browser – Rufnummern gekürzt, außer „vollständig anzeigen“ ist gesetzt.
 func (x *fritzExtra) view(full bool) *fritzExtra {
-	if x == nil || full || len(x.VoIP) == 0 {
+	if x == nil || full || len(x.VoIP)+len(x.Calls)+len(x.Defl) == 0 {
 		return x
 	}
 	c := *x
 	c.VoIP = make([]fritzVoIP, len(x.VoIP))
 	for i, v := range x.VoIP {
-		v.Number = maskNumber(v.Number)
+		v.Number, v.User = maskNumber(v.Number), maskNumber(v.User)
 		c.VoIP[i] = v
 	}
+	c.Calls = make([]fritzCall, len(x.Calls))
+	for i, v := range x.Calls {
+		v.Other, v.Own = maskNumber(v.Other), maskNumber(v.Own)
+		c.Calls[i] = v
+	}
+	c.Phones = make([]fritzPhone, len(x.Phones))
+	for i, v := range x.Phones {
+		v.Out = maskNumber(v.Out)
+		c.Phones[i] = v
+	}
+	c.Defl = make([]fritzDefl, len(x.Defl))
+	for i, v := range x.Defl {
+		v.Number, v.To = maskNumber(v.Number), maskNumber(v.To)
+		c.Defl[i] = v
+	}
 	return &c
+}
+
+const svcVoIPx = "urn:dslforum-org:service:X_VoIP:1"
+
+func firstNonEmpty(a ...string) string {
+	for _, x := range a {
+		if strings.TrimSpace(x) != "" {
+			return x
+		}
+	}
+	return ""
+}
+
+// wlanBand: lesbares Frequenzband – aus der Angabe der Box, sonst aus Kanal/Standard/Position.
+func wlanBand(w fritzWLAN, i int) string {
+	b := strings.ToLower(w.Band)
+	switch {
+	case strings.HasPrefix(b, "24") || strings.HasPrefix(b, "2.4") || strings.HasPrefix(b, "2,4"):
+		b = "2,4 GHz"
+	case strings.HasPrefix(b, "5"):
+		b = "5 GHz"
+	case strings.HasPrefix(b, "6"):
+		b = "6 GHz"
+	default:
+		b = ""
+	}
+	if b == "" {
+		switch {
+		case w.Channel >= 1 && w.Channel <= 14:
+			b = "2,4 GHz"
+		case w.Channel >= 36:
+			b = "5 GHz"
+		case strings.Contains(w.Standard, "ac") || strings.Contains(w.Standard, "ax"):
+			b = "5 GHz"
+		case i == 1:
+			b = "2,4 GHz"
+		case i == 2:
+			b = "5 GHz"
+		}
+	}
+	if strings.Contains(strings.ToLower(w.SSID), "gast") || strings.Contains(strings.ToLower(w.SSID), "guest") {
+		if b != "" {
+			return "Gastnetz (" + b + ")"
+		}
+		return "Gastnetz"
+	}
+	return b
 }
