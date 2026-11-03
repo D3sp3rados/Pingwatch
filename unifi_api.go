@@ -104,6 +104,10 @@ func (u *unifiAPI) raw(path string) (int, []byte, error) {
 		}
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 		resp.Body.Close()
+		if (resp.StatusCode == 408 || resp.StatusCode == 504) && try == 0 && u.cloud {
+			time.Sleep(2 * time.Second) // Cloud-Proxy hat nicht rechtzeitig geantwortet: einmal neu versuchen
+			continue
+		}
 		if resp.StatusCode == 429 {
 			ra := retryAfter(resp.Header.Get("Retry-After"))
 			if try == 0 && ra <= 10*time.Second {

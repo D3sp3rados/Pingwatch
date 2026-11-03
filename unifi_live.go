@@ -125,6 +125,7 @@ type unifiSiteState struct {
 	At      int64                 `json:"at"`
 	Err     string                `json:"err,omitempty"`
 	ErrN    int                   `json:"-"`
+	Note    string                `json:"note,omitempty"` // Hinweis ohne Störung (z. B. UniFi-Cloud träge)
 	Devices map[string]*unifiLive `json:"-"`
 	open    map[string]*Event     // MAC → offenes Ereignis
 	wanOpen map[string]*Event     // MAC|WAN → offenes Ereignis
@@ -201,7 +202,7 @@ func (m *Monitor) ingestUniFi(site SiteCfg, devs []unifiDevice, errText string) 
 		m.unifiNotify(site, starts, nil, errText)
 		return
 	}
-	st.Err, st.ErrN = "", 0
+	st.Err, st.ErrN, st.Note = "", 0, ""
 	if st.errEv != nil {
 		ends = append(ends, m.closeSiteEvent(st.errEv, nowMs))
 		st.errEv = nil
@@ -583,6 +584,7 @@ func (s *Server) handleUniFi(w http.ResponseWriter, r *http.Request) {
 
 type unifiSummary struct {
 	On          bool         `json:"on"`
+	Note        string       `json:"note,omitempty"`
 	Mode        string       `json:"mode,omitempty"` // "cloud" = über die UniFi-Cloud
 	Console     string       `json:"console,omitempty"`
 	ConsoleName string       `json:"consoleName,omitempty"`
@@ -662,7 +664,7 @@ func (m *Monitor) unifiSiteView(site *SiteCfg) unifiSummary {
 	if st == nil {
 		return v
 	}
-	v.At, v.Err = st.At, st.Err
+	v.At, v.Err, v.Note = st.At, st.Err, st.Note
 	now := time.Now().UnixMilli()
 	slot := int64(24*3600*1000) / barSlots
 	start := now - 24*3600*1000

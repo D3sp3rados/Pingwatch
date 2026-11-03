@@ -16,6 +16,7 @@ type fakeUniFiCloud struct {
 	apOnline  bool
 	wanOK     bool
 	consoleUp bool
+	slow      bool // Cloud-Proxy antwortet mit 408
 	hits      map[string]int
 }
 
@@ -50,6 +51,8 @@ func newFakeUniFiCloud(t *testing.T) (*fakeUniFiCloud, *httptest.Server) {
 			js([]map[string]any{{"id": "cam1", "name": "Kamera Hof", "state": "CONNECTED", "modelKey": "camera", "type": "G5 Bullet", "mac": "AA0000000009"}})
 		case strings.HasPrefix(p, "/v1/connector/consoles/c404/"):
 			w.WriteHeader(404)
+		case strings.HasPrefix(p, "/v1/connector/consoles/c1/") && f.slow:
+			w.WriteHeader(408)
 		case strings.HasPrefix(p, "/v1/connector/consoles/c1/"):
 			if !f.consoleUp {
 				w.WriteHeader(502)
@@ -296,6 +299,7 @@ func TestUniFiCloudSiteFlow(t *testing.T) {
 	f.mu.Lock()
 	f.consoleUp = false
 	f.mu.Unlock()
+	resetUniFiCaches()
 	for i := 0; i < 3; i++ {
 		s.m.unifiCloudPollSite(sc)
 	}

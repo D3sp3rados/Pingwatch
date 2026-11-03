@@ -240,6 +240,14 @@ func (m *Monitor) unifiCloudPollSite(s SiteCfg) {
 			return
 		}
 	}
+	if err != nil && unifiCloudTransient(err) {
+		// Zeitüberschreitung o. Ä. beim Cloud-Proxy: Ist die Konsole laut Site Manager verbunden,
+		// ist das eine Störung der UniFi-Cloud und kein Ausfall der Konsole – keine Meldung.
+		if c, cerr := m.unifiConsoleStatus(key, s.UniFi.Console); cerr == nil && c != nil && c.Online {
+			m.unifiSoftErr(s, "UniFi-Cloud antwortet gerade nicht ("+shortErr(err)+") – Konsole laut Ubiquiti verbunden, letzter Stand wird angezeigt")
+			return
+		}
+	}
 	if err != nil {
 		m.ingestUniFi(s, nil, err.Error())
 		return
@@ -574,4 +582,24 @@ func sanitizeSite(sc SiteCfg) SiteCfg {
 		sc.UniFi = &u
 	}
 	return sc
+}
+
+// unifiCloudTransient: vorübergehende Störung des Cloud-Proxys (Zeitüberschreitung, Gateway-Fehler).
+func unifiCloudTransient(err error) bool {
+	e := err.Error()
+	for _, k := range []string{"HTTP 408", "HTTP 502", "HTTP 503", "HTTP 504", "Timeout", "timeout", "deadline exceeded", "UniFi-Cloud nicht erreichbar"} {
+		if strings.Contains(e, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// unifiSoftErr: Hinweis anzeigen, ohne Fehlerzähler, Ereignis oder Meldung (Gerätestand bleibt).
+func (m *Monitor) unifiSoftErr(site SiteCfg, text string) {
+	unifiLiveState.Lock()
+	defer unifiLiveState.Unlock()
+	if st := unifiLiveState.bySite[site.ID]; st != nil && st.Err == "" {
+		st.Note, st.At = text, time.Now().UnixMilli() // Konsole gilt weiter als erreichbar
+	}
 }

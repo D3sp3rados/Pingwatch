@@ -122,6 +122,7 @@ func (s *Server) handleForgot(w http.ResponseWriter, r *http.Request) {
 	}
 	writeResetPage(w, "Passwort vergessen", `<form method="post" action="/forgot">`+brandHTML+`<h1>Passwort vergessen</h1>
 <p>Gib die E-Mail-Adresse deines Zugangs ein. Du bekommst einen Link, mit dem du ein neues Passwort festlegst.</p>
+<p style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:13px">⚠️ <b>Achtung:</b> Wenn du das Passwort zurücksetzt, wirst du <b>überall abgemeldet</b> – auf allen Geräten, im Browser und in der App. Danach meldest du dich überall mit dem neuen Passwort an.</p>
 <label for="em">E-Mail</label><input id="em" name="email" type="email" autocomplete="username" autocapitalize="none" required autofocus placeholder="name@firma.de">
 <button type="submit">Link senden</button><a class="back" href="/login">← Zur Anmeldung</a></form>`)
 }
