@@ -272,6 +272,9 @@ func (a *Agent) req(method, path string, body io.Reader, gz bool) (*http.Respons
 		r.Header.Set("Content-Encoding", "gzip")
 		r.Header.Set("Content-Type", "application/json")
 	}
+	if a.client == nil { // Agent ohne Verbindungsaufbau (z. B. in Tests)
+		return nil, errors.New("keine Verbindung zum Server")
+	}
 	return a.client.Do(r)
 }
 
