@@ -244,6 +244,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/agb", s.handleTerms)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
+	mux.HandleFunc("/forgot", s.handleForgot)
+	mux.HandleFunc("/reset", s.handlePassReset)
 	mux.HandleFunc("/passkey/login", s.handlePasskeyLogin)
 	mux.HandleFunc("/passkey/login/options", s.handlePasskeyLogin)
 	mux.HandleFunc("/.well-known/apple-app-site-association", handleAASA)
