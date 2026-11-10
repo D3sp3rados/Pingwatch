@@ -368,6 +368,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/unifi/snapshot", protect(s.handleUniFiSnapshot))
 	mux.HandleFunc("/api/snmp", protect(s.handleSNMP))
 	mux.HandleFunc("/api/fritz", protect(s.handleFritz))
+	mux.HandleFunc("/api/fritz/action", protect(s.handleFritzAction))
 	mux.HandleFunc("/api/mikrotik", protect(s.needMod("mtnx", s.handleMikrotik)))
 	mux.HandleFunc("/api/mikrotik/action", protect(s.needMod("mtnx", s.handleMikrotikAction)))
 	mux.HandleFunc("/api/netonix", protect(s.needMod("mtnx", s.handleNetonix)))

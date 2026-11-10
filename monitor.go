@@ -49,6 +49,8 @@ type HostCfg struct {
 	FritzNewDev bool `json:"fritzNewDev,omitempty"`
 	// FritzFullNums: Rufnummern vollständig anzeigen (sonst nur die letzten 4 Ziffern)
 	FritzFullNums bool `json:"fritzFullNums,omitempty"`
+	// FritzAct: Aktionen über TR-064 erlaubt (Neustart, Neu einwählen, WLAN, WoL, Update, Rufumleitung)
+	FritzAct bool `json:"fritzAct,omitempty"`
 	// MikroTik über die REST-API (RouterOS v7) durch den Agenten auslesen
 	Mt     bool   `json:"mt,omitempty"`
 	MtUser string `json:"mtUser,omitempty"`
@@ -248,7 +250,7 @@ func (h *HostCfg) normalize() {
 		h.Site = "cloud"
 	}
 	if !h.Fritz || h.Site == "cloud" {
-		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev, h.FritzFullNums = false, 0, "", "", false, false
+		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev, h.FritzFullNums, h.FritzAct = false, 0, "", "", false, false, false
 	} else if h.FritzPort <= 0 || h.FritzPort > 65535 {
 		h.FritzPort = 49000
 	}

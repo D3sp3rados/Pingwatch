@@ -57,6 +57,7 @@ type fritzCall struct {
 }
 
 type fritzDefl struct {
+	ID     string `json:"id,omitempty"` // DeflectionId (für Ein/Aus)
 	On     bool   `json:"on"`
 	Number string `json:"number,omitempty"` // für welche Rufnummer (leer = alle)
 	To     string `json:"to,omitempty"`
@@ -387,7 +388,7 @@ func fritzExtraQuery(c *tr064Client) *fritzExtra {
 	}
 	if v, err := c.call("/upnp/control/x_contact", svcOnTel, "GetDeflections"); err == nil {
 		for _, it := range xmlItems([]byte(v["NewDeflectionList"]), "Item") {
-			x.Defl = append(x.Defl, fritzDefl{On: it["Enable"] == "1", Number: it["Number"], To: it["DeflectionToNumber"], Mode: it["Mode"]})
+			x.Defl = append(x.Defl, fritzDefl{ID: it["DeflectionId"], On: it["Enable"] == "1", Number: it["Number"], To: it["DeflectionToNumber"], Mode: it["Mode"]})
 		}
 	} else {
 		miss("Rufumleitungen", err)
