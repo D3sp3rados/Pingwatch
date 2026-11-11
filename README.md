@@ -110,6 +110,17 @@ Hinweis rstcloud: ausgehende Verbindungen auf 25/465/587 sind dort gesperrt – 
 
 Die neuen Funktionen am Standort brauchen den Agenten ab Version 1.1.0 – einfach die neue `pingwatch-agent.exe` über die alte kopieren.
 
+## Fritzbox: Sprachqualität der Telefonate
+
+Die Werte aus *Telefonie → Eigene Rufnummern → Sprachübertragung* (Paketverlust, Jitter, Laufzeit, Codec je Gespräch) liefert TR-064 nicht. Zwei Wege, beide landen im Reiter **Sprachqualität** der Fritzbox:
+
+- **Live über den Agenten:** Am Host „Sprachqualität der Telefonate protokollieren“ anhaken. Der Agent meldet sich jede Minute mit dem TR-064-Benutzer an der Benutzeroberfläche an (`login_sid.lua`, PBKDF2) und liest `data.lua?page=sipQual`. Der Benutzer braucht das Recht „FRITZ!Box Einstellungen“, von außen zusätzlich „Zugang auch aus dem Internet“. Port wie bei TR-064: 49000 → http im LAN, sonst HTTPS (49443 bzw. Fernzugriffs-Port).
+- **Push-Mails der Box:** In der Box „Detailinformationen beendeter Anrufe … mit Push Service versenden“ aktivieren und den Push Service **FRITZ!Box-Info** (Inhalt: Anrufliste) an ein Postfach schicken lassen. Der Server holt die Mails per IMAP, wenn diese Umgebungsvariablen gesetzt sind:
+  `VOICE_IMAP_HOST`, `VOICE_IMAP_USER`, `VOICE_IMAP_PASS` (Secret), optional `VOICE_IMAP_PORT` (993) und `VOICE_IMAP_FOLDER` (INBOX).
+  Zuordnung über die eigenen Rufnummern der Box (aus TR-064) bzw. das Feld „Weitere Rufnummern für Push-Mails“. Mails ohne passende Box erscheinen für den Betreiber im Reiter Sprachqualität unter „Nicht zugeordnete Rufnummern“ und lassen sich dort zuordnen.
+
+Meldung (wie „Neues Gerät“/„Firmware-Update“): Gespräch ab 30 s mit Paketverlust ab dem Grenzwert des Hosts (Standard 3 %) in einer Richtung. Rufnummern werden gekürzt, außer „Rufnummern vollständig anzeigen“ ist gesetzt.
+
 ## Daten
 
 **Mit Datenbank (PostgreSQL):** PingWacht legt die Tabellen beim Start selbst an (`pw_config`, `pw_samples`, `pw_minutes`, `pw_events`).

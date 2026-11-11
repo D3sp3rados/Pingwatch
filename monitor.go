@@ -51,6 +51,12 @@ type HostCfg struct {
 	FritzFullNums bool `json:"fritzFullNums,omitempty"`
 	// FritzAct: Aktionen über TR-064 erlaubt (Neustart, Neu einwählen, WLAN, WoL, Update, Rufumleitung)
 	FritzAct bool `json:"fritzAct,omitempty"`
+	// FritzVoice: Sprachqualität der Telefonate über die Benutzeroberfläche auslesen (Anmeldung wie im Browser)
+	FritzVoice bool `json:"fritzVoice,omitempty"`
+	// FritzVoiceMax: Meldung ab diesem Paketverlust in % (0 = 3 %)
+	FritzVoiceMax float64 `json:"fritzVoiceMax,omitempty"`
+	// FritzVoiceNums: weitere Rufnummern dieser Box für die Zuordnung der Push-Mails (Komma-getrennt)
+	FritzVoiceNums string `json:"fritzVoiceNums,omitempty"`
 	// MikroTik über die REST-API (RouterOS v7) durch den Agenten auslesen
 	Mt     bool   `json:"mt,omitempty"`
 	MtUser string `json:"mtUser,omitempty"`
@@ -251,9 +257,14 @@ func (h *HostCfg) normalize() {
 	}
 	if !h.Fritz || h.Site == "cloud" {
 		h.Fritz, h.FritzPort, h.FritzUser, h.FritzPass, h.FritzNewDev, h.FritzFullNums, h.FritzAct = false, 0, "", "", false, false, false
+		h.FritzVoice, h.FritzVoiceMax = false, 0
 	} else if h.FritzPort <= 0 || h.FritzPort > 65535 {
 		h.FritzPort = 49000
 	}
+	if h.FritzVoiceMax < 0 || h.FritzVoiceMax > 100 {
+		h.FritzVoiceMax = 0
+	}
+	h.FritzVoiceNums = strings.TrimSpace(h.FritzVoiceNums)
 	if h.ThresholdMs < 0 {
 		h.ThresholdMs = 0
 	}

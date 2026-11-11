@@ -44,10 +44,11 @@ type fritzStatus struct {
 func (s *fritzStatus) connected() bool { return s != nil && s.Conn == "Connected" }
 
 type fritzSample struct {
-	T   int64        `json:"t"`
-	S   *fritzStatus `json:"s,omitempty"`
-	Err string       `json:"err,omitempty"`
-	X   *fritzExtra  `json:"x,omitempty"` // erweiterte Daten (alle 5 Minuten)
+	T   int64           `json:"t"`
+	S   *fritzStatus    `json:"s,omitempty"`
+	Err string          `json:"err,omitempty"`
+	X   *fritzExtra     `json:"x,omitempty"` // erweiterte Daten (alle 5 Minuten)
+	V   *fritzVoiceSnap `json:"v,omitempty"` // Sprachqualität der Telefonate (fritz_voice.go)
 }
 
 // ---------- TR-064-Client ----------
@@ -316,9 +317,16 @@ func (a *Agent) fritzLoop(ah *agentHost) {
 	c := newTR064(fritzBase(ah.cfg.Addr, ah.cfg.FritzPort), ah.cfg.FritzUser, ah.cfg.FritzPass)
 	var pend []fritzSample
 	var lastExtra time.Time
+	var voice *fritzVoiceTracker
+	if ah.cfg.FritzVoice {
+		voice = &fritzVoiceTracker{web: newFritzWeb(fritzWebBase(ah.cfg.Addr, ah.cfg.FritzPort), ah.cfg.FritzUser, ah.cfg.FritzPass)}
+	}
 	for {
 		s := fritzSample{T: time.Now().UnixMilli()}
 		st, err := fritzQuery(c)
+		if voice != nil {
+			s.V = voice.poll()
+		}
 		if err != nil {
 			s.Err = err.Error()
 		} else {
@@ -382,6 +390,12 @@ type fritzHost struct {
 	fwNoted   string          // Firmware-Version, zu der schon gemeldet wurde
 	logHist   []string        // gesammeltes Ereignisprotokoll (neueste zuerst)
 	logLoaded bool
+	// Sprachqualität (fritz_voice.go)
+	voice       []fritzVoice // beendete Gespräche, neueste zuerst
+	voiceAct    []fritzVoice // laufende Gespräche (Stand voiceAt)
+	voiceAt     int64
+	voiceErr    string
+	voiceLoaded bool
 }
 
 var fritzData = struct {
@@ -418,6 +432,9 @@ func (m *Monitor) ingestFritz(hc HostCfg, samples []fritzSample) {
 	hhmm := func(t int64) string { return time.UnixMilli(t).Format("15:04") }
 	fh.mu.Lock()
 	for _, s := range samples {
+		if s.V != nil && hc.FritzVoice && s.V.At <= now+60000 {
+			notes = append(notes, m.fritzVoiceIngest(hc, fh, s.V)...)
+		}
 		if s.T <= fh.at || s.T > now+60000 || s.T < now-24*3600*1000 {
 			// Zusatzdaten trotzdem übernehmen, wenn sie neuer sind (die Abfrage dauert, bzw. der
 			// Reserve-Agent hat zwischendurch Messwerte mit späterem Zeitstempel geschickt)
@@ -552,18 +569,19 @@ func (m *Monitor) fritzDropsFromEvents(hostID string, since int64) []int64 {
 }
 
 type fritzView struct {
-	On        bool         `json:"on"`
-	At        int64        `json:"at,omitempty"`
-	Err       string       `json:"err,omitempty"`
-	Status    *fritzStatus `json:"status,omitempty"`
-	ConnSince int64        `json:"connSince,omitempty"`
-	Drops24   int          `json:"drops24"`
-	Boots24   int          `json:"boots24"`
-	MinDown   int32        `json:"minDown,omitempty"` // kbit/s, 24 h
-	MaxDown   int32        `json:"maxDown,omitempty"`
-	Avail     float64      `json:"avail"` // % verbunden in 24 h (-1 = keine Daten)
-	Hist      []fritzPoint `json:"hist,omitempty"`
-	Extra     *fritzExtra  `json:"extra,omitempty"`
+	On        bool            `json:"on"`
+	At        int64           `json:"at,omitempty"`
+	Err       string          `json:"err,omitempty"`
+	Status    *fritzStatus    `json:"status,omitempty"`
+	ConnSince int64           `json:"connSince,omitempty"`
+	Drops24   int             `json:"drops24"`
+	Boots24   int             `json:"boots24"`
+	MinDown   int32           `json:"minDown,omitempty"` // kbit/s, 24 h
+	MaxDown   int32           `json:"maxDown,omitempty"`
+	Avail     float64         `json:"avail"` // % verbunden in 24 h (-1 = keine Daten)
+	Hist      []fritzPoint    `json:"hist,omitempty"`
+	Extra     *fritzExtra     `json:"extra,omitempty"`
+	Voice     *fritzVoiceView `json:"voice,omitempty"`
 }
 
 func (m *Monitor) fritzHostView(hc HostCfg) fritzView {
@@ -617,6 +635,7 @@ func (m *Monitor) fritzHostView(hc HostCfg) fritzView {
 	if known > 0 {
 		v.Avail = float64(up) * 100 / float64(known)
 	}
+	v.Voice = m.voiceView(hc)
 	return v
 }
 
